@@ -1685,7 +1685,7 @@ code_dashboard_transcript_ui = element "pollChatSidecar" "Function" "Polls incar
     }
 }
 
-code_dashboard_lifecycle_ui = element "lifecycleActionButton" "Function" "Shows pending and acknowledged Epic actions across row replacements; waits for canonical board confirmation." {
+code_dashboard_lifecycle_ui = element "lifecycleActionButton" "Function" "Shows pending and acknowledged Epic actions and row-local refusal reasons across row replacements; waits for canonical board confirmation." {
     properties {
         "cascade.semanticId" "element.code.dashboard.lifecycle-ui"
         "cascade.parent" "element.component.dashboard"
@@ -1971,12 +1971,69 @@ code_workspace_registry = element "get_integration_worktree" "Function" "Read re
     }
 }
 
-code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout and switches Epic or Feature transcript ownership inside its graph fence." {
+code_workspace_create = element "create_integration_worktree" "Function" "Creates and prepares an integration checkout before publishing its registration and switching Epic or Feature transcript ownership inside its graph fence." {
     properties {
         "cascade.semanticId" "element.code.workspace.create"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
         "cascade.sourceSymbol" "create_integration_worktree"
+    }
+}
+
+code_watchdog_activate_epic = element "_activate_epic" "Function" "Rechecks human admission and reviewed base, provisions or safely resumes an unstarted Epic checkout, then records activation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.activate-epic"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/dispatch.py"
+        "cascade.sourceSymbol" "_activate_epic"
+    }
+}
+
+code_epic_prepare_checkout = element "prepare_epic_checkout" "Function" "Scrubs inherited child documents from single-repository Epic checkouts before they are exposed to the merged board." {
+    properties {
+        "cascade.semanticId" "element.code.epic.prepare-checkout"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/epic/activation.py"
+        "cascade.sourceSymbol" "prepare_epic_checkout"
+    }
+}
+
+code_workspace_resume_epic = element "resume_unstarted_epic_worktree" "Function" "Proves canonical clean checkout identity and ancestor-only history, fast-forwards to the approved base and refreshes registration without deleting a branch." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.resume-epic"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "resume_unstarted_epic_worktree"
+    }
+}
+
+dashboard_post_to_epic_activation = code_dashboard_post -> code_watchdog_activate_epic "Submits human activation and returns typed outcome" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-post-to-epic-activation"
+    }
+}
+
+epic_activation_to_workspace_create = code_watchdog_activate_epic -> code_workspace_create "Cuts checkout from the reviewed revision" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-activation-to-workspace-create"
+    }
+}
+
+epic_activation_to_workspace_resume = code_watchdog_activate_epic -> code_workspace_resume_epic "Resumes only when no activation evidence exists" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-activation-to-workspace-resume"
+    }
+}
+
+workspace_create_to_epic_prepare = code_workspace_create -> code_epic_prepare_checkout "Prepares child-document scope before registry publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-create-to-epic-prepare"
+    }
+}
+
+workspace_resume_to_epic_prepare = code_workspace_resume_epic -> code_epic_prepare_checkout "Removes inherited child copies after safe fast-forward" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resume-to-epic-prepare"
     }
 }
 

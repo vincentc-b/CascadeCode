@@ -770,6 +770,9 @@ pending state and suppress duplicate submissions across background refreshes.
 A durable acknowledgement is shown independently of optional panels; canonical
 board reads determine the final lane and approval state without a page reload.
 See the [War Room refresh design](cascade/war_room/DESIGN.md#refresh-latency-and-coherent-read-projections).
+New Epic checkouts are prepared before board registration; a human may resume
+a provably unstarted checkout through the same activation action without
+discarding committed or uncommitted work. See [Watchdog provisioning](cascade/watchdog/DESIGN.md#interrupted-epic-provisioning).
 
 **War Room reads — `resolve_doc_worktree`**
 

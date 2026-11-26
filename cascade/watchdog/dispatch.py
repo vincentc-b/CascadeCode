@@ -21,7 +21,11 @@ from cascade.agent.execution_preflight import record_failed_provider_action
 from cascade.agent.flex_continuation_contract import ActionKind
 from cascade.agent.selection_preflight import RuntimeSelection, evaluate_work_selection
 from cascade.board.parse import parse_doc
-from cascade.epic.activation import _drop_stale_copies, activate_epic_on_worktree
+from cascade.epic.activation import (
+    _drop_stale_copies,
+    activate_epic_on_worktree,
+    prepare_epic_checkout,
+)
 from cascade.planning_action_dependencies import evaluate_action_dependencies
 from cascade.watchdog.config import task_parallelism
 from cascade.watchdog.events import append_event
@@ -42,6 +46,7 @@ from cascade.workspace.integration_worktree import (
     integration_branch,
     merged_board,
     refresh_merged_board,
+    resume_unstarted_epic_worktree,
     unregister_missing_integration_worktree,
 )
 
@@ -195,14 +200,20 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
     returning = (
         returned_manifest is not None and returned_manifest["state"] == "returned"
     )
-    if (
-        not returning
-        and get_integration_worktree(root, "epic", work_id) is not None
-        and not unregister_missing_integration_worktree(
+    existing = get_integration_worktree(root, "epic", work_id)
+    if not returning and existing is not None:
+        if unregister_missing_integration_worktree(
             "epic", work_id, trunk=root, require_missing_branch=True
-        )
-    ):
-        return _fail("existing_activation_run")
+        ):
+            existing = None
+        elif (
+            returned_manifest is not None
+            or meta.plan_approved_at is not None
+            or meta.children
+            or any(candidate.parent == work_id for candidate in board.by_id.values())
+            or not _unstarted_epic(work_id, root)
+        ):
+            return _existing_activation_refusal()
     if not _deps_met(board, meta, root=root):
         return _fail("unmet_deps")
     if refusal := _provider_preflight_refusal(meta, by=by, root=root):
@@ -233,19 +244,49 @@ def _activate_epic(work_id: str, by: str, root: Path) -> DispatchResult:
     if head_sha(root) is None:
         return _fail("bad_state")
     branch = integration_branch("epic", work_id)
-    epic_wt = create_integration_worktree(
-        "epic",
-        work_id,
-        branch=branch,
-        base_ref=base_sha,
-        trunk=root,
-    )
+    if existing is not None:
+        epic_wt = resume_unstarted_epic_worktree(
+            existing, trunk=root, base_sha=base_sha, prepare=prepare_epic_checkout,
+        )
+        if epic_wt is None:
+            return _existing_activation_refusal()
+    else:
+        epic_wt = create_integration_worktree(
+            "epic", work_id, branch=branch, base_ref=base_sha, trunk=root,
+            prepare=prepare_epic_checkout,
+        )
     activate_epic_on_worktree(work_id, trunk=root, epic_wt=epic_wt)
     run_id = _begin_epic_activation_run(work_id, root)
     event = _emit(
         root, work_id, "EpicActivated", {"epic_id": work_id, "by": by, "run_id": run_id}
     )
     return DispatchResult(ok=True, reason=None, event=event)
+
+
+def _existing_activation_refusal() -> DispatchResult:
+    return _fail(
+        "existing_activation_run",
+        detail=(
+            "An existing Epic checkout has activation history or cannot be proven clean "
+            "and contained in the approved trunk. Its work was preserved."
+        ),
+    )
+
+
+def _unstarted_epic(work_id: str, root: Path) -> bool:
+    """Check durable evidence before reusing a provisioned backlog checkout."""
+    from cascade.epic.checkpoint import checkpoint_path
+    from cascade.watchdog.events import read_events
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if project is not None and project.target.root.resolve() != project.tracking.root.resolve():
+        return False
+    checkpoint = checkpoint_path(work_id, root=root)
+    if checkpoint.exists() or (checkpoint.parent / "archive" / work_id).exists():
+        return False
+    events, _ = read_events(work_id, 0, root=root)
+    return not any(event.type == "EpicActivated" for event in events)
 
 
 def _begin_epic_activation_run(work_id: str, root: Path) -> str:

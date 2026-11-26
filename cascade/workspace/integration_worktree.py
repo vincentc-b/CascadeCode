@@ -871,8 +871,9 @@ def create_integration_worktree(
     branch: str,
     base_ref: str,
     trunk: Path,
+    prepare: Callable[[Path], None] | None = None,
 ) -> IntegrationWorktree:
-    """Add ``branch`` at ``base_ref`` and register a worktree (from trunk git dir)."""
+    """Add a worktree, prepare its checkout if needed, then publish its registration."""
 
     trunk = trunk.resolve()
     if head_sha(trunk) is None:
@@ -888,12 +889,20 @@ def create_integration_worktree(
     wt_path.parent.mkdir(parents=True, exist_ok=True)
     base_sha = _resolve_ref(trunk, base_ref)
 
+    if prepare is not None and (
+        wt_path.exists() or _listed_worktree_state(trunk, wt_path)[0]
+        or _branch_exists(trunk, branch)
+    ):
+        raise GitError("Existing unregistered Epic checkout or branch; preserved for recovery.")
     _remove_stale_worktree(trunk, wt_path)
 
     if _branch_exists(trunk, branch):
         _git(trunk, "worktree", "add", str(wt_path), branch)
     else:
         _git(trunk, "worktree", "add", "-b", branch, str(wt_path), base_ref)
+
+    if prepare is not None:
+        prepare(wt_path)
 
     record = IntegrationWorktree(
         kind=kind,
@@ -915,6 +924,54 @@ def create_integration_worktree(
     else:
         _upsert_registry_entry(trunk, record)
     return record
+
+
+def resume_unstarted_epic_worktree(
+    entry: IntegrationWorktree,
+    *,
+    trunk: Path,
+    base_sha: str,
+    prepare: Callable[[Path], None] | None = None,
+) -> IntegrationWorktree | None:
+    """Reuse only a clean, canonical checkout with no work beyond the approved base.
+
+    The caller must first prove the Epic is still backlog with no execution
+    evidence and recheck its admission gates. Never reset or delete an existing
+    branch, and do not treat divergent work as an abandoned provisioning attempt.
+    """
+    from cascade.board.gitutil import _run as git_run
+
+    if (
+        entry.kind != "epic"
+        or entry.branch != integration_branch("epic", entry.work_id)
+        or entry.path != integration_worktree_path("epic", entry.work_id, trunk=trunk)
+        or not entry.path.is_dir()
+    ):
+        return None
+    present, locked = _listed_worktree_state(trunk, entry.path)
+    if not present or locked:
+        return None
+    branch = git_run(["symbolic-ref", "--quiet", "--short", "HEAD"], entry.path, check=False)
+    dirty = git_run(["status", "--porcelain", "--untracked-files=all"], entry.path, check=False)
+    tip = head_sha(entry.path)
+    if (
+        branch.returncode or branch.stdout.strip() != entry.branch
+        or dirty.returncode or dirty.stdout or not tip
+    ):
+        return None
+    if any(
+        _git(trunk, "merge-base", "--is-ancestor", left, right, check=False).returncode
+        for left, right in ((entry.base_sha, tip), (tip, base_sha))
+    ):
+        return None
+    # A fast-forward preserves the existing checkout and every commit. The
+    # approved revision, not the interrupted attempt's old base, owns new work.
+    git_run(["merge", "--ff-only", base_sha], entry.path)
+    if prepare is not None:
+        prepare(entry.path)
+    updated = replace(entry, base_sha=base_sha)
+    _upsert_registry_entry(trunk, updated)
+    return updated
 
 
 def ensure_integration_worktree(

@@ -44,6 +44,7 @@ const context = {
   backlogEpicPriorityUi: null,
   OPEN_STATUSES: { backlog: true },
   branchSyncHelpers: () => null,
+  appendLifecycleActionFeedback() {},
   lifecycleActionButton(_item, _path, label, _pending, _confirmed, disabledReason) {
     return context.actionButton(label, null, disabledReason);
   },

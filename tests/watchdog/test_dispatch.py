@@ -71,21 +71,37 @@ def _open_feature(root: Path, feat_id: str = "feat_001", *, epic_id: str = "epic
     assert dispatch_feature(feat_id, "human", root=root).ok
 
 
-@pytest.mark.parametrize("artifacts", ["present", "branch_only", "absent"])
-def test_activate_epic_reconciles_only_fully_orphaned_registration(tmp_path: Path, artifacts: str) -> None:
+@pytest.mark.parametrize("artifacts", ["present", "branch_only", "absent", "dirty", "diverged", "checkpoint", "event"])
+def test_activate_epic_reconciles_only_proven_unstarted_registration(tmp_path: Path, artifacts: str) -> None:
     import subprocess
     from cascade.workspace.integration_worktree import create_integration_worktree
 
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Returned epic", tier="epic", status="backlog")
     run = create_integration_worktree("epic", "epic_001", branch="epic/epic_001", base_ref="HEAD", trunk=root)
-    if artifacts != "present":
+    if artifacts in {"branch_only", "absent"}:
         subprocess.run(["git", "worktree", "remove", str(run.path)], cwd=root, check=True, capture_output=True)
+    if artifacts == "dirty":
+        (run.path / "uncommitted.txt").write_text("preserve me")
+    if artifacts == "diverged":
+        (run.path / "unique.txt").write_text("preserve me")
+        subprocess.run(["git", "add", "unique.txt"], cwd=run.path, check=True)
+        subprocess.run(["git", "commit", "-m", "committed work"], cwd=run.path, check=True, capture_output=True)
+    if artifacts == "checkpoint":
+        from cascade.epic.checkpoint import checkpoint_path
+        checkpoint = checkpoint_path("epic_001", root=root)
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.touch()
+    if artifacts == "event":
+        from datetime import datetime, timezone
+        from cascade.watchdog.events import append_event
+        from cascade.watchdog.types import Event
+        append_event("epic_001", Event(type="EpicActivated", ts=datetime.now(timezone.utc), payload={}, dest="epic_001"), root=root)
     if artifacts == "absent":
         subprocess.run(["git", "branch", "-D", run.branch], cwd=root, check=True, capture_output=True)
     result = activate_epic("epic_001", "human", root=root)
-    assert result.ok is (artifacts == "absent")
-    if artifacts != "absent":
+    assert result.ok is (artifacts in {"present", "absent"})
+    if artifacts not in {"present", "absent"}:
         assert result.reason == "existing_activation_run"
     else:
         assert result.event.type == "EpicActivated"

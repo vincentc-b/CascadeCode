@@ -48,6 +48,17 @@ _(see integration worktree)_
 """
 
 
+def prepare_epic_checkout(epic_root: Path) -> None:
+    """Remove inherited child specs before exposing a single-repo Epic checkout."""
+    from cascade.board.context import get_project_context
+
+    project = get_project_context()
+    if project is not None and project.target.root.resolve() != project.tracking.root.resolve():
+        # Product and tracking files are separate in split projects.
+        return
+    _scrub_child_specs(epic_root)
+
+
 def activate_epic_on_worktree(
     work_id: str,
     *,

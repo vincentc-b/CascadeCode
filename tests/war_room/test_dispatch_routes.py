@@ -114,6 +114,21 @@ def test_activate_epic_human_success(dispatch_board):
     assert read_doc("epic_001", root=root).meta.path.parent.name == "2_active"
 
 
+def test_activation_schema_failure_is_a_json_conflict(dispatch_board, monkeypatch):
+    from cascade.board.errors import SchemaError
+
+    base, _root = dispatch_board
+
+    def fail(*args, **kwargs):
+        raise SchemaError("Duplicate historical child document")
+
+    monkeypatch.setattr("cascade.war_room.server.activate_epic", fail)
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        _post(f"{base}/api/activate_epic", {"id": "epic_001"})
+    assert exc.value.code == HTTPStatus.CONFLICT
+    assert json.loads(exc.value.read())["error"] == "Duplicate historical child document"
+
+
 def test_activation_api_can_finish_after_generic_request_deadline(dispatch_board, monkeypatch):
     from cascade.watchdog.types import DispatchResult
 

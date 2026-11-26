@@ -537,6 +537,59 @@ def test_activate_snapshot_only_epic_without_trunk_ff(tmp_path: Path, monkeypatc
     assert epic_wt.base_sha == provenance.sha
 
 
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_activation_scrubs_inherited_duplicate_children_before_board_scan(
+    tmp_path: Path, monkeypatch, interrupted: bool,
+) -> None:
+    """An approved remote brief may share a tree with stale historical child copies."""
+    from cascade.board.gitutil import head_sha
+    from cascade.watchdog.events import read_events
+    from cascade.workspace.integration_worktree import create_integration_worktree
+
+    upstream, remote = _seed_remote(tmp_path)
+    _push_remote_brief(upstream, "epic_050", "Activate me")
+    root = make_repo(tmp_path / "local")
+    (root / "README.md").write_text("local\n")
+    subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "local"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    if interrupted:
+        previous = read_provenance(root)
+        assert previous is not None
+        staged = create_integration_worktree(
+            "epic", "epic_050", branch="epic/epic_050", base_ref=previous.sha, trunk=root,
+        )
+        assert head_sha(staged.path) == previous.sha
+
+    # Deliberately reproduce the bad historical source tree. The snapshot
+    # contains only reviewed Epic briefs, not the unrelated child copies.
+    other = add_doc(upstream, id="epic_099", title="Old Epic", tier="epic", status="completed")
+    feat = add_doc(upstream, id="feat_099", title="Old Feature", tier="feature", parent=other.meta.id)
+    duplicate = upstream / "docs/features/3_completed" / feat.meta.path.name
+    duplicate.write_text(feat.meta.path.read_text().replace("status: backlog", "status: completed"))
+    subprocess.run(["git", "add", "docs"], cwd=upstream, check=True)
+    subprocess.run(["git", "commit", "-m", "historical duplicate"], cwd=upstream, check=True, capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=upstream, check=True, capture_output=True)
+    refresh_remote_backlog_snapshot(root, remote="origin", trunk_branch="main")
+    latest = read_provenance(root)
+    assert latest is not None
+    before = head_sha(root)
+    monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args, **_kwargs: None)
+    result = activate_epic("epic_050", "human", root=root)
+    assert result.ok
+    entry = get_integration_worktree(root, "epic", "epic_050")
+    assert entry is not None and entry.base_sha == latest.sha
+    if interrupted:
+        assert entry.path == staged.path
+    assert head_sha(root) == before
+    assert not list((entry.path / "docs/features").rglob("*.md"))
+    assert merged_board(root).by_id["epic_050"].status == "active"
+    events, _ = read_events("epic_050", 0, root=root)
+    assert sum(event.type == "EpicActivated" for event in events) == 1
+    assert not activate_epic("epic_050", "human", root=root).ok
+
+
 def test_activate_snapshot_brief_adds_missing_plan_sections(tmp_path: Path, monkeypatch) -> None:
     upstream, remote = _seed_remote(tmp_path)
     doc = add_doc(upstream, id="epic_051", title="Short brief", tier="epic", status="backlog")

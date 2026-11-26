@@ -297,7 +297,9 @@ pending control that survives board redraws. A successful write shows an
 acknowledgement before the follow-up board GET completes. The actual column,
 readiness, and approval state still come from the canonical board; the UI must
 not fabricate lifecycle state or require a full page reload. A refused write
-shows its reason; a lost response is an unconfirmed outcome, not proof of failure.
+shows its reason directly on the affected Epic row across polling; a lost response
+is an unconfirmed outcome, not proof of failure. The activation route returns a
+JSON conflict for known board/workspace errors rather than dropping its connection.
 The plan viewer likewise shows pending and confirmed approval and retains the
 exact review tuple and dispatch-pending warning.
 

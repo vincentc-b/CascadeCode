@@ -1,5 +1,8 @@
 {
   "elements": [
+    {"dsl_identifier": "code_watchdog_activate_epic", "semantic_id": "element.code.watchdog.activate-epic", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_epic_prepare_checkout", "semantic_id": "element.code.epic.prepare-checkout", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_resume_epic", "semantic_id": "element.code.workspace.resume-epic", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_lifecycle_ui", "semantic_id": "element.code.dashboard.lifecycle-ui", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_board_refresh", "semantic_id": "element.code.dashboard.board-refresh", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_plan_approval", "semantic_id": "element.code.dashboard.plan-approval", "fragment": "model.dsl"},
@@ -248,6 +251,11 @@
     {"path": "views.dsl", "owner": "epic_049"}
   ],
   "relationships": [
+    {"dsl_identifier": "dashboard_post_to_epic_activation", "semantic_id": "relationship.code-dashboard-post-to-epic-activation", "source": "code_dashboard_post", "destination": "code_watchdog_activate_epic", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_activation_to_workspace_create", "semantic_id": "relationship.code-epic-activation-to-workspace-create", "source": "code_watchdog_activate_epic", "destination": "code_workspace_create", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_activation_to_workspace_resume", "semantic_id": "relationship.code-epic-activation-to-workspace-resume", "source": "code_watchdog_activate_epic", "destination": "code_workspace_resume_epic", "fragment": "model.dsl"},
+    {"dsl_identifier": "workspace_create_to_epic_prepare", "semantic_id": "relationship.code-workspace-create-to-epic-prepare", "source": "code_workspace_create", "destination": "code_epic_prepare_checkout", "fragment": "model.dsl"},
+    {"dsl_identifier": "workspace_resume_to_epic_prepare", "semantic_id": "relationship.code-workspace-resume-to-epic-prepare", "source": "code_workspace_resume_epic", "destination": "code_epic_prepare_checkout", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_lifecycle_to_post", "semantic_id": "relationship.code-dashboard-lifecycle-to-post", "source": "code_dashboard_lifecycle_ui", "destination": "code_dashboard_post", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_lifecycle_to_board_refresh", "semantic_id": "relationship.code-dashboard-lifecycle-to-board-refresh", "source": "code_dashboard_lifecycle_ui", "destination": "code_dashboard_board_refresh", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_board_refresh_to_router", "semantic_id": "relationship.code-dashboard-board-refresh-to-router", "source": "code_dashboard_board_refresh", "destination": "code_dashboard_router", "fragment": "model.dsl"},

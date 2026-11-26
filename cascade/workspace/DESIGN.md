@@ -4,6 +4,22 @@ Purpose: resolve repository roles, manage integration worktrees, and enforce rev
 
 
 
+## Epic checkout admission and provisioning
+
+The worktree creator accepts a preparation callback before registry publication
+and transcript ownership handoff. Epic activation uses it to remove inherited
+Feature/Task documents in a single-repository project, so a newly registered
+checkout never contributes those stale copies to the board. A previous unregistered
+checkout or branch is preserved rather than force-removed by a provisioning retry.
+For an interrupted
+activation, `resume_unstarted_epic_worktree` verifies canonical identity, an
+unlocked and clean checkout and ancestor-only history against the latest approved
+base; it fast-forwards and refreshes the registry without rewriting history.
+Watchdog separately proves absent activation evidence and current admission gates.
+See [Epic preparation](../epic/DESIGN.md#initial-activation-checkout-preparation)
+and [Watchdog provisioning](../watchdog/DESIGN.md#interrupted-epic-provisioning).
+
+
 ## Worker lifecycle and runtime identity
 
 `REQ-WORKSPACE-RUNTIME-001`: A reviewed runtime repair is current only when an

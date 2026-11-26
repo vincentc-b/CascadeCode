@@ -2,6 +2,27 @@
 
 Purpose: observe canonical state, admit dependency-ready work, and coordinate bounded recovery. Interfaces are dispatch/activation, queues, poll loop, capability registry, incidents/reservations, health audit, and model resolution. Owns `REQ-WATCHDOG-001` (automation obeys lifecycle gates) and `DEC-WATCHDOG-001` (generation-bound reservations converge recovery).
 
+## Interrupted Epic provisioning
+
+`DEC-WATCHDOG-ACTIVATION-001`: An existing registry row does not, by itself,
+prove that planning started. A new explicit human activation may resume a
+single-repository backlog Epic's existing checkout only when no return manifest,
+plan approval, child work, current/archived checkpoint or `EpicActivated` queue
+evidence exists. Recheck dependency and provider admission on the current
+reviewed brief. Workspace must prove the exact unlocked registered branch/path,
+clean Git status and `original base ≤ checkout HEAD ≤ reviewed base` ancestry.
+Fast-forward to the approved base, prepare the checkout and refresh its base
+registration without deleting or resetting a branch. Dirty, divergent,
+branch-only or previously activated runs remain refused and preserved. The usual
+activation inserts one durable event and starts one run only after materializing
+the live document. No GET or automatic retry admits this action.
+
+Regression tests in `tests/test_backlog_snapshot.py` reproduce remote historical
+duplicate child documents and reuse a staged checkout on a newer approved base;
+`tests/watchdog/test_dispatch.py` covers refusal of actual work or activation
+evidence.
+
+
 ## Current recovery progress publication
 
 The significant producer, its SQLite projection state, fenced transcript mapping

@@ -705,7 +705,11 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         work_id = self._require_work_id(body)
         if work_id is None:
             return
-        result = activate_epic(work_id, "human", root=self.server.root)
+        try:
+            result = activate_epic(work_id, "human", root=self.server.root)
+        except (BoardError, WorkspaceError, OSError) as exc:
+            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            return
         self._json_response(HTTPStatus.OK, dispatch_result_to_dict(result))
 
     def _handle_brief_template(self) -> None:

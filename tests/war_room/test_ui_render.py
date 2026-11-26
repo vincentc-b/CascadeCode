@@ -645,8 +645,21 @@ def test_epic_lifecycle_buttons_reconcile_in_real_browser(ui_server):
             playwright.expect(row.get_by_role("button", name="Activating…")).to_be_disabled()
             assert len(writes) == 1
 
+            # A refused activation stays visible on the affected row after polling.
+            refusal = "Existing checkout contains work; activation was refused."
+            writes[0].fulfill(json={"ok": False, "reason": "existing_activation_run", "message": refusal})
+            feedback = row.locator(".lifecycle-action-feedback")
+            playwright.expect(feedback).to_have_text(refusal)
+            wait_for_poll()
+            playwright.expect(feedback).to_have_text(refusal)
+            playwright.expect(activate).to_be_enabled()
+            activate.click()
+            playwright.expect(row.get_by_role("button", name="Activating…")).to_be_disabled()
+            playwright.expect(feedback).to_have_count(0)
+            assert len(writes) == 2
+
             # Acknowledgement is visible before the full board has caught up.
-            writes[0].fulfill(json={"ok": True})
+            writes[1].fulfill(json={"ok": True})
             playwright.expect(row.get_by_role("button", name="Activated — refreshing…")).to_be_disabled()
             board["epics"]["1_backlog"].remove(epic)
             epic.update(status="active", plan_readiness={"status": "ready_for_review", "can_approve_plan": True})
@@ -656,14 +669,14 @@ def test_epic_lifecycle_buttons_reconcile_in_real_browser(ui_server):
             playwright.expect(approve).to_be_enabled(timeout=15000)
             approve.click()
             playwright.expect(active_row.get_by_role("button", name="Approving…")).to_be_disabled()
-            assert len(writes) == 2
+            assert len(writes) == 3
             wait_for_poll()
             playwright.expect(active_row.get_by_role("button", name="Approving…")).to_be_disabled()
-            assert len(writes) == 2
-            writes[1].fulfill(json={"ok": True})
+            assert len(writes) == 3
+            writes[2].fulfill(json={"ok": True})
             playwright.expect(active_row.get_by_role("button", name="Approved — refreshing…")).to_be_disabled()
             epic["plan_approved"] = True
             playwright.expect(active_row.get_by_role("button", name="Approved", exact=True)).to_be_disabled(timeout=15000)
-            assert len(writes) == 2
+            assert len(writes) == 3
         finally:
             browser.close()

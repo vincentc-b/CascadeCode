@@ -4,6 +4,21 @@ Purpose: run the persistent strategic team that owns Epic planning, decisions, a
 
 
 
+## Initial activation checkout preparation
+
+`REQ-EPIC-ACTIVATION-001`: An approved brief can share its remote base tree
+with historical Feature and Task copies. In a single repository, prepare the
+new Epic checkout by dropping inherited child specs before publishing its
+integration registration or scanning it as a live board. This prevents duplicate
+historical IDs from aborting initial activation. The reviewed base remains the
+branch's registered base; child specs in product trunk are not modified. Split
+product/tracking projects retain their separate document ownership.
+
+The [Watchdog activation contract](../watchdog/DESIGN.md#interrupted-epic-provisioning)
+controls reuse of a previously provisioned checkout. Only after live Epic
+materialization does normal activation write the authorization event and begin the
+planning run; preparation is not an execution authorization.
+
 ## Readiness projection versus authorization
 
 The board API calls `project_epic_plan_readiness` with its coherent response board

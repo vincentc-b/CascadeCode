@@ -1972,6 +1972,7 @@
     }
 
     row.appendChild(actions);
+    if (tier === "epics") appendLifecycleActionFeedback(row, item);
     return row;
   }
 
@@ -2296,6 +2297,24 @@
 
   // Track a write by logical action, not by the DOM node replaced on each poll.
   const lifecycleActions = new Map();
+  const lifecycleActionFailures = new Map();
+
+  function appendLifecycleActionFeedback(row, item) {
+    ["/api/activate_epic", "/api/approve_epic_plan"].forEach(function (path) {
+      const key = path + ":" + item.id;
+      if (path === "/api/activate_epic" ? !OPEN_STATUSES[item.status] : item.plan_approved) {
+        lifecycleActionFailures.delete(key);
+        return;
+      }
+      const message = lifecycleActionFailures.get(key);
+      if (!message) return;
+      const feedback = document.createElement("p");
+      feedback.className = "lifecycle-action-feedback status-line error";
+      feedback.setAttribute("role", "alert");
+      feedback.textContent = message;
+      row.appendChild(feedback);
+    });
+  }
 
   function reconcileLifecycleActions() {
     lifecycleActions.forEach(function (pending, key) {
@@ -2314,19 +2333,26 @@
       if (lifecycleActions.has(key)) return;
       const pending = { id: item.id, path: path, label: pendingLabel, button: btn, confirmed: false };
       lifecycleActions.set(key, pending);
+      if (lifecycleActionFailures.delete(key) && lastBoardView) renderBoard(lastBoardView);
       btn.textContent = pendingLabel;
       btn.setAttribute("aria-busy", "true");
       try {
         await dispatch(path, { id: item.id }, {
           timeoutMs: LIFECYCLE_ACTION_DEADLINE_MS,
           onResult: function (body) {
-            if (!body.ok) return;
+            if (!body.ok) {
+              lifecycleActionFailures.set(key, body.message || body.error || "Action refused: " + (body.reason || "unknown reason"));
+              return;
+            }
             pending.confirmed = true;
             pending.label = confirmedLabel;
             pending.button.textContent = confirmedLabel;
             reconcileLifecycleActions();
           }
         });
+      } catch (err) {
+        if (!pending.confirmed) lifecycleActionFailures.set(key, err.message || String(err));
+        throw err;
       } finally {
         if (!pending.confirmed) lifecycleActions.delete(key);
         // The canonical refresh may have failed or returned before the write was
