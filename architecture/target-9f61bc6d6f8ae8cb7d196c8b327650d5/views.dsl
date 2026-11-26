@@ -21,7 +21,7 @@ component supervisor "cascade-supervisor-components" {
 // Focused implementation boundary; lifecycle and code diagrams are in the
 // owning cascade/{epic,feature,task}/DESIGN.md documents.
 component supervisor "cascade-team-components" {
-    include team_component epic_team feature_team task_team agent_component watchdog_component repository
+    include team_component epic_team feature_team task_team agent_component watchdog_component boss_component workspace_component repository
     autoLayout lr
 }
 
@@ -204,6 +204,6 @@ custom "cascade-workspace-code" {
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
     include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
-    include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked
+    include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked code_workspace_retained_feature
     autoLayout lr
 }

@@ -887,7 +887,8 @@ def test_retirement_persists_and_rereads_missing_terminal_task(
     )
     reviews = root / ".cascade" / "reviews.json"
     reviews.write_text(
-        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001"}}\n',
+        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001", '
+        '"terminal_disposition": "closed"}}\n',
         encoding="utf-8",
     )
 
@@ -1070,6 +1071,19 @@ def test_delivery_rollup_retirement_and_restart_converge_on_terminal_task(
     invalidate_merged_board(root)
 
     assert try_complete_feature("feat_001", root=root, review_merged=True)
+    # A forge callback records completion but cannot retire the retained owner
+    # before the intended local Epic target contains the delivered head.
+    assert feature.path.exists()
+    assert get_integration_worktree(root, "feature", "feat_001") is not None
+    subprocess.run(
+        ["git", "merge", "--no-ff", feature.branch, "-m", "synchronize feature"],
+        cwd=epic.path,
+        check=True,
+        capture_output=True,
+    )
+    assert retire_integration_worktree(
+        "feature", "feat_001", merged_into=epic.branch, trunk=root
+    )
     assert not feature.path.exists()
     persisted = read_doc_in_worktree("task_001", epic.path)
     assert persisted.meta.status == "completed"
@@ -1135,7 +1149,8 @@ def test_retirement_refuses_missing_descendant_provenance(tmp_path: Path) -> Non
     save_doc(target_feature, previous_path=previous, root=epic.path)
     reviews = root / ".cascade" / "reviews.json"
     reviews.write_text(
-        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001"}}\n',
+        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001", '
+        '"terminal_disposition": "closed"}}\n',
         encoding="utf-8",
     )
 
@@ -1146,6 +1161,135 @@ def test_retirement_refuses_missing_descendant_provenance(tmp_path: Path) -> Non
         proof.reason is not None
         and "lacks delivery/completion provenance" in proof.reason
     )
+    assert feature.path.is_dir()
+    assert get_integration_worktree(root, "feature", "feat_001") is not None
+
+
+def test_feature_retirement_requires_exact_review_and_target_integration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import cascade.review as review
+    from cascade.watchdog import Event, append_event
+    from datetime import datetime, timezone
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    epic = ensure_integration_worktree(
+        "epic", "epic_001", branch="epic/epic_001", base_ref="HEAD", trunk=root
+    )
+    feature = ensure_integration_worktree(
+        "feature", "feat_001", branch="feat/feat_001", base_ref=epic.branch, trunk=root
+    )
+    (feature.path / "delivered.txt").write_text("delivery\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "delivered.txt"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "feature delivery"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+    )
+    source_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    target_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=epic.path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    projection = {
+        "url": "https://example.test/pulls/1",
+        "number": "1",
+        "forge": "github",
+        "source_branch": feature.branch,
+        "target_branch": epic.branch,
+        "source_head": source_head,
+        "target_head": target_head,
+        "draft": False,
+        "closed": False,
+        "seen_comments": [],
+        "toast_notified": True,
+    }
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    missing = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert not missing.ok and "review_not_published" in str(missing.reason)
+
+    review._store_review_generation(
+        root, "feat_001", projection, generation=1, action_id="repair:one"
+    )
+    opened = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert not opened.ok and "review_acceptance_pending" in str(opened.reason)
+
+    review._update_record(root, "feat_001", {"closed": True})
+    closed_unmerged = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert not closed_unmerged.ok
+    assert "accepted_current_generation_missing" in str(closed_unmerged.reason)
+
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "accepted_merge_sha": source_head,
+            "accepted_source_head": "stale-source",
+            "accepted_target_head": target_head,
+            "reconciliation_status": "accepted",
+        },
+    )
+    stale = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert not stale.ok
+
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "accepted_source_head": source_head,
+            "accepted_target_head": target_head,
+        },
+    )
+    unsynchronized = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert not unsynchronized.ok
+    assert "intended_target_not_verified" in str(unsynchronized.reason)
+    assert feature.path.is_dir()
+    assert get_integration_worktree(root, "feature", "feat_001") is not None
+
+    subprocess.run(
+        ["git", "merge", "--no-ff", feature.branch, "-m", "integrate feature"],
+        cwd=epic.path,
+        check=True,
+        capture_output=True,
+    )
+    append_event(
+        "epic_001",
+        Event(
+            type="FeatureCompleted",
+            ts=datetime.now(timezone.utc),
+            payload={"feature_id": "feat_001"},
+            dest="epic_001",
+        ),
+        root=root,
+    )
+
+    verified = prove_terminal_retirement("feature", "feat_001", trunk=root)
+    assert verified.ok
     assert feature.path.is_dir()
     assert get_integration_worktree(root, "feature", "feat_001") is not None
 
@@ -1167,7 +1311,8 @@ def test_restart_retires_terminal_review_worktree(tmp_path: Path) -> None:
     )
     reviews = root / ".cascade" / "reviews.json"
     reviews.write_text(
-        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001"}}\n',
+        '{"feat_001": {"closed": true, "target_branch": "epic/epic_001", '
+        '"terminal_disposition": "closed"}}\n',
         encoding="utf-8",
     )
 

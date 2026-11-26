@@ -302,9 +302,11 @@ def resume_inflight_graphs(root: Path) -> None:
     pending_recovery = pending_recovery_team_ids(root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        if (
-            meta.path.parent.name != "2_active"
-            and work_id not in pending_recovery
+        retained_delivery = _retained_feature_delivery(meta, root=repo)
+        if not _team_accepts_queue_delivery(
+            meta,
+            pending_recovery=pending_recovery,
+            retained_delivery=retained_delivery,
         ):
             continue
         if meta.tier not in ("epic", "feature", "task"):
@@ -377,9 +379,11 @@ def deliver_queue_kickoffs(root: Path) -> None:
     pending_recovery = pending_recovery_team_ids(root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        if (
-            meta.path.parent.name != "2_active"
-            and work_id not in pending_recovery
+        retained_delivery = _retained_feature_delivery(meta, root=repo)
+        if not _team_accepts_queue_delivery(
+            meta,
+            pending_recovery=pending_recovery,
+            retained_delivery=retained_delivery,
         ):
             continue
         if meta.tier not in ("epic", "feature", "task"):
@@ -597,6 +601,7 @@ def _run_queue_delivery_locked(
 ) -> None:
     from cascade.watchdog.events import read_events
 
+    retained_delivery: dict | None = None
     if tier == "task":
         from cascade.workspace.doc_root import read_doc_resolved
 
@@ -611,20 +616,26 @@ def _run_queue_delivery_locked(
         from cascade.workspace.integration_worktree import merged_board
 
         meta = merged_board(repo).by_id.get(work_id)
-        if (
-            meta is None
-            or meta.path.parent.name != "2_active"
-            and work_id not in pending_recovery_team_ids(root=repo)
+        pending_recovery = pending_recovery_team_ids(root=repo)
+        retained_delivery = _retained_feature_delivery(meta, root=repo)
+        if meta is None or not _team_accepts_queue_delivery(
+            meta,
+            pending_recovery=pending_recovery,
+            retained_delivery=retained_delivery,
         ):
             return
-
     from cascade.epic.return_graph import holds_turn
     if holds_turn(work_id, root=repo):
         return
     _resume_inflight_turn_if_needed(work_id, tier, repo, feature_id)
     _service_child_deliveries_between_turns(work_id, tier, repo)
 
-    if retry_staged and _unanswered_staged_input(
+    retained_actionable = bool(
+        retained_delivery and retained_delivery.get("actionable")
+    )
+    if retry_staged and (
+        retained_delivery is None or retained_actionable
+    ) and _unanswered_staged_input(
         work_id, tier, root=repo, feature_id=feature_id
     ):
         kickoff_turn(
@@ -653,6 +664,12 @@ def _run_queue_delivery_locked(
 
         warn_duplicate_kickoff_if_needed(work_id, new_offset, root=repo)
         staged = _staged_messages_from_queue_events(new_events, repo)
+        if retained_delivery is not None and not retained_actionable:
+            # Polls and generic messages may advance the durable cursor for a
+            # completed Feature owner, but cannot create repair authority or a
+            # paid planning turn.  A current admitted repair is rechecked under
+            # this graph lock before its event is staged.
+            staged = []
         after = _commit_classified_queue_batch(
             work_id,
             tier,
@@ -683,6 +700,43 @@ def _run_queue_delivery_locked(
                 )
             )
             _service_child_deliveries_between_turns(work_id, tier, repo)
+
+
+def _retained_feature_delivery(meta: WorkMeta | None, *, root: Path) -> dict | None:
+    """Return the nonterminal delivery view for a completed Feature owner."""
+
+    if (
+        meta is None
+        or meta.tier != "feature"
+        or meta.status != "completed"
+        or meta.path.parent.name != "3_completed"
+    ):
+        return None
+    from cascade.review import feature_delivery_view
+
+    delivery = feature_delivery_view(meta.id, root=root)
+    if delivery.get("phase") in {
+        "verified_integrated",
+        "terminal_cancelled",
+        "terminal_closed",
+    }:
+        return None
+    return delivery
+
+
+def _team_accepts_queue_delivery(
+    meta: WorkMeta,
+    *,
+    pending_recovery: set[str],
+    retained_delivery: dict | None,
+) -> bool:
+    """Share ordinary, startup and locked eligibility for graph delivery."""
+
+    return bool(
+        meta.path.parent.name == "2_active"
+        or meta.id in pending_recovery
+        or retained_delivery is not None
+    )
 
 
 def _service_child_deliveries_between_turns(work_id: str, tier: str, repo: Path) -> None:

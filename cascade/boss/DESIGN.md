@@ -33,7 +33,10 @@ Under `REQ-BOSS-001`, Boss invokes Workspace's descendant-aware retirement proof
 the existing lifecycle authority after accepted Feature/Epic closeout. Boss logs
 the proof's missing evidence and owner action and leaves the branch, checkout and
 registry intact on refusal; it does not rank board copies or maintain a second
-retirement ledger.
+retirement ledger. Workspace independently rereads the same shared Feature
+delivery projection before it persists descendants, so a stale callback or an
+unsynchronized intended Epic target cannot exploit time between Boss closeout
+and checkout retirement.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -56,7 +59,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
-| [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
+| [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
 
 ```mermaid
 flowchart TD
@@ -69,7 +72,7 @@ flowchart TD
     Accept --> Target{Accepted merge on intended Epic target?}
     Target -->|no| Preserve
     Target -->|yes| Event[Emit FeatureCompleted once]
-    Event --> Proof[Workspace descendant persistence + canonical readback]
+    Event --> Proof[Workspace delivery recheck + descendant persistence + canonical readback]
     Proof -->|complete| Close[Attempt retirement]
     Proof -->|refused| Preserve
 ```

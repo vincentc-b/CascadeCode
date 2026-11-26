@@ -4,6 +4,7 @@
     {"dsl_identifier": "code_workspace_resume", "semantic_id": "element.code.workspace.resume", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_schedule", "semantic_id": "element.code.workspace.schedule", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_delivery_locked", "semantic_id": "element.code.workspace.delivery-locked", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_retained_feature", "semantic_id": "element.code.workspace.retained-feature-delivery", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_review_health", "semantic_id": "element.code.watchdog.review-health", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_review_snapshot", "semantic_id": "element.code.watchdog.review-snapshot", "fragment": "model.dsl"},
     {"dsl_identifier": "code_boss_review_pending", "semantic_id": "element.code.boss.review-pending", "fragment": "model.dsl"},
@@ -260,6 +261,11 @@
   ],
   "relationships": [
     {"dsl_identifier": "code_workspace_delivery_to_schedule", "semantic_id": "relationship.code-workspace-delivery-to-schedule", "fragment": "model.dsl", "source": "code_workspace_delivery", "destination": "code_workspace_schedule"},
+    {"dsl_identifier": "code_workspace_delivery_to_retained_feature", "semantic_id": "relationship.code-workspace-delivery-to-retained-feature", "fragment": "model.dsl", "source": "code_workspace_delivery", "destination": "code_workspace_retained_feature"},
+    {"dsl_identifier": "code_workspace_resume_to_retained_feature", "semantic_id": "relationship.code-workspace-resume-to-retained-feature", "fragment": "model.dsl", "source": "code_workspace_resume", "destination": "code_workspace_retained_feature"},
+    {"dsl_identifier": "code_workspace_locked_to_retained_feature", "semantic_id": "relationship.code-workspace-locked-to-retained-feature", "fragment": "model.dsl", "source": "code_workspace_delivery_locked", "destination": "code_workspace_retained_feature"},
+    {"dsl_identifier": "code_workspace_retained_feature_to_delivery_view", "semantic_id": "relationship.code-workspace-retained-feature-to-delivery-view", "fragment": "model.dsl", "source": "code_workspace_retained_feature", "destination": "code_boss_delivery_view"},
+    {"dsl_identifier": "code_workspace_descendant_proof_to_delivery_view", "semantic_id": "relationship.code-workspace-descendant-proof-to-delivery-view", "fragment": "model.dsl", "source": "code_workspace_descendant_proof", "destination": "code_boss_delivery_view"},
     {"dsl_identifier": "code_workspace_resume_to_schedule", "semantic_id": "relationship.code-workspace-resume-to-schedule", "fragment": "model.dsl", "source": "code_workspace_resume", "destination": "code_workspace_schedule"},
     {"dsl_identifier": "code_workspace_schedule_to_locked", "semantic_id": "relationship.code-workspace-schedule-to-locked", "fragment": "model.dsl", "source": "code_workspace_schedule", "destination": "code_workspace_delivery_locked"},
     {"dsl_identifier": "code_workspace_delivery_to_invoke", "semantic_id": "relationship.code-workspace-delivery-to-invoke", "fragment": "model.dsl", "source": "code_workspace_delivery_locked", "destination": "code_workspace_invoke"},
@@ -562,6 +568,7 @@
     {"dsl_identifier": "code_task_budget_reserve_to_bind", "semantic_id": "relationship.code-task-incident-budget-reserve-to-bind", "source": "code_task_budget_reserve", "destination": "code_task_budget_bind", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_budget_settle_to_reserve", "semantic_id": "relationship.code-task-incident-budget-settle-to-reserve", "source": "code_task_budget_settle", "destination": "code_task_budget_reserve", "fragment": "model.dsl"},
     {"dsl_identifier": "boss_uses_workspace", "semantic_id": "relationship.boss-uses-workspace", "source": "boss_component", "destination": "workspace_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "workspace_uses_boss_delivery", "semantic_id": "relationship.workspace-uses-boss-delivery", "source": "workspace_component", "destination": "boss_component", "fragment": "model.dsl"},
     {"dsl_identifier": "watchdog_uses_boss", "semantic_id": "relationship.watchdog-uses-boss", "source": "watchdog_component", "destination": "boss_component", "fragment": "model.dsl"}
   ],
   "renames": [],
