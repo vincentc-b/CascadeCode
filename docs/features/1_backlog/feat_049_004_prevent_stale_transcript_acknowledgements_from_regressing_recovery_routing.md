@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-26T02:07:49.014961+00:00'
 ---
 # Prevent stale transcript acknowledgements from regressing recovery routing
 
