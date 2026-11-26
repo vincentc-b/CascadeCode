@@ -2947,3 +2947,62 @@ listing, twelve pinned digest checks, lifecycle diff/ancestry inspection and
 sign-off remain withheld pending integration, contention proof, canonical record
 corrections, design/publication reconciliation and broader documentation-refresh
 proof. Return control to the queued Feature architecture turn and child delivery.
+
+## Manager terminal publication handoff and corrective planning constraints
+
+In reply to Feature 3's `architecture_publication_terminal_failed_99be54b1`
+and `completion_after_architecture_failure_822f5e7e` handoffs, and Feature 5's
+planning-start event. Canonical Epic remains `9663684255700d5178bdd369c97cb8d5a6f4ed6a`.
+Canonical Feature 3 is completed at `822f5e7e89ece4ad782b39fcc0dbb2feee2215f1`;
+its diff from publication pin `99be54b1` changes only the relocated Feature
+record and closeout. It remains outside Epic ancestry. Completion establishes
+neither integrated acceptance nor architecture approval.
+
+The Feature architect reports that exact replay returned terminal `failed` for
+`architecture-publication-3bf3561962d0da6f67faa72de20ff0acd354420e95106002effcd7e350911127`,
+render `c4-render-46c097541b52d3b528cd766d334be295dbe21ccd415ce37b651bb01f5fca12d9`,
+with `reason_code=internal_error`, `review_unit_id=null` and message
+“render worker was interrupted after its automatic recovery attempt”. The
+reviewed tuple is `3aee1ac019a753c476cc2734afb633c9a0e5dc7c1bc0acf8f3ec9c2c4492b17c`.
+This attributed terminal result supersedes the pending status in earlier
+handoffs; it is not an independent operation query by the Epic Manager.
+Preserve the exact failed request in
+`feat_049_003_architecture_review_99be54b1.json`, including its null generation
+and original plan revision. Its payload SHA-256 remains
+`6425d14508268121cfd65c07ea801cb57c99f3ef6a7ee01d779cad7829941c0f`.
+All six pinned content digests match, as do all six in the older Epic request.
+Further publication requires render-service recovery and a fresh exact review
+of its intended integrated revision; changing old pins is not a replay.
+
+Reviewed canonical Feature 5 plan `ebfafba57ac1cfa9f50c2d9660c08d2414756a59`.
+Its two-Task sequence retains shared monotonic deadline accounting, bounded
+publisher/thread/OS/SQLite acquisition, existing-index-only lookup, graph fence
+through mapping commit, immutable identities, pending/replay and measured
+contention followed by exactly-once delivery. Its architecture Task follows
+implementation and retains the all-level inventory. Existing Epic scope and
+decisions already cover this sequence; no amendment or new decision is needed.
+
+Sent `manager:f5_planning_constraints_f3_terminal_failure_822f5e7e` through
+Cascade; enqueue succeeded. Reinforced the prior task-to-criterion verification
+request, exact supported integrated baseline including Feature 3, held-final-reply
+regression, atomic routing and UTF-8 fixtures, and fresh pinned architecture
+evidence after repair. Task criteria remain subject to the architect's recorded
+content-access limitation; this turn does not claim to have inspected them.
+Epic retains persisted Recovery Progress ownership reconciliation during
+integration, canonical record corrections and publication recovery. Feature 4's
+broader documentation-refresh proof remains a separate open limitation.
+
+Design closeout: inspected Feature 3's lifecycle-only diff and Feature 5's
+diagram-impact inventory. No design was edited. Existing reviews of root,
+Cascade, War Room, Task, Watchdog, Workspace and Recovery Progress designs
+remain applicable; this evidence-only change alters no context, runtime/data
+boundary, component, Code symbol or execution flow. Final source-linked design,
+normal/failure replay and integrated navigation verification remain assigned to
+Feature 5 and Epic integration; no fresh render or browser result is claimed.
+
+Validation: canonical Epic and Feature reads, lifecycle diff and ancestry,
+twelve pinned Git-blob digest checks, exact saved request digest and
+`git diff --check`. No product tests were rerun for this handoff. Historical
+sign-offs are unchanged. Acceptance and renewed sign-off remain withheld pending
+integrated contention proof, record corrections, design/publication reconciliation
+and broader documentation-refresh proof. Return control to child delivery.
