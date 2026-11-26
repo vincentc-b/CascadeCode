@@ -2690,3 +2690,36 @@ unchanged; no new scope decision or canonical spec edit is needed. Acceptance an
 renewed sign-off remain withheld pending merged-head proof, Feature 5 contention
 repair, canonical record corrections and design/publication reconciliation.
 Return control for supervised child delivery.
+
+## Architect Task 3 source and publication-payload review
+
+Reviewed candidate `6cf5b7724038c58d3956bfd8c4fa759d350d31f2` against
+`96f36fa0`, its operational closeout, Task execution design and Recovery Progress
+producer design. The acknowledgement parser accepts the committed
+`owner_acknowledged` kind and nested routing timestamps. `resume_action` registers
+the exact executor observation before start notification; refused preflight still
+notifies its committed outcome without executing. The Task Mermaid sequence
+agrees with that ordering. Existing Epic Manager evidence already routes the
+producer-design review and exact publication-payload preservation to Task 4;
+no duplicate notification or scope amendment is required.
+
+At this inspection, the candidate is an ancestor of Feature 3 branch
+`0a87a1dbdda7a3b22dc9a191e70d61cf42276981`, but not Epic head `66389847`.
+This establishes Feature ancestry only, not Epic integration or merged-head
+operational acceptance. Task 4 retains final source-contract, rendered native
+Code navigation, ownership and publication reconciliation. No new actor,
+container, component ownership or Code declaration is introduced by the reviewed
+source diff; its behavioral ordering is covered by the changed Task design.
+The Epic's evidence-only review requires no additional model/design edit.
+
+The exact Task 2 publication payload remains unavailable in the inspected Epic
+artifacts; the saved Epic proposal is a different proposal and was not replayed
+as a substitute. All six references in that saved Epic proposal match their
+committed SHA-256 digests. Canonical Epic revision remains `96636842`; both
+historical role sign-offs remain pinned to `03280933`. Candidate and owned-tree
+`git diff --check` passed. No product tests, browser journey or renderer were
+rerun, and child test results remain attributed evidence.
+
+Renewed sign-off and acceptance remain withheld pending integrated verification,
+Feature 5 contention repair, canonical record corrections and design/publication
+reconciliation. Return control to child execution.
