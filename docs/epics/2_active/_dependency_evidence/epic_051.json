@@ -888,6 +888,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_229eb99bff77bcc73a06f74fb5c901294cfb4c89aef68c779fa93c94d3040280",
+      "dependency_id": "dep_langgraph_checkpoint_sqlite",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:15448d9a4f988d645d1d57835459c840dc2bd43a74689eec5db084373eca6a3c",
+      "recipe_revision": "sha256:086a77043f8be79493b96b8548f4d2456ae54f2c7aa878e8e266de5bf56a99f0",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"'); print('\"'\"'langgraph-checkpoint-sqlite'\"'\"', d.version)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-26T20:01:57.519543+00:00",
+      "completed_at": "2026-11-26T20:01:59.142776+00:00",
+      "result": "succeeded",
+      "redacted_output": "langgraph-checkpoint-sqlite 3.1.1\n",
+      "selected_version": "3.1.1",
+      "integrity_reference": "sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968",
+      "lock_references": [
+        "pyproject.toml",
+        "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/RECORD"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
