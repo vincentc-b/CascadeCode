@@ -1,5 +1,17 @@
 {
   "diffs": {
+    "architecture-review-00ce36f2c37133ff58149a1b0266be660350a854d07cf97bf01109cd435a19be": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
     "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea": {
       "changed_view_keys": [
         "cascade-boss-code",
@@ -1628,6 +1640,102 @@
         }
       ]
     },
+    "architecture-review-17dcb606a55fd71e3d5d8a25a5c9259898b40026d08741778806b6cb984e1019": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:796aeee228d58c37d5821a026e3c9b0c6b00d259",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-1e4ee3bd82b513be9c979714b92f153d37413ad4a292f8d94bc7d1753f4e724e": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:107d3a267da1153e77d5818188e7abd19f35389d",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-2a186f6c168e95237cea35653ceb8e8fe6e0f90b9566186fcad00711681ea337": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:9da5fa8d83688c172e422a7eef27a007f0c19f2d",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-3a00a7a19770d022e46af1f58f025aae48a36f47a7201f5e7fc043ce15e55218": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:9c97b16f8c3d6853c7a1903cbaddd71c1fcd83e0",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-518cf87bc5d2f1016e09008db3d6c3581ce91670e23d7d69778c48aaf1587a7b": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:e41b5be5d6581d4ed29347cafa47213d2052f743",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-5618eebafeed9da51792aa8ed3958d34a5fa60e377408fa38f4a254c98da37e6": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:b47b1b781618a21fe46443aa1d2a262590f188cd",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-5deb1a74712dada03f07ca8a9dec461c2c2662394f67b4e320d19319b17f20e0": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:be5dfdba819e21143dff12ef2aafdb5403aa6246",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-673e3ca9623ba0966925ba58f4aab0279a1c69e69023e57f24b3c7896693dfdc": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:61f74c66d0054db91b6bc6177c1a49b7b096a07c",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
     "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0": {
       "changed_view_keys": [
         "cascade-containers",
@@ -1979,6 +2087,54 @@
       "summary": "unchanged: proposal explicitly records no diagram change",
       "views": []
     },
+    "architecture-review-6ec413ff364a1a3dfe8fd44d45f9ce3aac2c92cb6bf4490d3b35e0e5c6039454": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:5b170561e4fe97bf8457932c5b4e8da8c96ab75f",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-70fc083c1b5a21b1a76147edd4cedf76381446927c7f681653215465d69d4196": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:a90648ca8033e8e4ce63acf099a994a702763852",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-8dc7cf56145e85083446603dbd827e74ea5f91fbbf101e03262609e87466beee": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:adee5617fd3c69527f9b7d8ac199edca10c9f99c",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-965d0f443da641e34381769d7a63c66010d2b10ada919df2c2cd7bc843d7a8ad": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:a4d7036b46298b21551ad96575abdc3239d9fa24",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
     "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8": {
       "changed_view_keys": [],
       "containment": [],
@@ -1987,6 +2143,138 @@
       "identities": [],
       "proposed_artifact_ref": null,
       "source_diff_reference": "plan:a911fb1e13729ebce182383a52b3f9832428b535",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-a5daa55cf2f6366eb91d015f184c98fcf337129c34dc00072747c6a11176144d": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:ac9ddcf32cd67965da38682847f59e183f78b1d7",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-a7c0b5434cd97473d126324a9f45733a7b6268c054a0275ff4602011c565c3f4": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:89c1bbd4cc52f5600dd99f3bc2abd91a43d6d7f3",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-a990d84add182a9bdb06482c766f6c94f11072797e35143157fcd7c19aa0d1b2": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:aaca5e02633c350c280a7d0e8b9a584cc404c151",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-af284c3d92d04c7e54f5cb37094de52bec422fdfaa24bb8dd633f923efe22916": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:ba53aa47ac3fb433d4110228fc09baa5a3c05746",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-b8d2efc86d10ee1a6caed28dab9f8897f41b5e404c3a35156ce06aff4fe921a6": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:a4776fbe9193a62303a6a2bcae40eb7dbdaef917",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-c6d790d18de6d15ae232594eb3436b823865924ef9ffb83af29847dade733d8d": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:d3dd61db21e1166b68d3bb51e97421bdd88fed8f",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-cdbacaac21dca034d7e4909b0f8df86faa8782e082cf6bc5fbb6e19b63ba6215": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:d60464cbb150dae78c4f752b7d216a9a526e6bc2",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-ce0b13682ac773208207bb3103bc7fb72cb95efbe9f3e253713e506bb7ab621f": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:92a0e7274bde4963097b90e4aa974dc45ae7be21",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-d4364931f80bd0d866e5aeca9e6cc10acfa9facce4e51d4d872aa8f55e895fc4": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:382be96b3b9c8b988072a5a6a69771b1d93189bd",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-d64708508ce17fd63596c64b3bf88e924043b8a108b77208e59f659537a795a9": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:06fdb44b53fa9fbe26c717d0e47672ce975bdc63",
+      "state": "unchanged",
+      "summary": "unchanged: proposal explicitly records no diagram change",
+      "views": []
+    },
+    "architecture-review-ef80edb05961cfeb7bda77bcc449fca466f512ede29f699dd319db000df6f3c0": {
+      "changed_view_keys": [],
+      "containment": [],
+      "current_artifact_ref": null,
+      "error": null,
+      "identities": [],
+      "proposed_artifact_ref": null,
+      "source_diff_reference": "plan:3748929904b7040dad064eacb155c0e9a88e5006",
       "state": "unchanged",
       "summary": "unchanged: proposal explicitly records no diagram change",
       "views": []
@@ -2007,9 +2295,102 @@
   "promotion_reservations": {},
   "promotions": {},
   "review_order": [
-    "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea"
+    "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea",
+    "architecture-review-8dc7cf56145e85083446603dbd827e74ea5f91fbbf101e03262609e87466beee",
+    "architecture-review-6ec413ff364a1a3dfe8fd44d45f9ce3aac2c92cb6bf4490d3b35e0e5c6039454",
+    "architecture-review-2a186f6c168e95237cea35653ceb8e8fe6e0f90b9566186fcad00711681ea337",
+    "architecture-review-cdbacaac21dca034d7e4909b0f8df86faa8782e082cf6bc5fbb6e19b63ba6215",
+    "architecture-review-00ce36f2c37133ff58149a1b0266be660350a854d07cf97bf01109cd435a19be",
+    "architecture-review-d64708508ce17fd63596c64b3bf88e924043b8a108b77208e59f659537a795a9",
+    "architecture-review-ce0b13682ac773208207bb3103bc7fb72cb95efbe9f3e253713e506bb7ab621f",
+    "architecture-review-673e3ca9623ba0966925ba58f4aab0279a1c69e69023e57f24b3c7896693dfdc",
+    "architecture-review-965d0f443da641e34381769d7a63c66010d2b10ada919df2c2cd7bc843d7a8ad",
+    "architecture-review-c6d790d18de6d15ae232594eb3436b823865924ef9ffb83af29847dade733d8d",
+    "architecture-review-17dcb606a55fd71e3d5d8a25a5c9259898b40026d08741778806b6cb984e1019",
+    "architecture-review-ef80edb05961cfeb7bda77bcc449fca466f512ede29f699dd319db000df6f3c0",
+    "architecture-review-b8d2efc86d10ee1a6caed28dab9f8897f41b5e404c3a35156ce06aff4fe921a6",
+    "architecture-review-a7c0b5434cd97473d126324a9f45733a7b6268c054a0275ff4602011c565c3f4",
+    "architecture-review-1e4ee3bd82b513be9c979714b92f153d37413ad4a292f8d94bc7d1753f4e724e",
+    "architecture-review-518cf87bc5d2f1016e09008db3d6c3581ce91670e23d7d69778c48aaf1587a7b",
+    "architecture-review-a990d84add182a9bdb06482c766f6c94f11072797e35143157fcd7c19aa0d1b2",
+    "architecture-review-3a00a7a19770d022e46af1f58f025aae48a36f47a7201f5e7fc043ce15e55218",
+    "architecture-review-af284c3d92d04c7e54f5cb37094de52bec422fdfaa24bb8dd633f923efe22916",
+    "architecture-review-a5daa55cf2f6366eb91d015f184c98fcf337129c34dc00072747c6a11176144d",
+    "architecture-review-d4364931f80bd0d866e5aeca9e6cc10acfa9facce4e51d4d872aa8f55e895fc4",
+    "architecture-review-5618eebafeed9da51792aa8ed3958d34a5fa60e377408fa38f4a254c98da37e6",
+    "architecture-review-5deb1a74712dada03f07ca8a9dec461c2c2662394f67b4e320d19319b17f20e0",
+    "architecture-review-70fc083c1b5a21b1a76147edd4cedf76381446927c7f681653215465d69d4196"
   ],
   "review_units": {
+    "architecture-review-00ce36f2c37133ff58149a1b0266be660350a854d07cf97bf01109cd435a19be": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/workspace",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WORKSPACE-C4-001",
+        "DEC-WORKSPACE-OWNER-001"
+      ],
+      "design": {
+        "content_digest": "c6ae1e6b6cb1ea3685d00a4bf36e8266e2bdf5c99523b78890386c4a3a8ef171",
+        "reference": {
+          "code_directory": "cascade/workspace",
+          "design_owner_directory": "cascade/workspace",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_003",
+          "repository_path": "cascade/workspace/DESIGN.md",
+          "revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/workspace",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed revision updates the Feature plan and Task acceptance only. Workspace and other owning designs and the Structurizr source contract, model and views retain the same bytes and current implementation boundaries. The plan assigns runtime, delivery, recovery and integrated Code-view reconciliation against the implementing diffs to Tasks 001-003; this planning revision adds no new actor, process, store, interface or code structure to diagram.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_003",
+      "plan": {
+        "content_digest": "b8176b074ab22450cba70cd72085608709441012371a18a76c9504bb39ff5bd0",
+        "path": "docs/features/2_active/feat_048_003_prove_reviewed_repairs_are_loaded_and_survive_cross_stage_delivery.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "a4a20bd3e791e251f3882a60b1314bcbd58cb5b6"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WORKSPACE-OWNER-001",
+        "REQ-WORKSPACE-RETIRE-001",
+        "REQ-TASK-DELIVERY-002",
+        "REQ-WATCHDOG-REPAIR-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-cli-components",
+        "cascade-supervisor-components",
+        "cascade-workspace-commands-code",
+        "cascade-workspace-code",
+        "cascade-watchdog-code",
+        "cascade-feature-code",
+        "cascade-task-code"
+      ]
+    },
     "architecture-review-02bd14eca71a30af51a9c18daa36ebf204d753ce658b3859a9672ac45b9dfbea": {
       "accepted_baseline": {
         "accepted_review_unit_id": null,
@@ -2141,6 +2522,568 @@
         "cascade-feature-code",
         "cascade-epic-code",
         "cascade-task-code"
+      ]
+    },
+    "architecture-review-17dcb606a55fd71e3d5d8a25a5c9259898b40026d08741778806b6cb984e1019": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed revision adds only a Feature work-record dependency on a separate production correction and keeps its regression in the mandatory recovery gate. It changes no source declaration, design, model, process, store, runtime boundary, or C4 relationship. The existing source-linked designs and integrated Code views still describe current behavior. Task 3 must reconcile the later corrected production revision and rerun the final gate, source, render and navigation checks; Task 4 retains independently authorized operational evidence.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "9daf78c773154c15bb83acf1adc555efe566b312426abb63fe0a36c26b333a5f",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "796aeee228d58c37d5821a026e3c9b0c6b00d259"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-1e4ee3bd82b513be9c979714b92f153d37413ad4a292f8d94bc7d1753f4e724e": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The reviewed diff from plan 89c1bbd4 to 107d3a26 changes only Feature evidence text and Task 3 lifecycle status. Production source, root and child DESIGN.md files, model.dsl, views.dsl, workspace.contract.json, boundaries, persistence and source symbols are unchanged. Existing context, container, component, integrated Code and normal/failure/restart views still describe the production route. The final source/design/model/render/navigation review remains required after the separately owned F1 correction and any F2/F3 consumer changes are integrated; the controlled supervisor run requires separate operational authority.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "d2b81e5d5fe88ab8d779b4638c9a1925d8f6d13742bf463c78e07587166243fb",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "107d3a267da1153e77d5818188e7abd19f35389d"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-2a186f6c168e95237cea35653ceb8e8fe6e0f90b9566186fcad00711681ea337": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_002"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/agent",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-AGENT-001",
+        "DEC-RECOVERY-BUDGET-001"
+      ],
+      "design": {
+        "content_digest": "3724a93753c2e09138ecca0bd11fe764d4f9c7217b8a92b5e21bde49a22a6c1b",
+        "reference": {
+          "code_directory": "cascade/agent",
+          "design_owner_directory": "cascade/agent",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_002",
+          "repository_path": "cascade/agent/DESIGN.md",
+          "revision": "9da5fa8d83688c172e422a7eef27a007f0c19f2d",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/agent",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This committed planning revision changes only the feature work record. Current Agent, Task and Watchdog designs and integrated Code views still describe the implemented budget API and provider boundary. Tasks 001-004 require owning design and C4 updates after new provider receipts, owner routing and postchecks exist; this review does not claim those proposed behaviors are implemented.",
+      "integration_lineage": "feature:feat_048_002",
+      "owner_work_id": "feat_048_002",
+      "plan": {
+        "content_digest": "3bba5b73fb16183ee738cc7634b88187e9a5e7a8bb1783aeb8104153d4b529fb",
+        "path": "docs/features/2_active/feat_048_002_execute_and_independently_verify_the_bounded_owner_agent_repair_journey.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "9da5fa8d83688c172e422a7eef27a007f0c19f2d"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-AGENT-001",
+        "REQ-RECOVERY-BUDGET-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-agent-code",
+        "cascade-task-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code"
+      ]
+    },
+    "architecture-review-3a00a7a19770d022e46af1f58f025aae48a36f47a7201f5e7fc043ce15e55218": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_001"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": ".",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-TASK-RECOVERY-EVIDENCE-001",
+        "DEC-WARROOM-AUDIT-001"
+      ],
+      "design": {
+        "content_digest": "df2eda1b95136e6d9058983aa00aa7da7cfd584aaf0c2fdf21c23c138ee6f90f",
+        "reference": {
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_001",
+          "repository_path": "DESIGN.md",
+          "revision": "9c97b16f8c3d6853c7a1903cbaddd71c1fcd83e0",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": ".",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This planning revision allocates source receipts, live evidence, a published progress projection and bounded reads to four implementation tasks. The committed model and current designs still describe the existing runtime. The tasks require source-linked component and native Code updates, execution and recovery flows, and model/contract validation against implemented symbols; inventing those symbols in the current model would misrepresent the present system.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_001",
+      "plan": {
+        "content_digest": "eb3db950b90eed9d12d7f567d286dc0a11514279ef2c5bbef10774f94d28f3ca",
+        "path": "docs/features/2_active/feat_049_001_project_evidence_based_recovery_progress.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "9c97b16f8c3d6853c7a1903cbaddd71c1fcd83e0"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-TASK-RECOVERY-EVIDENCE-001",
+        "REQ-WARROOM-AUDIT-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-watchdog-code",
+        "cascade-workspace-code",
+        "cascade-dashboard-code",
+        "cascade-teams-code"
+      ]
+    },
+    "architecture-review-518cf87bc5d2f1016e09008db3d6c3581ce91670e23d7d69778c48aaf1587a7b": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "469c13bcf533a02a31aafbf4fb20a7aafe353f80bf2a0fc3557900c03762362d",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "f258bca3a0beaee66d3eedd1483218245e838ea7",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The reviewed integrated diff adds bounded Recovery contract CI, local run instructions, and Task-owned receipt and material-retry design clarification. F1 and F2 production changes remain within the existing Task, Agent and Teams components; their real source symbols, declaration kinds, persistent ledger and authority boundaries are represented by the existing Code views. No person, external system, deployed runtime, data store, component ownership or architecture source changed. The current context, container, component and Code views, together with Task normal and failure/restart flow, remain accurate. Task 3's exact c2e8b608 delivery passed the complete 163-test bounded gate and renderer/browser navigation; subsequent changes through plan e41b5be5 are board records only. Controlled operational evidence and the F1 owning reconciliation receipt remain final closeout gaps.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "a3da68486d7aaae86f0d1cd40cab55e08474695a690d4bffbc21e8b155f9f3e1",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "e41b5be5d6581d4ed29347cafa47213d2052f743"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-5618eebafeed9da51792aa8ed3958d34a5fa60e377408fa38f4a254c98da37e6": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/war_room",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WARROOM-PROGRESS-001",
+        "DEC-WARROOM-TRANSCRIPT-004"
+      ],
+      "design": {
+        "content_digest": "b3852a038ad711052038f8fa2e53390e7f38464911ac47cd966fe6d9b222a93a",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_003",
+          "repository_path": "cascade/war_room/DESIGN.md",
+          "revision": "d26c04063535c62855b4380ae161230b2562c8f3",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/war_room",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed revision updates feature and task acceptance records only. The reviewed War Room design, C4 model, and views have no intervening edits; operator, runtime, and artifact boundaries remain as pinned. Tasks 1, 2, and 4 own Dashboard Code and source-link reconciliation against implemented consumer changes.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_003",
+      "plan": {
+        "content_digest": "6b8aefae1194e73d25881c4dc7178b185ed5f6c56cc806e67b2d30da2b749415",
+        "path": "docs/features/2_active/feat_049_003_show_coherent_recovery_progress_on_board_and_historical_transcript.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "b47b1b781618a21fe46443aa1d2a262590f188cd"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WARROOM-PROGRESS-001",
+        "REQ-WARROOM-TRANSCRIPT-005"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-war-room-components",
+        "cascade-dashboard-code"
+      ]
+    },
+    "architecture-review-5deb1a74712dada03f07ca8a9dec461c2c2662394f67b4e320d19319b17f20e0": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/war_room",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WARROOM-PROGRESS-001",
+        "DEC-WARROOM-TRANSCRIPT-004"
+      ],
+      "design": {
+        "content_digest": "b3852a038ad711052038f8fa2e53390e7f38464911ac47cd966fe6d9b222a93a",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_003",
+          "repository_path": "cascade/war_room/DESIGN.md",
+          "revision": "d26c04063535c62855b4380ae161230b2562c8f3",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/war_room",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed change corrects only the stable patch ID in the feature acceptance record. The pinned War Room design and C4 source files are unchanged. Existing operator, runtime, and artifact boundaries still describe the current implementation; Tasks 1, 2, and 4 own consumer source and Dashboard Code reconciliation after implementation.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_003",
+      "plan": {
+        "content_digest": "31f53c15fa82bd9fa5db1a86e1bb8a1511a1f66d350c90af394d4d597ad71e3b",
+        "path": "docs/features/2_active/feat_049_003_show_coherent_recovery_progress_on_board_and_historical_transcript.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "be5dfdba819e21143dff12ef2aafdb5403aa6246"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WARROOM-PROGRESS-001",
+        "REQ-WARROOM-TRANSCRIPT-005"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-war-room-components",
+        "cascade-dashboard-code"
+      ]
+    },
+    "architecture-review-673e3ca9623ba0966925ba58f4aab0279a1c69e69023e57f24b3c7896693dfdc": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed revision updates only the Feature and Task work records. It changes no production source declaration, runtime actor, process, store, or C4 relationship. The harness is scoped to existing supervisor, Task, Agent, Watchdog, repository, War Room and review boundaries; implementation Tasks must reconcile any later production diff and verify integrated Code navigation.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "45d9c910936209df37ad19780eafda9751bd3f78fa53eba378e2b7dba5176ed1",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "61f74c66d0054db91b6bc6177c1a49b7b096a07c"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
       ]
     },
     "architecture-review-68391a34d61f0563084bc06593d4c2b1e3cd863cd619ad5647102a65541fb5e0": {
@@ -2324,6 +3267,276 @@
       "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
       "view_citations": []
     },
+    "architecture-review-6ec413ff364a1a3dfe8fd44d45f9ce3aac2c92cb6bf4490d3b35e0e5c6039454": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_001"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/task",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WATCHDOG-REPAIR-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "065cf9ee6b703f1502b6b7eca648779bf8df025446c3d79ae358751573e24c49",
+        "reference": {
+          "code_directory": "cascade/task",
+          "design_owner_directory": "cascade/task",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_001",
+          "repository_path": "cascade/task/DESIGN.md",
+          "revision": "5b170561e4fe97bf8457932c5b4e8da8c96ab75f",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/task",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This committed feature revision changes only the plan and Task contracts. The new incident-budget entry points and persistence do not exist in source yet; existing context, container, component, and Code views still describe current implementation. The plan assigns model, code-view, and owning-design reconciliation to the implementing Tasks.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_001",
+      "plan": {
+        "content_digest": "ff9cb7f2e50eb55d633d4ba5fb2d611f02a35ab6b812a0494d43fff4edbb50bd",
+        "path": "docs/features/2_active/feat_048_001_enforce_durable_incident_budgets_at_recovery_admission.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "5b170561e4fe97bf8457932c5b4e8da8c96ab75f"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WATCHDOG-REPAIR-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-task-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code"
+      ]
+    },
+    "architecture-review-70fc083c1b5a21b1a76147edd4cedf76381446927c7f681653215465d69d4196": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_005"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/war_room",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-RECOVERY-PROGRESS-001",
+        "DEC-RECOVERY-PROGRESS-002",
+        "DEC-WARROOM-TRANSCRIPT-002",
+        "DEC-WARROOM-TRANSCRIPT-003"
+      ],
+      "design": {
+        "content_digest": "b3852a038ad711052038f8fa2e53390e7f38464911ac47cd966fe6d9b222a93a",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_005",
+          "repository_path": "cascade/war_room/DESIGN.md",
+          "revision": "a90648ca8033e8e4ce63acf099a994a702763852",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/war_room",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed planning branch changes work records only. Existing source-linked context, container, component and native Code views still represent current symbols and responsibility boundaries. Current graph thread/OS locks and the 30-second schema-opening index lookup do not meet the planned shared contention deadline; Task 1 owns that correction and Task 2 owns final design, model, contract and browser reconciliation. The current REQ-RECOVERY-PROGRESS-004 verification claim and recovery_progress design mapping are explicit Task 2 gaps. No current source, design or model artifact is edited by this planning review.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_005",
+      "plan": {
+        "content_digest": "dabd8b050e24fdc206fe00b8fe1e2350ed59c7ea5a0c990e3482ac9b4a9a191c",
+        "path": "docs/features/2_active/feat_049_005_bound_transcript_acknowledgement_work_under_contention.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "tracking",
+        "revision": "a90648ca8033e8e4ce63acf099a994a702763852"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-RECOVERY-PROGRESS-002",
+        "REQ-RECOVERY-PROGRESS-003",
+        "REQ-RECOVERY-PROGRESS-004",
+        "REQ-WARROOM-TRANSCRIPT-002",
+        "REQ-WARROOM-TRANSCRIPT-003"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-war-room-components",
+        "cascade-watchdog-code",
+        "cascade-dashboard-code",
+        "cascade-workspace-code"
+      ]
+    },
+    "architecture-review-8dc7cf56145e85083446603dbd827e74ea5f91fbbf101e03262609e87466beee": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_047_002"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/feature",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-FEATURE-REPAIR-001"
+      ],
+      "design": {
+        "content_digest": "8c0f0e1ed149190e06031d762e44f65d8f5741aca7f102a2c0878a00160add3f",
+        "reference": {
+          "code_directory": "cascade/feature",
+          "design_owner_directory": "cascade/feature",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_047_002",
+          "repository_path": "cascade/feature/DESIGN.md",
+          "revision": "adee5617fd3c69527f9b7d8ac199edca10c9f99c",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/feature",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This committed planning revision changes only the Feature work record. Current design and C4 source still describe the implemented behavior. Tasks 001 through 004 own source-linked design and Code view changes after implementation, with revision-pinned publication then.",
+      "integration_lineage": "epic:epic_047",
+      "owner_work_id": "feat_047_002",
+      "plan": {
+        "content_digest": "b86ece914f981028ff2933e9b2964a0d7a2bd59c19c9d5e497cb277d0f64a632",
+        "path": "docs/features/2_active/feat_047_002_admit_late_repair_generations_without_losing_accepted_review_history.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "adee5617fd3c69527f9b7d8ac199edca10c9f99c"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-FEATURE-REPAIR-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-team-components",
+        "cascade-feature-code"
+      ]
+    },
+    "architecture-review-965d0f443da641e34381769d7a63c66010d2b10ada919df2c2cd7bc843d7a8ad": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This committed revision adds Task 1 integration evidence and Task 2 acceptance wording; the merged Task 1 implementation adds tests only. No production source declaration, runtime actor, process, persistent store, or C4 relationship changed. The existing source-linked designs and integrated Code views still describe the production behavior; Tasks 2-4 must reconcile any subsequent implementation delta and verify navigation and recovery flows.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "2b4bff1c664d99d6955a709d0401fd1eede6cca1936bef4c8e9f8fe33b6bab76",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "a4d7036b46298b21551ad96575abdc3239d9fa24"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
     "architecture-review-9d3c1005e1fcaf965e555148757bc7de586c0a3804aa09e936a6ab2e665a9db8": {
       "accepted_baseline": {
         "accepted_review_unit_id": null,
@@ -2378,6 +3591,797 @@
       "status": "staged",
       "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
       "view_citations": []
+    },
+    "architecture-review-a5daa55cf2f6366eb91d015f184c98fcf337129c34dc00072747c6a11176144d": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_002"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/war_room",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WARROOM-TRANSCRIPT-001",
+        "DEC-WARROOM-PROGRESS-001"
+      ],
+      "design": {
+        "content_digest": "491d9c565941214217baf37db73fde9af9cdeaa7dbcf4ae693efc92d7b5597b1",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_002",
+          "repository_path": "cascade/war_room/DESIGN.md",
+          "revision": "bce2542401fd2e3a571aaab56061f7076e74cfa1",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/war_room",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The feature plan revisions specify the producer fixture, durable receipt-to-message acknowledgement, publisher milestone mapping and oversized legacy detail route as future implementation contracts. Current source and designs are unchanged. The existing context, container, component and native Code views still describe the implemented full-JSONL/thread-only transcript; Tasks 1-4 own model and design reconciliation after real source symbols exist.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_002",
+      "plan": {
+        "content_digest": "7af2ed6ca10214cbb254735c42bf0ea392a197a41dac91a2dc3ef029377fd60a",
+        "path": "docs/features/2_active/feat_049_002_persist_recovery_milestones_and_bounded_transcript_history.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "tracking",
+        "revision": "ac9ddcf32cd67965da38682847f59e183f78b1d7"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WARROOM-TRANSCRIPT-001",
+        "REQ-WARROOM-PROGRESS-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-war-room-components",
+        "cascade-dashboard-code",
+        "cascade-task-code",
+        "cascade-watchdog-code",
+        "cascade-workspace-code",
+        "cascade-teams-code"
+      ]
+    },
+    "architecture-review-a7c0b5434cd97473d126324a9f45733a7b6268c054a0275ff4602011c565c3f4": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed revision records Task 3 supervised red CI evidence and revises Task 3 and Task 4 acceptance to require the reviewed F1/PR #251 correction before final integration. The reviewed diff from a4776fbe changes only Feature and Task records; it changes no production source, root or child DESIGN.md, model.dsl, views.dsl, workspace.contract.json, runtime boundary, persistent schema, or source symbol. The existing context, container, component, native Code, and normal/failure/restart views still describe the current production recovery route. Task 3 and Task 4 retain final source, design, render, navigation and bounded CI review after the corrected F1 source and any F2/F3 consumer delta are integrated. Controlled supervisor evidence still requires separate operational authority.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "ac431ffd8b48b5a82d8fe9b3ce47e93764af1c31877db2f829ad81111fd3b8d6",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "89c1bbd4cc52f5600dd99f3bc2abd91a43d6d7f3"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-a990d84add182a9bdb06482c766f6c94f11072797e35143157fcd7c19aa0d1b2": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "469c13bcf533a02a31aafbf4fb20a7aafe353f80bf2a0fc3557900c03762362d",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "a273e921f145e905383a37a37fc7b36c39a67e0a",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The final integrated revision adds the controlled-supervisor evidence dossier and Feature closeout record. The Task 4 delta changes only evidence prose and lifecycle records; production code, package and child design content, model.dsl, views.dsl, workspace.contract.json, deployed boundaries, persistence, source symbols and ownership are unchanged from the reviewed integrated Task 3 design. The existing landscape, context, container, component and native Code views still explain the normal recovery, refusal and restart paths. Task 3 supervised Recovery contract passed 163 tests in 165.69 seconds at c2e8b608, and Task 4 supervised validation passed 181 tests in 194.60 seconds at 3dc7f74e. Source contracts, local links, renderer and browser navigation evidence are recorded in the final dossier; operational exercise authority and the F1 owning reconciliation receipt remain open acceptance gaps.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "072bcd1da252c3aee511835c2f44fe0bee1bb1cea47ea41ad7bae78d48718864",
+        "path": "docs/features/3_completed/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "aaca5e02633c350c280a7d0e8b9a584cc404c151"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-af284c3d92d04c7e54f5cb37094de52bec422fdfaa24bb8dd633f923efe22916": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_002"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/war_room",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WARROOM-TRANSCRIPT-001",
+        "DEC-WARROOM-PROGRESS-001"
+      ],
+      "design": {
+        "content_digest": "491d9c565941214217baf37db73fde9af9cdeaa7dbcf4ae693efc92d7b5597b1",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_002",
+          "repository_path": "cascade/war_room/DESIGN.md",
+          "revision": "bce2542401fd2e3a571aaab56061f7076e74cfa1",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/war_room",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The feature planning commit changes only the work record and task records. The existing context, container, component and native Code views still describe the current full-JSONL/thread-only transcript implementation. The four implementation tasks explicitly own the future War Room, Task, Watchdog and Workspace design and model updates after real source symbols exist; no current source or design change is claimed by this review.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_002",
+      "plan": {
+        "content_digest": "3d95ca0e0177a903910c1279cfba0cb446bd019def34b55a86c75a24b0ddec53",
+        "path": "docs/features/2_active/feat_049_002_persist_recovery_milestones_and_bounded_transcript_history.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "tracking",
+        "revision": "ba53aa47ac3fb433d4110228fc09baa5a3c05746"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WARROOM-TRANSCRIPT-001",
+        "REQ-WARROOM-PROGRESS-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-war-room-components",
+        "cascade-dashboard-code",
+        "cascade-task-code",
+        "cascade-watchdog-code",
+        "cascade-workspace-code",
+        "cascade-teams-code"
+      ]
+    },
+    "architecture-review-b8d2efc86d10ee1a6caed28dab9f8897f41b5e404c3a35156ce06aff4fe921a6": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed Feature revision reallocates the material-retry correction to the existing F1 branch and PR #251, preserves the red mandatory regression, and requires a full bounded CI and architecture rerun after reviewed integration. The reviewed diff changes only Feature and Task work records; production declarations, root and child designs, model.dsl, views.dsl and native Code views are unchanged. Existing context, container, component, Code and recovery-flow descriptions still cover the current harness and production paths. Task 4 must review the eventual corrected F1 source and any F2/F3 consumer deltas at the exact integrated SHA; controlled supervisor evidence remains gated by separate target, fault and rollback authority.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "afaaf46984e61008370b16a2d6bcad36a90b3ef9561f3f76332b42d2a20ce257",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "a4776fbe9193a62303a6a2bcae40eb7dbdaef917"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-c6d790d18de6d15ae232594eb3436b823865924ef9ffb83af29847dade733d8d": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed Task 2 integration adds adversarial and budget tests plus work records only. No production source, declaration, persistent schema, runtime or data boundary, or C4 relationship changed. Root and package/Task/Agent/Watchdog/Workspace/War Room designs and the pinned model and Code views still describe the exercised normal, refusal and restart paths. Task 3 owns final CI and navigation/render reconciliation; Task 4 retains separately authorized operational evidence.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "8bf39300ca664795d6c252b0b13ea856696264f3e391e138c1d07b2fa77af319",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "d3dd61db21e1166b68d3bb51e97421bdd88fed8f"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-cdbacaac21dca034d7e4909b0f8df86faa8782e082cf6bc5fbb6e19b63ba6215": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/workspace",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WORKSPACE-C4-001",
+        "DEC-WORKSPACE-OWNER-001"
+      ],
+      "design": {
+        "content_digest": "c6ae1e6b6cb1ea3685d00a4bf36e8266e2bdf5c99523b78890386c4a3a8ef171",
+        "reference": {
+          "code_directory": "cascade/workspace",
+          "design_owner_directory": "cascade/workspace",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_003",
+          "repository_path": "cascade/workspace/DESIGN.md",
+          "revision": "d60464cbb150dae78c4f752b7d216a9a526e6bc2",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/workspace",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This committed planning revision changes only the Feature work record and Task contracts. The current Workspace design and Structurizr source bytes are unchanged; implementation Tasks own the listed runtime, delivery, and recovery diagram updates and must publish their reconciled changes.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_003",
+      "plan": {
+        "content_digest": "874da01a22d8abfba7740750d4b5f50249f13ff62ad55f441801a8b758b75422",
+        "path": "docs/features/2_active/feat_048_003_prove_reviewed_repairs_are_loaded_and_survive_cross_stage_delivery.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "d60464cbb150dae78c4f752b7d216a9a526e6bc2"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WORKSPACE-OWNER-001",
+        "REQ-WORKSPACE-RETIRE-001",
+        "REQ-TASK-DELIVERY-002",
+        "REQ-WATCHDOG-REPAIR-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-cli-components",
+        "cascade-supervisor-components",
+        "cascade-workspace-commands-code",
+        "cascade-workspace-code",
+        "cascade-watchdog-code",
+        "cascade-feature-code",
+        "cascade-task-code"
+      ]
+    },
+    "architecture-review-ce0b13682ac773208207bb3103bc7fb72cb95efbe9f3e253713e506bb7ab621f": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "This committed planning revision changes the feature work record and task contracts. It adds no runtime actor, process, product store, source declaration, or C4 relationship. The integration harness uses existing supervisor, Task, Agent, Watchdog, repository and review boundaries. Tasks 1-4 own reconciliation of any production changes and final source-linked navigation checks.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "61a256cdcfa534b6c07db6e7055ce49757e32a745aafe20c1ad3651cea755dfd",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code"
+      ]
+    },
+    "architecture-review-d4364931f80bd0d866e5aeca9e6cc10acfa9facce4e51d4d872aa8f55e895fc4": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_049_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/war_room",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WARROOM-PROGRESS-001",
+        "DEC-WARROOM-TRANSCRIPT-004"
+      ],
+      "design": {
+        "content_digest": "b3852a038ad711052038f8fa2e53390e7f38464911ac47cd966fe6d9b222a93a",
+        "reference": {
+          "code_directory": "cascade/war_room",
+          "design_owner_directory": "cascade/war_room",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_049_003",
+          "repository_path": "cascade/war_room/DESIGN.md",
+          "revision": "d26c04063535c62855b4380ae161230b2562c8f3",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/war_room",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed feature plan and reviewed War Room design retain the existing operator, runtime, and data boundaries; this planning revision changes task scope only. Tasks 1, 2, and 4 own reconciliation of the Dashboard Code view and source-linked behavior after implementation.",
+      "integration_lineage": "epic:epic_049",
+      "owner_work_id": "feat_049_003",
+      "plan": {
+        "content_digest": "803de2b32b0a949481fa92f994d89ad80a984c63ad95854bedff2fb67b1a0645",
+        "path": "docs/features/2_active/feat_049_003_show_coherent_recovery_progress_on_board_and_historical_transcript.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "382be96b3b9c8b988072a5a6a69771b1d93189bd"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WARROOM-PROGRESS-001",
+        "REQ-WARROOM-TRANSCRIPT-005"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-war-room-components",
+        "cascade-dashboard-code"
+      ]
+    },
+    "architecture-review-d64708508ce17fd63596c64b3bf88e924043b8a108b77208e59f659537a795a9": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_003"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade/workspace",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-WORKSPACE-RUNTIME-001",
+        "DEC-WORKSPACE-C4-001",
+        "DEC-WORKSPACE-OWNER-001"
+      ],
+      "design": {
+        "content_digest": "4dcb063759fc739aa590455d8dd6c7fb3ceb3f450fea97ae8914245376e7cb6f",
+        "reference": {
+          "code_directory": "cascade/workspace",
+          "design_owner_directory": "cascade/workspace",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_003",
+          "repository_path": "cascade/workspace/DESIGN.md",
+          "revision": "f238169dfcb8a32768fb5d13c9314a8b1a49de72",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade/workspace",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The exact 06fdb44b plan revision adds a dependent proof Task and assigns post-push interruption, original-incident budget continuity, and any resulting design/C4 reconciliation. Its committed diff changes only the Feature work record. The current runtime, Watchdog, Feature, Task and shared publication design and Structurizr changes were integrated with Tasks 001 and 002 at f238169d; this plan revision adds no actor, process, store, interface or source declaration. Task 003 owns final all-level model, render, browser and pinned-source checks; Task 004 rechecks changed views after its proof and records concrete unchanged-level reasons.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_003",
+      "plan": {
+        "content_digest": "abc10ba644c5085cea9562ae0f132cc3dee11ec6c6225aabc5caf9ecbb5cab9c",
+        "path": "docs/features/2_active/feat_048_003_prove_reviewed_repairs_are_loaded_and_survive_cross_stage_delivery.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "06fdb44b53fa9fbe26c717d0e47672ce975bdc63"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-WORKSPACE-RUNTIME-001",
+        "REQ-WORKSPACE-OWNER-001",
+        "REQ-WORKSPACE-RETIRE-001",
+        "REQ-TASK-DELIVERY-002",
+        "REQ-WATCHDOG-REPAIR-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-context",
+        "cascade-containers",
+        "cascade-cli-components",
+        "cascade-supervisor-components",
+        "cascade-workspace-commands-code",
+        "cascade-workspace-code",
+        "cascade-watchdog-code",
+        "cascade-feature-code",
+        "cascade-task-code",
+        "cascade-teams-code",
+        "cascade-war-room-components",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
+    },
+    "architecture-review-ef80edb05961cfeb7bda77bcc449fca466f512ede29f699dd319db000df6f3c0": {
+      "accepted_baseline": {
+        "accepted_review_unit_id": null,
+        "kind": "empty_baseline",
+        "model": null
+      },
+      "affected_work_ids": [
+        "feat_048_004"
+      ],
+      "architecture_impact": "no_diagram_change",
+      "authorized_owner": "feature_architect",
+      "baseline_generation": null,
+      "baseline_pointer_id": null,
+      "code_directory": "cascade",
+      "code_repository_key": "repository-874164fe0f964e347c1e9926",
+      "decision_citations": [
+        "DEC-CASCADE-001",
+        "DEC-RECOVERY-BUDGET-001",
+        "DEC-REVIEW-PUBLISH-001"
+      ],
+      "design": {
+        "content_digest": "f3a0f122071852863ad2d176c61ab3f29c20add0239e24cd50bec33c3c30a9e5",
+        "reference": {
+          "code_directory": "cascade",
+          "design_owner_directory": "cascade",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "owning_work": "feat_048_004",
+          "repository_path": "cascade/DESIGN.md",
+          "revision": "92a0e7274bde4963097b90e4aa974dc45ae7be21",
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5"
+        }
+      },
+      "design_owner_directory": "cascade",
+      "documentation_destination_path": ".",
+      "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "documentation_repository_role": "target",
+      "impact_reason": "The committed Feature revision records the separate production correction ownership, mandatory regression gate and final integration handoff. The reviewed diff changes only Feature and Task work records; test additions since the pinned baseline have no production declaration or runtime boundary change. Root, package, Task, Agent, Watchdog, Workspace and War Room designs, the model and native Code views still explain the current owner, budget, publication and postcheck paths. Task 3 must review its implementation and final render/navigation evidence, and Task 4 must repeat the final-diff review after the F5 correction is integrated; controlled supervisor evidence still needs separate operational authority.",
+      "integration_lineage": "epic:epic_048",
+      "owner_work_id": "feat_048_004",
+      "plan": {
+        "content_digest": "e8a2554e3d505da55384eb370dc155ab77cbf43df8851df471b35569b2eee091",
+        "path": "docs/features/2_active/feat_048_004_gate_recovery_with_adversarial_ci_and_controlled_supervisor_evidence.md",
+        "repository_key": "repository-874164fe0f964e347c1e9926",
+        "repository_role": "target",
+        "revision": "3748929904b7040dad064eacb155c0e9a88e5006"
+      },
+      "proposed_ancestor_context": null,
+      "proposed_model": null,
+      "requirement_citations": [
+        "REQ-CASCADE-RECOVERY-002",
+        "REQ-RECOVERY-BUDGET-001",
+        "REQ-REVIEW-PUBLISH-001"
+      ],
+      "rollout_version": 1,
+      "status": "staged",
+      "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+      "view_citations": [
+        "cascade-landscape",
+        "cascade-context",
+        "cascade-containers",
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-cli-components",
+        "cascade-war-room-components",
+        "cascade-task-code",
+        "cascade-agent-code",
+        "cascade-watchdog-code",
+        "cascade-teams-code",
+        "cascade-epic-code",
+        "cascade-feature-code",
+        "cascade-workspace-code",
+        "cascade-workspace-commands-code",
+        "cascade-dashboard-code",
+        "cascade-war-room-http-code"
+      ]
     }
   },
   "reviews": {},
