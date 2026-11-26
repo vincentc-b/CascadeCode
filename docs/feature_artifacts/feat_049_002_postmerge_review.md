@@ -38,3 +38,36 @@ journey before this repair; those reports are not new post-repair browser eviden
 The completed Task 1 and Task 5 board-record corrections remain an independent
 authorized-board issue. This artifact does not change the canonical Feature or
 Task lifecycle records.
+
+## Architecture review after the repair
+
+Reviewed the final `ecd390f4` diff against `cascade/war_room/DESIGN.md`,
+`cascade/watchdog/DESIGN.md`, `cascade/workspace/DESIGN.md`,
+`cascade/task/DESIGN.md`, `cascade/DESIGN.md`, `DESIGN.md`, and the pinned
+`model.dsl`, `views.dsl` and `workspace.contract.json`. The War Room design owns
+the detail-cursor failure behavior and fenced transcript routing rule; Watchdog
+owns the private publisher mapping and its restart path. The source and designs
+agree that a stale receipt may update mutable routing only from the current
+fenced acknowledgement, while receipt, entry, graph and message identities remain
+fixed. A malformed detail offset fails before any nonadvancing page is returned.
+
+Diagram impact by level: `cascade-context` and `cascade-containers` retain their
+actor, runtime and persistence boundaries; `cascade-war-room-components` and
+`cascade-supervisor-components` retain their ownership and interfaces. The
+native `cascade-dashboard-code` and `cascade-watchdog-code` views already name
+the affected real Function symbols. The `resume_transcript_room_move` Code node
+and retirement relationship are present in the final model and view contract.
+This repair changes behavior inside those symbols, so no model element, source
+link or relationship needs revision. The War Room normal/crash and move-resume
+sequences, plus the Watchdog after-lock/replay sequence, still trace to source.
+
+Local verification after the repair: 29 focused milestone, transcript API and
+C4 source tests passed; `validate_c4_workspace` accepted 234 elements, 280
+relationships and 24 views; Ruff and `git diff --check` passed. The final source
+contract resolves the affected Code symbols. Task 4's earlier pinned render and
+Chromium navigation covered context → containers → component → Code, Level up,
+deep-link restoration, pinned source, warm reuse and render bounds on the same
+model revision. The repair changed no C4 source, so that navigation evidence
+still applies; it was not rerun after `ecd390f4`. The final architecture
+publication/accepted-lineage state is left for the Epic's authorized review;
+this local evidence does not claim product-trunk integration.
