@@ -465,6 +465,27 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_2ae4ebf8f00ab36415920aad5e5ed585aa9195461d8b6ede92fb1285dba32f69",
+      "dependency_id": "dep_node",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:9868fb1e99a4765e864c512c58e29d68f00d5f64954d2b0e3301787e5bb9849e",
+      "recipe_revision": "sha256:6b324950596f72a4f569468867386278bb40dca2c8fb1c84a26c2824ed6b13a9",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; out=subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"', '\"'\"'--version'\"'\"'],text=True); assert '\"'\"'20.20.2'\"'\"' in out; print(out.strip())'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-26T20:01:07.440507+00:00",
+      "selected_version": "20.20.2",
+      "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "lock_references": [
+        "README.md",
+        "/usr/bin/node"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
