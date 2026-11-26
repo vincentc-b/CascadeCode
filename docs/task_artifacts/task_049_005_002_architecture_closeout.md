@@ -105,8 +105,8 @@ python -m pytest -q \
 ```
 
 Named coverage included
-`test_receipt_retry_refreshes_registered_room_move_incarnation` (eventual drain
-and `current.json` publication),
+`test_receipt_retry_refreshes_registered_room_move_incarnation` (current
+acknowledgement and room-move mapping, with an immediate projection read),
 `test_public_mapping_commit_holds_fence_across_rewrite` (atomic routing),
 `test_oversized_detail_reconstructs_utf8_and_rejects_foreign_or_stale_cursor`
 (positive UTF-8 continuation),
@@ -133,3 +133,22 @@ Epic acceptance, publication recovery and completed-record correction remain
 with their existing owners. The Task lifecycle message carries the exact final
 commit and supervised validation result to the owning Feature and the dependent
 Feature 3 team.
+
+## Review conflict resolution on the integrated Feature branch
+
+The Feature branch was rebased onto the Epic branch containing the Recovery
+Progress design ownership correction and Feature 3's Historical/current-progress
+Code nodes. The Recovery Progress evidence row now states the measured contention
+coverage and admitted filesystem limit. The Dashboard Code view retains both UI
+nodes and the existing-index source node; the War Room design retains both the
+Historical polling contract and the bounded writer/lookup contract.
+
+On that rebased tree, the focused publisher, milestone, durable-store, recovery
+and transcript API, held-executor, source-contract and real-render/cache command
+listed above passed 94 tests in 136.67 s. A separate regression now forces the
+first fast-path dirty publication to reach its deadline after the mapping commit.
+It observes no `current.json` pointer, then proves that a later drain publishes
+the same milestone reference and replay keeps one transcript line. The new test
+and the room-move mapping test passed together (2 tests in 1.21 s); `ruff check`
+on the changed test file and `git diff --check` passed. The room-move test alone
+does not prove expiry followed by drain.

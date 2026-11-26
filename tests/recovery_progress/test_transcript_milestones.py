@@ -361,6 +361,48 @@ def test_receipt_retry_refreshes_registered_room_move_incarnation(
     ) == 1
 
 
+def test_expired_fast_path_publishes_dirty_owner_on_later_drain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.recovery_progress import publisher
+
+    root = make_repo(tmp_path, git=False)
+    _board(root)
+    receipt = _receipt(1)
+    original_publish_dirty = publisher._publish_dirty
+    expired_once = False
+
+    def expire_first_publication(*args: object, **kwargs: object) -> int:
+        nonlocal expired_once
+        if not expired_once:
+            expired_once = True
+            time.sleep(max(0.0, float(kwargs["deadline"]) - time.monotonic()) + 0.01)
+        return original_publish_dirty(*args, **kwargs)
+
+    monkeypatch.setattr(publisher, "_publish_dirty", expire_first_publication)
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+
+    assert expired_once
+    assert not list(
+        (root / ".cascade/recovery_progress/v1/work").glob("*/current.json")
+    )
+    message = next(
+        row
+        for row in read_messages("feat_001", root=root)
+        if row.get("receipt_id") == receipt["receipt_id"]
+    )
+    assert _stored_milestone(root, str(receipt["receipt_id"]))["message_id"] == message["id"]
+
+    result = drain_recovery_progress(root)
+    assert result["published_owners"] >= 1
+    assert _items(root)[0]["milestone_refs"] == [message["id"]]
+    publish_committed_transition(root, receipt, {"recovery_state": "waiting"})
+    assert len(
+        [row for row in read_messages("feat_001", root=root) if row.get("receipt_id")]
+    ) == 1
+    assert _items(root)[0]["milestone_refs"] == [message["id"]]
+
+
 def test_missed_notification_replays_as_reconciled_after_source_commit(
     tmp_path: Path,
 ) -> None:
