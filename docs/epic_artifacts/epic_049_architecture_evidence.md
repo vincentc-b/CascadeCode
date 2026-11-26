@@ -2201,3 +2201,44 @@ Renewed sign-off and acceptance remain withheld. Supported integration,
 contention repair, completed Task-record corrections, design-owner reconciliation
 and both publication follow-ups remain open. Return control to child execution
 and the authorized architecture publication owner.
+
+## Architect pending-publication and persisted-owner review
+
+Reviewed canonical Epic revision `9663684255700d5178bdd369c97cb8d5a6f4ed6a`
+and completed Feature 4 revision `a3d4a42b3df92a553206c300c42142600183eaef`
+against the latest handoff. The Epic already preserves the exact pending
+Feature publication operation and references; no additional plan amendment or
+duplicate notification is needed. Its authenticated Feature architect owns
+identical-proposal replay, already routed by the Manager. The Epic-bound
+publication tool cannot stand in for that owner. This review does not establish
+completion of the reported pending operation or repair the separately failed
+Epic publication. All six saved Epic proposal reference digests still match.
+
+Pinned inspection confirms the producer child owns its four requirements and
+two decisions, and package/Watchdog designs link to it. The persisted mapping
+instead names the package owner. The workspace contract names `epic_049` as
+owner of workspace/model/views; this is publication authority, distinct from
+the child design's requirement ownership. Reconcile both through the supported
+integration/publication path, without assigning model authority from directory
+names alone. Feature 4 is not an ancestor of owned HEAD `7460de1b`, and the
+producer child design is absent here. Adding its mapping in this baseline would
+create a dangling owner; the canonical integration gate correctly retains the
+Epic Architect's responsibility for the integrated correction.
+
+Design review: read the pinned producer's source-linked interfaces, persisted
+SQLite/page layout, fence-through-commit sequence and pending/restart flow,
+plus package/Watchdog ownership links. Its deadline verification claim remains
+subject to Feature 5's contention repair and actual integrated tests. This turn
+changes only work evidence: context and container boundaries, components,
+native Watchdog/Dashboard Code nodes and behavioral diagrams are unchanged.
+Final integrated design mapping, source-contract ownership and navigation checks
+remain required by the existing diagram-impact inventory.
+
+Verification: canonical reads, empty amendment list, pinned design/mapping and
+contract inspection, ancestry/child-presence checks, saved publication digest
+checks and `git diff --check`. No runtime or browser rerun was warranted for
+this evidence-only review. Both historical sign-offs remain on `03280933`;
+renewed sign-off and acceptance remain withheld. Integration, contention repair,
+completed Task-record corrections, final design reconciliation and the two
+distinct publication follow-ups remain open. Return control to child execution
+and supervised delivery.
