@@ -406,7 +406,10 @@ capability. The active-path scanner accepts
 for Epics, checking introduction timestamps. For a generation-bound repair,
 [repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
 to the live action, exact owner/path/ref bindings, and the committed introduction
-blob. An arbitrary active-path move therefore lacks recovery authority.
+blob. Open-review repair authority additionally binds the canonical request
+digest, original review URL and generation, observed head pair, and retained
+claim/budget identities. An arbitrary active-path move or replay for changed
+review evidence therefore lacks recovery authority.
 
 The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,
 mixed-root, unintegrated or capability-mismatched runtime evidence as pending.

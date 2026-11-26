@@ -75,6 +75,23 @@ and document digest. [Watchdog authorization](../watchdog/loop.py) admits the
 active introduction only while all of those bindings and, after checkpointing,
 the introducing commit and blob still agree.
 
+[admit_open_review_repair](repair.py) admits a scoped parent or authenticated
+human request against the original open Feature review without manufacturing a
+Task delivery mismatch. Before queue authority, its action records the stable
+request ID and canonical content digest, reason and evidence, accountable
+Feature, authority, approval and scope references, review URL/forge/route,
+observed source and target heads, immutable review generation, and any existing
+claim and incident-budget identities. The lifecycle transaction re-reads the
+mutation owner, Feature and parent status, approval, dependencies, governing
+comments, review registry, heads, claim and finite budget. The review request's
+own governing comment may remain open while unrelated blocking comments wait.
+Changed content under the same request ID is a terminal typed refusal; stale or
+missing prerequisites return a typed next prerequisite without emitting queue
+authority. A current repair writer is joined or deferred to instead of creating
+a competing generation. Completed/open review records without an explicit
+current generation use generation zero as their observed identity and follow
+the same admission path.
+
 ```mermaid
 sequenceDiagram
     participant Feature as feature_repair
@@ -90,6 +107,11 @@ sequenceDiagram
     Watchdog->>Board: verify path, digest, commit and blob
     Note over Ledger,Queue: Restart joins the stable event ID before appending
 ```
+
+The `FeatureRepairAuthorized` payload also binds the open-review request digest,
+review identity and generation, observed heads, claim and budget identity.
+[repair_event_authorizes](repair.py) joins those fields back to the live action;
+the event is not independently executable authority.
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 

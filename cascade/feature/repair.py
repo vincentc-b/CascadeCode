@@ -18,7 +18,8 @@ from cascade.board.errors import GitError
 from cascade.board.gitutil import head_sha, last_commit_touching, read_blob
 from cascade.board.parse import parse_doc, render_doc
 from cascade.board.store import save_doc
-from cascade.comments.gate import refusal_if_blocked
+from cascade.comments.gate import blocking_threads_for, refusal_if_blocked
+from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.feature.registry import register_feature_tool
 from cascade.task.action_recovery import (
     ActionRecoveryUnavailable,
@@ -54,10 +55,32 @@ _ACTIVE_PHASES = frozenset(
     }
 )
 _MARKER_PREFIX = "<!-- cascade-feature-repair:"
+_OPEN_REVIEW_REQUIRED_FIELDS = (
+    "reason",
+    "approval_reference",
+    "scope_reference",
+    "review_url",
+    "review_forge",
+    "source_ref",
+    "target_ref",
+    "observed_source_head",
+    "observed_target_head",
+    "observed_review_generation",
+)
 
 
 class FeatureRepairError(ValueError):
     """The exact Feature repair cannot be admitted or resumed."""
+
+
+class _FeatureRepairRefusal(FeatureRepairError):
+    """Internal typed prerequisite result for open-review admission."""
+
+    def __init__(self, code: str, next_prerequisite: str, *, terminal: bool = False):
+        super().__init__(code)
+        self.code = code
+        self.next_prerequisite = next_prerequisite
+        self.terminal = terminal
 
 
 def _digest(data: bytes | str) -> str:
@@ -75,8 +98,11 @@ def _copy(value: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _result(action: Mapping[str, Any], *, replayed: bool = False) -> dict[str, Any]:
+    phase = str(action.get("phase", ""))
+    admitted = phase in _ACTIVE_PHASES
+    verified = phase == "verified"
     return {
-        "ok": not str(action.get("phase", "")).startswith(("blocked", "superseded")),
+        "ok": admitted or verified,
         "action_id": action.get("action_id"),
         "generation": action.get("generation"),
         "phase": action.get("phase"),
@@ -88,6 +114,47 @@ def _result(action: Mapping[str, Any], *, replayed: bool = False) -> dict[str, A
             "introduction_blob": action.get("introduction_blob"),
         },
         "replayed": replayed,
+        "requested": True,
+        "admitted": admitted,
+        "acknowledged": True,
+        "executing": phase in {"delivery_pending", "review_pending", "integration_pending"},
+        "executed": phase in {"retirement_pending", "verified"},
+        "waiting": phase == "waiting",
+        "refused": phase == "refused",
+        "verification_pending": admitted and not verified,
+        "verified": verified,
+        "next_prerequisite": action.get("next_action"),
+    }
+
+
+def _typed_refusal(
+    action_id: str,
+    refusal: _FeatureRepairRefusal,
+    *,
+    action: Mapping[str, Any] | None = None,
+    replayed: bool = False,
+) -> dict[str, Any]:
+    phase = "refused" if refusal.terminal else "waiting"
+    generation = action.get("generation") if action is not None else None
+    return {
+        "ok": False,
+        "action_id": action_id,
+        "generation": generation,
+        "phase": phase,
+        "blocker": refusal.code,
+        "next_action": refusal.next_prerequisite,
+        "next_prerequisite": refusal.next_prerequisite,
+        "evidence": {},
+        "replayed": replayed,
+        "requested": True,
+        "admitted": False,
+        "acknowledged": action is not None,
+        "executing": False,
+        "executed": False,
+        "waiting": not refusal.terminal,
+        "refused": refusal.terminal,
+        "verification_pending": False,
+        "verified": False,
     }
 
 
@@ -128,6 +195,19 @@ def feature_repair(
     scope_reference: str | None = None,
     expected_generation: int | None = None,
     claim_owner: str | None = None,
+    reason: str | None = None,
+    evidence: Mapping[str, Any] | None = None,
+    requesting_parent_id: str | None = None,
+    authenticated_human: AuthenticatedHuman | None = None,
+    review_url: str | None = None,
+    review_forge: str | None = None,
+    source_ref: str | None = None,
+    target_ref: str | None = None,
+    observed_source_head: str | None = None,
+    observed_target_head: str | None = None,
+    observed_review_generation: int | None = None,
+    claim_id: str | None = None,
+    incident_budget_id: str | None = None,
 ) -> dict[str, Any]:
     """Inspect, admit, or resume an exact generation-bound Feature repair.
 
@@ -139,6 +219,23 @@ def feature_repair(
         return inspect_feature_repair(feature_id, request_id, root=root)
     if operation not in {"admit", "resume"}:
         raise FeatureRepairError(f"unknown feature repair operation: {operation}")
+    open_request = _open_review_request(
+        reason=reason,
+        evidence=evidence,
+        requesting_parent_id=requesting_parent_id,
+        authenticated_human=authenticated_human,
+        approval_reference=approval_reference,
+        scope_reference=scope_reference,
+        review_url=review_url,
+        review_forge=review_forge,
+        source_ref=source_ref,
+        target_ref=target_ref,
+        observed_source_head=observed_source_head,
+        observed_target_head=observed_target_head,
+        observed_review_generation=observed_review_generation,
+        claim_id=claim_id,
+        incident_budget_id=incident_budget_id,
+    )
     return _admit_or_resume(
         feature_id,
         request_id,
@@ -149,6 +246,7 @@ def feature_repair(
         expected_generation=expected_generation,
         claim_owner=claim_owner,
         resume=operation == "resume",
+        open_request=open_request,
     )
 
 
@@ -166,6 +264,30 @@ def resume_feature_repair(
     return feature_repair(
         feature_id, request_id, root=root, operation="resume", **kwargs
     )
+
+
+def admit_open_review_repair(
+    feature_id: str, request_id: str, *, root: Path, **kwargs: Any
+) -> dict[str, Any]:
+    """Admit one scoped request against the Feature's existing open review.
+
+    The caller supplies the review observation it is acting on.  Admission
+    joins that evidence to the current local review registry while holding the
+    lifecycle fence; stale or incomplete evidence is returned as a typed
+    prerequisite rather than being converted into a new review or Task
+    mismatch.
+    """
+
+    try:
+        return feature_repair(
+            feature_id, request_id, root=root, operation="admit", **kwargs
+        )
+    except FeatureRepairError as exc:
+        code = str(exc).replace(" ", "_")
+        return _typed_refusal(
+            _stable_action_id(feature_id, request_id),
+            _FeatureRepairRefusal(code, "complete_repair_request"),
+        )
 
 
 def repair_action_for_mint(
@@ -389,6 +511,119 @@ def mark_feature_repair_delivery_pending(
         _write_payload(repo, payload)
 
 
+def _open_review_request(
+    *,
+    reason: str | None,
+    evidence: Mapping[str, Any] | None,
+    requesting_parent_id: str | None,
+    authenticated_human: AuthenticatedHuman | None,
+    approval_reference: str | None,
+    scope_reference: str | None,
+    review_url: str | None,
+    review_forge: str | None,
+    source_ref: str | None,
+    target_ref: str | None,
+    observed_source_head: str | None,
+    observed_target_head: str | None,
+    observed_review_generation: int | None,
+    claim_id: str | None,
+    incident_budget_id: str | None,
+) -> dict[str, Any] | None:
+    if authenticated_human is not None and not isinstance(
+        authenticated_human, AuthenticatedHuman
+    ):
+        raise FeatureRepairError(
+            "authenticated_human must come from an authenticated boundary"
+        )
+    values: dict[str, Any] = {
+        "reason": reason,
+        "evidence": dict(evidence) if isinstance(evidence, Mapping) else evidence,
+        "requesting_parent_id": requesting_parent_id,
+        "authenticated_human": authenticated_human.subject
+        if isinstance(authenticated_human, AuthenticatedHuman)
+        else authenticated_human,
+        "approval_reference": approval_reference,
+        "scope_reference": scope_reference,
+        "review_url": review_url,
+        "review_forge": review_forge,
+        "source_ref": source_ref,
+        "target_ref": target_ref,
+        "observed_source_head": observed_source_head,
+        "observed_target_head": observed_target_head,
+        "observed_review_generation": observed_review_generation,
+        "claim_id": claim_id,
+        "incident_budget_id": incident_budget_id,
+    }
+    open_only_fields = (
+        reason,
+        evidence,
+        requesting_parent_id,
+        authenticated_human,
+        review_url,
+        review_forge,
+        source_ref,
+        target_ref,
+        observed_source_head,
+        observed_target_head,
+        observed_review_generation,
+        claim_id,
+        incident_budget_id,
+    )
+    if not any(value is not None for value in open_only_fields):
+        return None
+    if evidence is None or not isinstance(evidence, Mapping):
+        raise FeatureRepairError("open review repair evidence must be a mapping")
+    try:
+        normalized = json.loads(json.dumps(values, sort_keys=True))
+    except (TypeError, ValueError) as exc:
+        raise FeatureRepairError("open review repair evidence must be JSON-safe") from exc
+    missing = [
+        field
+        for field in _OPEN_REVIEW_REQUIRED_FIELDS
+        if normalized.get(field) in {None, ""}
+    ]
+    if missing:
+        raise FeatureRepairError(
+            f"open review repair request is missing {', '.join(missing)}"
+        )
+    for field in (
+        "reason",
+        "approval_reference",
+        "scope_reference",
+        "review_url",
+        "review_forge",
+        "source_ref",
+        "target_ref",
+        "observed_source_head",
+        "observed_target_head",
+    ):
+        value = normalized[field]
+        if not isinstance(value, str) or not value.strip():
+            raise FeatureRepairError(f"open review repair {field} must be nonempty")
+    if bool(requesting_parent_id) == bool(authenticated_human):
+        raise FeatureRepairError(
+            "open review repair requires exactly one parent or authenticated human authority"
+        )
+    if isinstance(observed_review_generation, bool) or not isinstance(
+        observed_review_generation, int
+    ) or observed_review_generation < 0:
+        raise FeatureRepairError("observed review generation must be nonnegative")
+    normalized["authority"] = (
+        {"kind": "parent", "id": requesting_parent_id}
+        if requesting_parent_id
+        else {"kind": "authenticated_human", "id": authenticated_human.subject}
+    )
+    normalized.pop("requesting_parent_id", None)
+    normalized.pop("authenticated_human", None)
+    return normalized
+
+
+def _request_digest(request: Mapping[str, Any]) -> str:
+    return _digest(
+        json.dumps(dict(request), sort_keys=True, separators=(",", ":"))
+    )
+
+
 def _admit_or_resume(
     feature_id: str,
     request_id: str,
@@ -400,18 +635,37 @@ def _admit_or_resume(
     expected_generation: int | None,
     claim_owner: str | None,
     resume: bool,
+    open_request: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     if not feature_id.startswith("feat_") or not request_id.strip():
         raise FeatureRepairError(
             "feature_id and request_id must be stable nonempty identities"
         )
     action_id = _stable_action_id(feature_id, request_id)
+    content_digest = _request_digest(open_request) if open_request is not None else None
     repo = lifecycle_root(root)
     with task_lifecycle_lock(root=repo):
         payload = _read_payload(repo)
         actions = _actions(payload)
         existing = actions.get(action_id)
         if existing is not None:
+            if open_request is not None:
+                stored_digest = existing.get("request_digest")
+                if stored_digest != content_digest:
+                    return _typed_refusal(
+                        action_id,
+                        _FeatureRepairRefusal(
+                            "request_content_changed",
+                            "submit_a_new_request_id",
+                            terminal=True,
+                        ),
+                        action=existing,
+                        replayed=True,
+                    )
+            elif existing.get("request_digest") is not None:
+                raise FeatureRepairError(
+                    "open review repair requires its original request content"
+                )
             if (
                 expected_generation is not None
                 and existing.get("generation") != expected_generation
@@ -435,6 +689,26 @@ def _admit_or_resume(
         else:
             if resume:
                 raise FeatureRepairError("feature repair has not been admitted")
+            if open_request is not None:
+                current = [
+                    row
+                    for row in actions.values()
+                    if row.get("kind") == "feature_repair"
+                    and row.get("feature_id") == feature_id
+                    and row.get("phase") in _ACTIVE_PHASES
+                ]
+                if current:
+                    writer = max(
+                        current, key=lambda row: int(row.get("generation") or 0)
+                    )
+                    return _typed_refusal(
+                        str(writer.get("action_id") or action_id),
+                        _FeatureRepairRefusal(
+                            "repair_writer_active", "join_current_repair_generation"
+                        ),
+                        action=writer,
+                        replayed=True,
+                    )
             generation = 1 + max(
                 (
                     int(row.get("generation") or 0)
@@ -446,16 +720,28 @@ def _admit_or_resume(
             )
             if expected_generation not in {None, generation}:
                 raise FeatureRepairError("stale feature repair generation")
-            action = _prepare_action(
-                feature_id,
-                request_id,
-                action_id=action_id,
-                generation=generation,
-                task_id=task_id,
-                approval_reference=approval_reference,
-                scope_reference=scope_reference,
-                claim_owner=claim_owner,
-                root=repo,
+            action = (
+                _prepare_open_review_action(
+                    feature_id,
+                    request_id,
+                    action_id=action_id,
+                    generation=generation,
+                    request=open_request,
+                    claim_owner=claim_owner,
+                    root=repo,
+                )
+                if open_request is not None
+                else _prepare_action(
+                    feature_id,
+                    request_id,
+                    action_id=action_id,
+                    generation=generation,
+                    task_id=task_id,
+                    approval_reference=approval_reference,
+                    scope_reference=scope_reference,
+                    claim_owner=claim_owner,
+                    root=repo,
+                )
             )
             actions[action_id] = action
             payload["version"] = max(int(payload.get("version") or 1), 3)
@@ -465,7 +751,10 @@ def _admit_or_resume(
         if existing is not None and action.get("phase") in {
             "prepared",
             "authority_recorded",
+            "waiting",
         }:
+            if action.get("phase") == "waiting":
+                action.update(phase="prepared", blocker=None)
             attempts = list(action.get("attempts") or [])
             attempts.append(
                 {
@@ -482,7 +771,40 @@ def _admit_or_resume(
         # Re-read every mutable gate while holding the lifecycle lock.  A
         # prepared receipt is not permission to ignore a later lease or owner.
         doc, owner_root = _current_feature(feature_id, repo)
-        _recheck_action(action, doc, owner_root=owner_root, task_id=task_id, root=repo)
+        try:
+            _recheck_action(
+                action, doc, owner_root=owner_root, task_id=task_id, root=repo
+            )
+        except _FeatureRepairRefusal as refusal:
+            action.update(
+                phase="refused" if refusal.terminal else "waiting",
+                blocker=refusal.code,
+                next_action=refusal.next_prerequisite,
+                updated_at=datetime.now(timezone.utc).isoformat(),
+            )
+            actions[action_id] = action
+            payload["actions"] = actions
+            _write_payload(repo, payload)
+            return _typed_refusal(
+                action_id, refusal, action=action, replayed=existing is not None
+            )
+        except FeatureRepairError as exc:
+            if open_request is None:
+                raise
+            code = str(exc).replace(" ", "_")
+            refusal = _FeatureRepairRefusal(code, "refresh_repair_prerequisites")
+            action.update(
+                phase="waiting",
+                blocker=refusal.code,
+                next_action=refusal.next_prerequisite,
+                updated_at=datetime.now(timezone.utc).isoformat(),
+            )
+            actions[action_id] = action
+            payload["actions"] = actions
+            _write_payload(repo, payload)
+            return _typed_refusal(
+                action_id, refusal, action=action, replayed=existing is not None
+            )
         if action.get("phase") not in {"prepared", "authority_recorded"}:
             return _result(action, replayed=True)
         event_id = str(
@@ -502,6 +824,13 @@ def _admit_or_resume(
                     "owner_fingerprint": action["owner_fingerprint"],
                     "source_ref": action["source_ref"],
                     "target_ref": action["target_ref"],
+                    "source_head": action.get("source_head"),
+                    "target_head": action.get("target_head"),
+                    "request_digest": action.get("request_digest"),
+                    "review_url": action.get("review_url"),
+                    "review_generation": action.get("review_generation"),
+                    "claim_id": action.get("claim_id"),
+                    "incident_budget_id": action.get("incident_budget_id"),
                     "intended_active_path": action["intended_active_path"],
                     "document_digest": action["intended_document_digest"],
                 },
@@ -670,6 +999,196 @@ def _prepare_action(
     }
 
 
+def _prepare_open_review_action(
+    feature_id: str,
+    request_id: str,
+    *,
+    action_id: str,
+    generation: int,
+    request: Mapping[str, Any],
+    claim_owner: str | None,
+    root: Path,
+) -> dict[str, Any]:
+    """Snapshot request and intended introduction before any queue authority."""
+
+    doc, owner_root = _current_feature(feature_id, root)
+    prior_path = doc.meta.path.resolve().relative_to(owner_root.resolve()).as_posix()
+    prior_digest = _digest(doc.meta.path.read_bytes())
+    active_rel = f"docs/features/2_active/{doc.meta.path.name}"
+    marker = f"{_MARKER_PREFIX} action_id={action_id} generation={generation} -->"
+    if marker not in doc.body:
+        doc.body = doc.body.rstrip() + "\n\n" + marker + "\n"
+    doc.meta.status = "active"
+    doc.meta.updated = date.today()
+    doc.meta.path = owner_root / active_rel
+    intended = render_doc(doc)
+    epic_id = str(doc.meta.parent or "")
+    owner_fingerprint = _digest(
+        "\0".join(
+            (str(root.resolve()), str(owner_root.resolve()), feature_id, epic_id, prior_path)
+        )
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    request_copy = _copy(request)
+    return {
+        "schema_version": 2,
+        "kind": "feature_repair",
+        "repair_route": "open_review",
+        "action_id": action_id,
+        "request_id": request_id,
+        "request_digest": _request_digest(request_copy),
+        "reason": request_copy["reason"],
+        "request_evidence": request_copy["evidence"],
+        "request_authority": request_copy["authority"],
+        "feature_id": feature_id,
+        "accountable_feature_id": feature_id,
+        "task_id": None,
+        "epic_id": epic_id,
+        "generation": generation,
+        "review_generation": request_copy["observed_review_generation"],
+        "review_url": request_copy["review_url"],
+        "review_forge": request_copy["review_forge"],
+        "source_ref": request_copy["source_ref"],
+        "target_ref": request_copy["target_ref"],
+        "source_head": request_copy["observed_source_head"],
+        "target_head": request_copy["observed_target_head"],
+        "owner_fingerprint": owner_fingerprint,
+        "claim_owner": claim_owner,
+        "claim_id": request_copy.get("claim_id"),
+        "incident_budget_id": request_copy.get("incident_budget_id"),
+        "approval_reference": request_copy["approval_reference"],
+        "approved_at": doc.meta.approved_at.isoformat() if doc.meta.approved_at else None,
+        "scope_reference": request_copy["scope_reference"],
+        "prior_document_path": prior_path,
+        "prior_document_digest": prior_digest,
+        "intended_active_path": active_rel,
+        "intended_document_digest": _digest(intended),
+        "phase": "prepared",
+        "blocker": None,
+        "next_action": "record_feature_repair_authority",
+        "attempts": [{"attempt": 1, "admitted_at": now, "outcome": None}],
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _governing_comment_ids(evidence: object) -> set[str]:
+    if not isinstance(evidence, Mapping):
+        return set()
+    values: list[object] = []
+    for key in ("comment_id", "comment_ids", "governing_comment_ids"):
+        value = evidence.get(key)
+        values.extend(value if isinstance(value, list) else [value])
+    return {str(value) for value in values if isinstance(value, str) and value}
+
+
+def _open_review_admission_gates(
+    action: Mapping[str, Any], doc, *, owner_root: Path, root: Path
+) -> None:
+    from cascade.review import review_record_for_feature
+
+    if doc.meta.status not in {"completed", "active"}:
+        raise _FeatureRepairRefusal(
+            "feature_not_repairable", "restore_open_feature_lifecycle", terminal=True
+        )
+    board = merged_board(root)
+    parent = board.by_id.get(doc.meta.parent) if doc.meta.parent else None
+    if parent is None or parent.tier != "epic" or parent.status != "active":
+        raise _FeatureRepairRefusal("parent_not_active", "activate_accountable_epic")
+    authority = action.get("request_authority")
+    if not isinstance(authority, Mapping):
+        raise _FeatureRepairRefusal(
+            "request_authority_missing", "authenticate_repair_request", terminal=True
+        )
+    if authority.get("kind") == "parent" and authority.get("id") != doc.meta.parent:
+        raise _FeatureRepairRefusal(
+            "parent_authority_changed", "request_from_current_parent", terminal=True
+        )
+    if authority.get("kind") not in {"parent", "authenticated_human"}:
+        raise _FeatureRepairRefusal(
+            "request_authority_invalid", "authenticate_repair_request", terminal=True
+        )
+
+    record = review_record_for_feature(doc.meta.id, root=root)
+    if record is None:
+        raise _FeatureRepairRefusal("review_evidence_missing", "restore_review_registry")
+    if record.get("closed") or record.get("forge_acceptance") or record.get(
+        "stacked_acceptance"
+    ):
+        raise _FeatureRepairRefusal(
+            "review_is_not_open", "use_accepted_review_followup", terminal=True
+        )
+    forge_state = str(record.get("state") or record.get("forge_state") or "open").lower()
+    if forge_state not in {"open", "awaiting_review", ""}:
+        raise _FeatureRepairRefusal(
+            "review_is_not_open", "refresh_or_reopen_original_review"
+        )
+    expected = {
+        "review_url": record.get("url") or record.get("review_url"),
+        "review_forge": record.get("forge"),
+        "source_ref": record.get("source_branch"),
+        "target_ref": record.get("target_branch"),
+        "source_head": record.get("source_head"),
+        "target_head": record.get("target_head"),
+        "review_generation": int(record.get("current_generation") or 0),
+    }
+    if any(action.get(key) != value for key, value in expected.items()):
+        raise _FeatureRepairRefusal(
+            "stale_review_evidence", "refresh_review_observation"
+        )
+    if action.get("source_ref") != integration_branch("feature", doc.meta.id) or action.get(
+        "target_ref"
+    ) != integration_branch("epic", str(doc.meta.parent)):
+        raise _FeatureRepairRefusal(
+            "review_route_changed", "restore_original_review_route", terminal=True
+        )
+
+    for dep in doc.meta.depends_on:
+        candidate = board.by_id.get(dep)
+        if candidate is None or candidate.status != "completed":
+            raise _FeatureRepairRefusal(
+                "feature_dependency_incomplete", f"complete_dependency:{dep}"
+            )
+    gate = blocking_threads_for(doc.meta.id, root=root, board=board)
+    allowed = _governing_comment_ids(action.get("request_evidence"))
+    unexpected = [thread.id for thread in gate.threads if thread.id not in allowed]
+    if unexpected:
+        raise _FeatureRepairRefusal(
+            "governing_comments_changed", "resolve_or_refresh_governing_comments"
+        )
+
+    if action.get("phase") in {"prepared", "authority_recorded", "waiting"}:
+        if head_sha(owner_root) != action.get("source_head"):
+            raise _FeatureRepairRefusal(
+                "stale_source_head", "refresh_review_observation"
+            )
+        target_root = resolve_mutation_owner(str(doc.meta.parent), trunk=root)
+        if head_sha(target_root) != action.get("target_head"):
+            raise _FeatureRepairRefusal(
+                "stale_target_head", "refresh_review_observation"
+            )
+
+    budget_id = action.get("incident_budget_id")
+    if budget_id is not None:
+        budgets = _read_payload(root).get("incident_budgets")
+        budget = budgets.get(budget_id) if isinstance(budgets, Mapping) else None
+        if not isinstance(budget, Mapping):
+            raise _FeatureRepairRefusal(
+                "incident_budget_missing", "restore_original_incident_budget"
+            )
+        if budget.get("status") != "active":
+            raise _FeatureRepairRefusal(
+                "incident_budget_unavailable", "reconcile_original_incident_budget"
+            )
+        live_claim = budget.get("live_claim")
+        if isinstance(live_claim, Mapping) and live_claim.get("claim_id") != action.get(
+            "claim_id"
+        ):
+            raise _FeatureRepairRefusal(
+                "incident_claim_changed", "join_current_incident_claim"
+            )
+
+
 def _admission_gates(doc, *, task_id: str | None, root: Path) -> None:
     if doc.meta.status not in {"completed", "active"}:
         raise FeatureRepairError(
@@ -724,6 +1243,10 @@ def _recheck_action(
     if doc.meta.approved_at is None or doc.meta.approved_at.isoformat() != action.get(
         "approved_at"
     ):
+        if action.get("repair_route") == "open_review":
+            raise _FeatureRepairRefusal(
+                "feature_approval_changed", "restore_or_refresh_feature_approval"
+            )
         raise FeatureRepairError("feature repair approval changed")
     target_root = resolve_mutation_owner(str(doc.meta.parent), trunk=root)
     expected_target = (
@@ -732,6 +1255,10 @@ def _recheck_action(
         else action.get("target_head")
     )
     if head_sha(target_root) != expected_target:
+        if action.get("repair_route") == "open_review":
+            raise _FeatureRepairRefusal(
+                "stale_target_head", "refresh_review_observation"
+            )
         raise FeatureRepairError("feature repair target head changed")
     expected_owner = _digest(
         "\0".join(
@@ -746,7 +1273,12 @@ def _recheck_action(
     )
     if expected_owner != action.get("owner_fingerprint"):
         raise FeatureRepairError("feature repair mutation owner changed")
-    _admission_gates(doc, task_id=task_id or action.get("task_id"), root=root)
+    if action.get("repair_route") == "open_review":
+        _open_review_admission_gates(
+            action, doc, owner_root=owner_root, root=root
+        )
+    else:
+        _admission_gates(doc, task_id=task_id or action.get("task_id"), root=root)
     current_rel = doc.meta.path.resolve().relative_to(owner_root.resolve()).as_posix()
     current_digest = _digest(doc.meta.path.read_bytes())
     allowed = {
@@ -814,6 +1346,13 @@ def repair_event_authorizes(meta, event: Event, *, root: Path) -> bool:
         "owner_fingerprint": event.payload.get("owner_fingerprint"),
         "source_ref": event.payload.get("source_ref"),
         "target_ref": event.payload.get("target_ref"),
+        "source_head": event.payload.get("source_head"),
+        "target_head": event.payload.get("target_head"),
+        "request_digest": event.payload.get("request_digest"),
+        "review_url": event.payload.get("review_url"),
+        "review_generation": event.payload.get("review_generation"),
+        "claim_id": event.payload.get("claim_id"),
+        "incident_budget_id": event.payload.get("incident_budget_id"),
         "intended_active_path": event.payload.get("intended_active_path"),
         "intended_document_digest": event.payload.get("document_digest"),
     }

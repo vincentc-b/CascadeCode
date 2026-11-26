@@ -41,7 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
-    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_reserve
+    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_reserve
     autoLayout lr
 }
 

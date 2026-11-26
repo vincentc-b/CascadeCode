@@ -2343,12 +2343,21 @@ code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedD
     }
 }
 
-code_feature_repair = element "feature_repair" "Function" "Persist and authorize one exact late-repair generation." {
+code_feature_repair = element "feature_repair" "Function" "Persist, recheck and authorize one exact late-repair generation." {
     properties {
         "cascade.semanticId" "element.code.feature.repair"
         "cascade.parent" "element.component.feature-team"
         "cascade.sourcePath" "cascade/feature/repair.py"
         "cascade.sourceSymbol" "feature_repair"
+    }
+}
+
+code_feature_open_review_repair = element "admit_open_review_repair" "Function" "Admit a content-addressed parent or authenticated-human request against the existing open Feature review." {
+    properties {
+        "cascade.semanticId" "element.code.feature.open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "admit_open_review_repair"
     }
 }
 
@@ -2724,6 +2733,12 @@ code_feature_registry_to_repair = code_feature_registry -> code_feature_repair "
     }
 }
 
+code_feature_open_review_to_repair = code_feature_open_review_repair -> code_feature_repair "Uses the shared durable admission and introduction state machine" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-open-review-to-repair"
+    }
+}
+
 code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-registry-to-recover"
@@ -2838,7 +2853,7 @@ code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget
     }
 }
 
-code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
+code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event, request/review/claim bindings, live action and committed active-document introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-authority"
         "cascade.parent" "element.component.watchdog"

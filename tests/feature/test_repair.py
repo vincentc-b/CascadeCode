@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 import cascade.feature.repair as repair
+import cascade.review as review
 from cascade.board.store import read_doc, write_doc
-from cascade.feature.repair import FeatureRepairError, admit_feature_repair
+from cascade.feature.repair import (
+    FeatureRepairError,
+    admit_feature_repair,
+    admit_open_review_repair,
+)
 from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.loop import _authorized
 from cascade.watchdog.types import Event
@@ -31,6 +37,43 @@ def _completed_feature(root: Path) -> None:
     feature.meta.approved_at = datetime.now(timezone.utc)
     write_doc(feature, root=root)
     commit_board(root)
+
+
+def _open_review_request(root: Path, request_id: str = "review-fix:comment-7", **changes):
+    head = repair.head_sha(root)
+    assert head is not None
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "url": "https://example.test/pulls/7",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": head,
+            "target_head": head,
+            "current_generation": 3,
+            "closed": False,
+            "state": "open",
+        },
+        create=True,
+    )
+    kwargs = {
+        "reason": "Address the scoped review finding",
+        "evidence": {"comment_id": "comment-7", "finding": "edge case"},
+        "requesting_parent_id": "epic_001",
+        "approval_reference": "feature-approval:1",
+        "scope_reference": "review-comment:comment-7",
+        "review_url": "https://example.test/pulls/7",
+        "review_forge": "github",
+        "source_ref": "feat/feat_001",
+        "target_ref": "epic/epic_001",
+        "observed_source_head": head,
+        "observed_target_head": head,
+        "observed_review_generation": 3,
+    }
+    kwargs.update(changes)
+    return admit_open_review_repair("feat_001", request_id, root=root, **kwargs)
 
 
 def test_admission_persists_exact_generation_before_active_introduction(
@@ -189,3 +232,144 @@ def test_admission_refuses_missing_approval_without_moving_feature(
     with pytest.raises(FeatureRepairError, match="approval is missing"):
         admit_feature_repair("feat_001", "delivery:task_001", root=root)
     assert read_doc("feat_001", root=root).meta.status == "completed"
+
+
+def test_open_review_request_persists_original_route_and_content_before_authority(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+
+    result = _open_review_request(root)
+
+    assert result["admitted"] is True
+    assert result["verification_pending"] is True
+    assert result["phase"] == "parent_enabled"
+    ledger = json.loads((root / ".cascade/executions.json").read_text())
+    action = ledger["actions"][result["action_id"]]
+    assert action["repair_route"] == "open_review"
+    assert action["task_id"] is None
+    assert action["accountable_feature_id"] == "feat_001"
+    assert action["request_digest"]
+    assert action["request_authority"] == {"kind": "parent", "id": "epic_001"}
+    assert action["review_url"] == "https://example.test/pulls/7"
+    assert action["review_generation"] == 3
+    assert action["source_ref"] == "feat/feat_001"
+    assert action["target_ref"] == "epic/epic_001"
+    feature = read_doc("feat_001", root=root)
+    assert _authorized(root, feature.meta)
+    events, _ = read_events("feat_001", 0, root=root)
+    assert events[0].payload["request_digest"] == action["request_digest"]
+    assert events[0].payload["review_generation"] == 3
+
+
+def test_open_review_same_id_changed_content_is_typed_refusal(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    admitted = _open_review_request(root)
+
+    refused = _open_review_request(root, reason="A different repair request")
+
+    assert refused["action_id"] == admitted["action_id"]
+    assert refused["refused"] is True
+    assert refused["blocker"] == "request_content_changed"
+    assert refused["next_prerequisite"] == "submit_a_new_request_id"
+
+
+def test_open_review_stale_observation_waits_without_queue_authority(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+
+    waiting = _open_review_request(root, observed_source_head="stale-source")
+
+    assert waiting["waiting"] is True
+    assert waiting["admitted"] is False
+    assert waiting["blocker"] == "stale_review_evidence"
+    events, _ = read_events("feat_001", 0, root=root)
+    assert events == []
+    assert read_doc("feat_001", root=root).meta.status == "completed"
+
+
+def test_open_review_crash_after_authority_append_replays_exact_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    real_append = repair.append_event
+    interrupted = False
+
+    def append_then_interrupt(*args, **kwargs):
+        nonlocal interrupted
+        result = real_append(*args, **kwargs)
+        if not interrupted:
+            interrupted = True
+            raise OSError("injected open-review authority interruption")
+        return result
+
+    monkeypatch.setattr(repair, "append_event", append_then_interrupt)
+    with pytest.raises(OSError, match="authority interruption"):
+        _open_review_request(root)
+
+    monkeypatch.setattr(repair, "append_event", real_append)
+    resumed = _open_review_request(root)
+
+    assert resumed["generation"] == 1
+    assert resumed["phase"] == "parent_enabled"
+    events, _ = read_events("feat_001", 0, root=root)
+    assert len(events) == 1
+    ledger = json.loads((root / ".cascade/executions.json").read_text())
+    assert list(ledger["actions"]) == [resumed["action_id"]]
+
+
+def test_concurrent_open_review_replays_one_writer_and_one_event(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    head = repair.head_sha(root)
+    assert head is not None
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "url": "https://example.test/pulls/7",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": head,
+            "target_head": head,
+            "current_generation": 3,
+            "closed": False,
+            "state": "open",
+        },
+        create=True,
+    )
+    kwargs = {
+        "reason": "Address the scoped review finding",
+        "evidence": {"comment_id": "comment-7"},
+        "requesting_parent_id": "epic_001",
+        "approval_reference": "feature-approval:1",
+        "scope_reference": "review-comment:comment-7",
+        "review_url": "https://example.test/pulls/7",
+        "review_forge": "github",
+        "source_ref": "feat/feat_001",
+        "target_ref": "epic/epic_001",
+        "observed_source_head": head,
+        "observed_target_head": head,
+        "observed_review_generation": 3,
+    }
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(
+                lambda _: admit_open_review_repair(
+                    "feat_001", "review-fix:comment-7", root=root, **kwargs
+                ),
+                range(2),
+            )
+        )
+
+    assert {row["action_id"] for row in results} == {results[0]["action_id"]}
+    assert {row["generation"] for row in results} == {1}
+    events, _ = read_events("feat_001", 0, root=root)
+    assert [event.type for event in events] == ["FeatureRepairAuthorized"]
