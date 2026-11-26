@@ -210,6 +210,10 @@ No product-scope question blocks Feature planning. The following implementation 
 
 - 2026-11-25 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-26 · Epic Manager · **Macro-architecture / Delivery contract and scope**
+  Chose Keep the current board status schema and completed-source review staging; make delivery ownership explicit through the shared review/obligation phase consumed by queue, resume, closeout, dependency and UI paths..
+  Rationale: The publication path stages completed source documents before forge merge. Changing board enums would widen scope; a shared nonterminal delivery contract preserves compatibility while preventing staged completion from retiring or disabling the accountable owner.
+  Honors: Success criteria 1, 3 and 5; original Feature/branch/review identity; existing review and owner contracts..
 ## Amendment log
 
 _(none)_
