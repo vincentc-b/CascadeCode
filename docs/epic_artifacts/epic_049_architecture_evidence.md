@@ -1551,3 +1551,60 @@ checks were rerun for this work-record-only review. Epic plan, sign-offs and the
 failed publication tuple remain unchanged. Final acceptance, canonical record
 corrections, producer design ownership and supported publication recovery remain
 open. Return control to supervised child delivery.
+
+## Manager post-merge stale acknowledgement correction
+
+In reply to `feat_049_002:feat_049_002:postmerge_stale_private_ack_20261126`,
+reviewed canonical Feature `7f7df0e8` and its publisher source. Cascade inspection
+reports the Feature completed with no supervision incident. The private
+`_record_transcript_milestone` checks immutable entry/graph/message identity but
+unconditionally replaces differing incarnation/sequence. Fast-path and drain
+callers supply an acknowledgement after releasing the graph fence. The reported
+publish, rewrite, republish, delayed-private-ack reproduction is consistent with
+source; this turn did not rerun that reproduction or the reported 27 tests.
+The public wrapper re-reads routing before acquiring the publisher writer lock;
+its check-to-write interval also needs explicit race analysis.
+
+Minted corrective backlog `feat_049_004`, depending on completed Feature 2,
+through Cascade. Final canonical spec `115d3f34` requires a deterministic real
+private-path interleaving regression, immutable-conflict rejection, exactly one
+milestone, rewrite/move/restart coverage, pending-evidence behavior, safe lock
+ordering and bounded work. It requires source/design/Code reconciliation and
+final API fixtures. Epic decision `dec_008` records the corrective sequence;
+canonical Epic is now `fd966c56`. Existing sign-offs/publication evidence for
+`03280933` do not approve this changed plan revision. Architect review and renewed
+role sign-offs remain pending; no completion or publication is claimed.
+
+Feature 3 spec `1925b1e6` explicitly requires the verified correction before
+dispatch/integrated acceptance. IMPORTANT: its canonical `depends_on` metadata
+still lists only Features 1 and 2. The successful body write did not apply the
+requested metadata change: `board/serde.py::work_doc_from_dict` reloads canonical
+metadata for existing work. No dependency-edit tool is exposed to this Epic.
+This is a documented planning/acceptance hold, not a machine-enforced dispatch
+dependency. The supervisor/authorized lifecycle owner must reconcile this gap
+before advancing Feature 3. Feature 2 received both the repair route and this
+readback correction through `message_team`; no completed record was reopened.
+
+Design review: read Feature-branch Watchdog, War Room and Workspace designs
+against the acknowledgement and retirement source paths. Watchdog and War Room
+claim delayed acknowledgements cannot restore stale routing; the private path
+contradicts that statement. Corrective Feature acceptance requires reconciliation
+with implemented behavior. The integrated model and source contract now contain
+the private mapping and `resume_transcript_room_move` symbols; navigation is still
+unverified by this turn.
+
+| Level / view | Corrective scope and verification owner |
+|---|---|
+| Landscape/context | Same actors and external systems; correction owner confirms final diff. |
+| Containers | Same publisher SQLite and transcript JSONL/index boundaries; no new runtime/store proposed. |
+| Supervisor/War Room components | Existing publisher/transcript ownership; reconcile changed synchronization relationships. |
+| Watchdog/Dashboard Code, Workspace if affected | Corrective Feature owns mapping/append/drain/move source symbols, native relationships and contract; preserve resume/retirement coverage and verify Explore, Level up, deep links and pinned source. |
+| Watchdog/War Room/Workspace behavior | Corrective Feature must trace normal mapping, delayed writer, unavailable evidence and restart with the actual lock/transaction protocol. |
+
+Validation: canonical readbacks of Epic and both backlog specs, completed-child
+inspection, source/design trace and model/contract symbol inspection. The owned
+diff changes only this work record; no new diagram/render or executable test is
+warranted here. `git diff --check` passed. No dependency was installed. Producer
+design ownership, completed Task 1/5 board corrections, final API/navigation
+evidence and supported Epic publication recovery remain open. Return control to
+Architect/lifecycle review and corrective child planning.
