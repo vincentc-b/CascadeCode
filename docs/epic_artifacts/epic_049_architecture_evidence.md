@@ -2050,3 +2050,62 @@ exact commits, and `git diff --check`. Historical publication pins are unchanged
 terminal publication recovery still has no supported retry in the available
 tools. No replacement publication or accepted-lineage change is claimed.
 Return control to Feature 3 planning and authorized corrective delivery.
+
+## Manager final Feature 4 handoff and contention repair ownership
+
+In reply to `feat_049_004:feat_049_004_integrated_handoff_a3d4a42b_20261126`.
+Read canonical Feature 4 `a3d4a42b3df92a553206c300c42142600183eaef`,
+Feature 3 `382be96b`, and Epic `03ce7eb0`; child supervision reports Feature 4
+completed without an incident. Feature 4 is not an ancestor of the owned Epic
+HEAD reviewed at `64ad6eb6`. No manual merge or completed-record edit was made.
+
+The owner reports 69 focused passes in 76.62 s at the exact handoff revision,
+plus 235 elements/283 relationships/24 views. Its child closeout reports the
+77-test suite, pinned render/cache and scoped actual-model Code navigation;
+the broader refreshed-documentation assertion remains a reported limitation.
+These are child results, not an Epic rerun. Passed the exact revision, both
+named transcript API/detail tests, milestone suite and pending-source fixture
+to Feature 3 in request `manager:f4_pins_and_f5_acceptance_gate_20261126`.
+Feature 3 must persist them and verify its integrated consumer baseline.
+
+Source review confirms the remaining gap recorded by the Architect:
+`graph_transcript_fence` blocks on thread RLock and `flock(LOCK_EX)`;
+`fenced_transcript_source_acknowledgement` opens `_connect_index`, which uses
+a 30-second SQLite timeout and initializes schema. The private mapping helper
+has no remaining deadline argument. The fence-through-commit protection is
+valuable but does not establish the selected fast-path/drain budgets.
+
+Minted `feat_049_005`, dependent on completed Feature 4, for the smallest
+supported correction. Its canonical acceptance requires shared deadlines
+across publisher/graph/SQLite contention, existing-index-only lookup, pending
+without lost cursor/receipt, thread/process/SQLite contention tests, successful
+later replay, immutable identity and fence-through-commit preservation. It
+also covers preceding append/dedup acquisitions so mapping-only timeouts cannot
+hide another blocking path. No new route, install or product scope is added.
+Removed generated duplicate scaffolding via canonical `write_doc`.
+
+Epic `write_doc` succeeded at `96c71afd`; `record_decision` saved `dec_010`,
+yielding canonical Epic `2125b7c8`. The plan records Feature 5 ownership and the
+final fixtures. Feature 3 may continue independent consumer work; its final
+acceptance and Epic completion require integrated Feature 5 verification.
+This is an explicit acceptance gate, not a changed dependency-metadata claim.
+Feature 4 was notified to avoid duplicate repair or completed-record mutation.
+
+Design review: read the source-linked Recovery Progress child design and the
+final Task 3 closeout inventory covering root/package, Watchdog, War Room and
+Workspace. The child explains normal mapping, persistence and pending/restart;
+`REQ-RECOVERY-PROGRESS-004` verification overstates contention coverage and is
+assigned to Feature 5 for reconciliation. Its canonical inventory assigns
+context/container final-diff review, component ownership, native Watchdog and
+Dashboard Code source/deadline changes, affected Workspace links, normal and
+timeout/replay flows, source validation and actual pinned navigation/warm reuse.
+This turn changes work records only; it adds no runtime actor, container, Code
+symbol or behavior diagram. No current design/model edit or publication claim.
+
+Validation: canonical reads/write/readback, child lifecycle inspection, empty
+amendment list, exact-commit source/design/closeout inspection, ancestry check
+and `git diff --check`. Runtime suites were not repeated for this planning-only
+change. Renewed sign-off and acceptance remain withheld; supported integration,
+contention repair, completed Task record corrections, final design ownership
+reconciliation and architecture publication recovery remain open. Return
+control to corrective planning, consumer execution and supervised delivery.
