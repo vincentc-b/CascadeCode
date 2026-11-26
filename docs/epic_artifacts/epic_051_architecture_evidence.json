@@ -56,8 +56,21 @@
     "Browser smoke isolates unrelated operational panels; architecture routes, rendering, navigation and pinned-source reads use production code.",
     "Rapid navigation/reload cancelled some in-flight requests, producing server BrokenPipe diagnostics; all asserted browser paths and responses passed. This smoke does not establish general HTTP cancellation behavior or a latency SLA."
   ],
-  "planning_handoff": "Four canonical child specs were read; each includes required Task design/model/Code acceptance. No open Epic comment or architecture amendment was found. Record final plan evidence through write_doc, then architect sign-off and revision-pinned publication. Epic Manager must re-review the changed plan revision.",
+  "planning_handoff": "Epic Architect signed c4a9ef2534f34d5955bd5e18ed837087f649ac18 after final canonical read. Epic Manager must re-review and sign that revision. Architecture publication is durably pending; replay the saved identical request on a later turn. Do not substitute newer references. Human plan approval remains a separate gate.",
   "reviewed_plan_revision": "c4a9ef2534f34d5955bd5e18ed837087f649ac18",
   "browser_receipt": "docs/epic_artifacts/epic_051_architecture_browser.json",
-  "publication_request": "docs/epic_artifacts/epic_051_architecture_review.json"
+  "publication_request": "docs/epic_artifacts/epic_051_architecture_review.json",
+  "architect_sign_off": {
+    "plan_revision": "c4a9ef2534f34d5955bd5e18ed837087f649ac18",
+    "evidence_snapshot_id": "evidence_7f611fddb7664c64b17125c772ca5cd8",
+    "role": "epic_architect",
+    "ok": true
+  },
+  "publication_receipt": {
+    "operation_id": "architecture-publication-363127f111d7e852e633e613936a1306e0b35f764689c4016a1e4bde7f79ccc3",
+    "status": "pending",
+    "render_operation_id": "c4-render-516e3cbc08e02b339eea510e082945e49d6e4664e3d46fde3018a5eca7749eed",
+    "reviewed_tuple_digest": "81552f6123bc4e556f468f22e7df3cbe554fb593c2ea33f0a0befc53d6497bbd",
+    "message": "bounded architecture render is pending"
+  }
 }
