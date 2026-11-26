@@ -81,7 +81,11 @@ top-level fields project the current generation for compatibility. A generation
 binds its repair action, route, observed heads, accepted merge, publication
 action and reconciliation status. Restart retries queued actions and polls the
 same current row. A stale callback fails its generation/URL/ref fence and cannot
-close or retire a newer obligation. `not_active` remains a transient merge wait.
+close or retire a newer obligation. A queued Task merge refused with `not_active`
+because its Feature is completed is a `parent_lifecycle_mismatch`. The durable
+action retains its validation evidence and authoritative generation; unchanged
+observations do not claim another merge attempt. The immediate parent routes
+that generation through Feature repair admission before delivery resumes.
 
 Verification: [merge tests](../../tests/boss/test_merge.py),
 [rollup tests](../../tests/boss/test_rollup.py),
