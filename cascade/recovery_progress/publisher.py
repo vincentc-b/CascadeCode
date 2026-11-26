@@ -274,7 +274,7 @@ def _has_timestamped_acknowledgement(
     receipt: Mapping[str, Any], authoritative: Mapping[str, Any]
 ) -> bool:
     if (
-        receipt.get("transition_kind") == "acknowledged"
+        receipt.get("transition_kind") in {"acknowledged", "owner_acknowledged"}
         and _parse_time(receipt.get("occurred_at")) is not None
     ):
         return True
@@ -289,6 +289,12 @@ def _has_timestamped_acknowledgement(
     if isinstance(execution_claim, Mapping):
         candidates.extend(
             execution_claim.get(key)
+            for key in ("acknowledged_at", "claimed_at", "observed_at", "at")
+        )
+    routing_marker = acknowledgement.get("routing_marker")
+    if isinstance(routing_marker, Mapping):
+        candidates.extend(
+            routing_marker.get(key)
             for key in ("acknowledged_at", "claimed_at", "observed_at", "at")
         )
     return any(_parse_time(value) is not None for value in candidates)
