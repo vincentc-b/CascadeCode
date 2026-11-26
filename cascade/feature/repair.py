@@ -513,17 +513,99 @@ def feature_repair_actions(feature_id: str, *, root: Path) -> list[dict[str, Any
 
 
 def mark_feature_repair_verified(
+    feature_id: str,
+    generation: int,
+    *,
+    postcheck: Mapping[str, Any],
+    root: Path,
+) -> bool:
+    """Fence one exact generation to an independent Watchdog receipt.
+
+    Delivery, publication and lifecycle callers are deliberately unable to
+    manufacture this transition: the receipt must name the canonical action,
+    corrected review head, check-policy observation and Epic integration proof.
+    """
+
+    repo = lifecycle_root(root)
+    with task_lifecycle_lock(root=repo):
+        return _mark_feature_repair_verified_locked(
+            feature_id, generation, postcheck=postcheck, repo=repo
+        )
+
+
+def _mark_feature_repair_verified_locked(
+    feature_id: str,
+    generation: int,
+    *,
+    postcheck: Mapping[str, Any],
+    repo: Path,
+) -> bool:
+    """Apply the exact receipt while the lifecycle fence is held."""
+
+    payload = _read_payload(repo)
+    actions = _actions(payload)
+    if postcheck.get("verified") is not True:
+        return False
+    current = max(
+        (
+            row
+            for row in actions.values()
+            if row.get("kind") == "feature_repair"
+            and row.get("repair_route") == "open_review"
+            and row.get("feature_id") == feature_id
+            and row.get("phase") in _ACTIVE_PHASES
+        ),
+        key=lambda row: int(row.get("generation") or 0),
+        default=None,
+    )
+    if (
+        not isinstance(current, Mapping)
+        or current.get("generation") != generation
+        or current.get("action_id") != postcheck.get("repair_action_id")
+        or not isinstance(postcheck.get("required_check_policy"), Mapping)
+        or not isinstance(postcheck.get("required_check_results"), Mapping)
+        or not postcheck.get("accepted_merge_sha")
+        or not postcheck.get("target_head")
+    ):
+        return False
+    for action_id, action in actions.items():
+        if (
+            action.get("kind") == "feature_repair"
+            and action.get("feature_id") == feature_id
+            and int(action.get("generation") or 0) == generation
+            and action.get("action_id") == postcheck.get("repair_action_id")
+            and postcheck.get("repair_generation") == generation
+            and postcheck.get("source_head")
+            == postcheck.get("checked_source_head")
+        ):
+            action.update(
+                phase="verified",
+                next_action=None,
+                verification_postcheck=_copy(postcheck),
+                verified_at=datetime.now(timezone.utc).isoformat(),
+                updated_at=datetime.now(timezone.utc).isoformat(),
+            )
+            actions[action_id] = action
+            break
+    else:
+        return False
+    payload["actions"] = actions
+    _write_payload(repo, payload)
+    return True
+
+
+def mark_legacy_feature_repair_verified(
     feature_id: str, generation: int, *, root: Path
 ) -> None:
-    """Make a satisfied generation historical before checkout retirement."""
+    """Preserve completed-parent mismatch closeout outside open-review repair."""
 
     repo = lifecycle_root(root)
     payload = _read_payload(repo)
     actions = _actions(payload)
-    changed = False
     for action_id, action in actions.items():
         if (
             action.get("kind") == "feature_repair"
+            and action.get("repair_route") != "open_review"
             and action.get("feature_id") == feature_id
             and int(action.get("generation") or 0) == generation
         ):
@@ -534,11 +616,9 @@ def mark_feature_repair_verified(
                 updated_at=datetime.now(timezone.utc).isoformat(),
             )
             actions[action_id] = action
-            changed = True
-            break
-    if changed:
-        payload["actions"] = actions
-        _write_payload(repo, payload)
+            payload["actions"] = actions
+            _write_payload(repo, payload)
+            return
 
 
 def mark_feature_repair_delivery_pending(
@@ -1417,11 +1497,24 @@ def repair_event_authorizes(meta, event: Event, *, root: Path) -> bool:
         return False
     try:
         with task_lifecycle_read_lock(root=root):
-            action = _actions(_read_payload(root)).get(action_id)
+            actions = _actions(_read_payload(root))
+            action = actions.get(action_id)
+            current = max(
+                (
+                    row
+                    for row in actions.values()
+                    if row.get("kind") == "feature_repair"
+                    and row.get("feature_id") == meta.id
+                    and row.get("phase") in _ACTIVE_PHASES
+                ),
+                key=lambda row: int(row.get("generation") or 0),
+                default=None,
+            )
     except ActionRecoveryUnavailable:
         return False
     if (
         action is None
+        or current is not action
         or action.get("kind") != "feature_repair"
         or action.get("phase") not in _ACTIVE_PHASES
     ):
@@ -1446,7 +1539,22 @@ def repair_event_authorizes(meta, event: Event, *, root: Path) -> bool:
     if any(action.get(key) != value for key, value in bindings.items()):
         return False
     try:
-        owner_root = git_root_for_path(meta.path)
+        owner_root = resolve_mutation_owner(meta.id, trunk=root).resolve()
+        if git_root_for_path(meta.path).resolve() != owner_root:
+            return False
+        expected_owner = _digest(
+            "\0".join(
+                (
+                    str(root.resolve()),
+                    str(owner_root),
+                    meta.id,
+                    str(action.get("epic_id") or ""),
+                    str(action.get("prior_document_path") or ""),
+                )
+            )
+        )
+        if expected_owner != action.get("owner_fingerprint"):
+            return False
         rel = meta.path.resolve().relative_to(owner_root.resolve()).as_posix()
         if rel != action["intended_active_path"]:
             return False
@@ -1457,6 +1565,13 @@ def repair_event_authorizes(meta, event: Event, *, root: Path) -> bool:
             current_head = head_sha(owner_root)
             if current_head is None or not _is_ancestor(
                 owner_root, commit, current_head
+            ):
+                return False
+            introduction_head = action.get("source_head_after_introduction")
+            if (
+                not isinstance(introduction_head, str)
+                or not _is_ancestor(owner_root, commit, introduction_head)
+                or not _is_ancestor(owner_root, introduction_head, current_head)
             ):
                 return False
             if _digest(read_blob(owner_root, commit, rel)) != action.get(

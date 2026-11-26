@@ -98,7 +98,12 @@ direct Epic parent or an `AuthenticatedHuman`, then schedules the already-durabl
 event through Workspace. It does not infer work from acknowledgement: the
 action projection independently reports admission, queue acknowledgement,
 execution and authoritative verification. Replay after an adapter crash reuses
-this action ID, generation and event.
+this action ID, generation and event. When the Feature graph already owns the
+turn, [inspect_open_review_repair](repair.py) reads the canonical action under
+the lifecycle read lock and compares the complete request digest before the
+adapter joins that owner. An identical request reuses the action; changed
+content under the same request ID returns the terminal
+`request_content_changed` prerequisite without enqueueing or mutating it.
 
 ```mermaid
 sequenceDiagram
@@ -111,6 +116,10 @@ sequenceDiagram
     Feature->>Queue: append FeatureRepairAuthorized once (exact bindings)
     Feature->>Board: commit exact active document
     Feature->>Ledger: checkpoint commit and blob
+    alt live owner replay
+        Feature->>Ledger: inspect canonical request digest
+        Ledger-->>Feature: join identical action or refuse changed content
+    end
     Watchdog->>Ledger: rejoin live generation
     Watchdog->>Board: verify path, digest, commit and blob
     Note over Ledger,Queue: Restart joins the stable event ID before appending
@@ -118,8 +127,10 @@ sequenceDiagram
 
 The `FeatureRepairAuthorized` payload also binds the open-review request digest,
 review identity and generation, observed heads, claim and budget identity.
-[repair_event_authorizes](repair.py) joins those fields back to the live action;
-the event is not independently executable authority.
+[repair_event_authorizes](repair.py) joins those fields back to the greatest
+live action, current registered mutation owner and exact committed introduction;
+the event is not independently executable authority. A stale event cannot
+authorize an older generation even when its marker and commit remain in history.
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
@@ -164,10 +175,16 @@ the execution lease under the lifecycle lock. Its typed projection keeps
 selection, request/admission, acknowledgement, execution, refusal and verified
 postcheck evidence distinct; parent reactivation alone is never verified
 delivery.
-After closeout marks the exact repair generation verified, Watchdog separately
-checks the canonical completed Feature, current accepted review heads, surviving
-completed Task and retired owner checkouts. Feature recovery cannot clear the
-shared incident or substitute an older accepted review generation.
+For open-review repair, [Watchdog](../watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
+marks the exact generation verified before closeout after independently checking
+the original review identity, corrected head, normalized current required checks
+and intended Epic integration. [mark_feature_repair_verified](repair.py) accepts
+only that generation-bound receipt and persists it in the existing action; Boss
+cannot synthesize verification from delivery or publication. Missing or stale
+evidence leaves the action, owner claim, child reservation and finite budget
+identities intact across restart. The completed-parent Task-mismatch route keeps
+its existing terminal incident postcheck after retirement. Feature recovery
+cannot clear the shared incident or substitute an older accepted review generation.
 Both entries appear in `cascade-feature-code`, linked from the scoped registry.
 The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
 [Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)

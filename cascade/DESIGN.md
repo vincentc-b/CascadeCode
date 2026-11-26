@@ -521,6 +521,11 @@ the same delivery projection before its completed-document fast path: only exact
 current-generation acceptance whose merge is reachable from the intended Epic
 target can emit normal completion or release retirement. Callback flags, green
 checks, closed-unmerged rows and stale source/target heads remain nonterminal.
+For an admitted open-review repair, Watchdog additionally binds the original
+review identity, current corrected source head, authoritative normalized required
+check policy/results and Epic-target integration before Boss may record the
+generation verified or retire its owner checkout. Unavailable policy, check or
+forge evidence remains a typed prerequisite in the existing repair action.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

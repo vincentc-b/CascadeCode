@@ -17,6 +17,7 @@ from cascade.feature.repair import (
     FeatureRepairError,
     admit_feature_repair,
     admit_open_review_repair,
+    repair_event_authorizes,
 )
 from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.loop import _authorized
@@ -214,6 +215,56 @@ def test_watchdog_binds_introduction_but_allows_later_marked_feature_edit(
     )
     write_doc(feature, root=root)
     assert not _authorized(root, read_doc("feat_001", root=root).meta)
+
+
+def test_watchdog_rejects_stale_event_after_newer_generation_is_current(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    first = admit_feature_repair("feat_001", "delivery:task_001", root=root)
+    feature = read_doc("feat_001", root=root)
+    payload = json.loads((root / ".cascade/executions.json").read_text())
+    newer = dict(payload["actions"][first["action_id"]])
+    newer.update(
+        action_id="feature_repair:feat_001:newer",
+        request_id="delivery:task_002",
+        generation=2,
+    )
+    payload["actions"][newer["action_id"]] = newer
+    (root / ".cascade/executions.json").write_text(json.dumps(payload))
+
+    assert not _authorized(root, feature.meta)
+
+
+@pytest.mark.parametrize(
+    ("field", "changed"),
+    [
+        ("generation", 99),
+        ("owner_fingerprint", "changed-owner"),
+        ("source_head", "changed-source-head"),
+        ("target_head", "changed-target-head"),
+        ("review_url", "https://example.test/pulls/changed"),
+    ],
+)
+def test_watchdog_rejects_changed_exact_event_binding(
+    tmp_path: Path, field: str, changed: object
+) -> None:
+    root = make_repo(tmp_path)
+    _completed_feature(root)
+    _open_review_request(root)
+    feature = read_doc("feat_001", root=root)
+    events, _ = read_events("feat_001", 0, root=root)
+    event = events[0]
+    assert repair_event_authorizes(feature.meta, event, root=root)
+
+    stale = Event(
+        type=event.type,
+        ts=event.ts,
+        payload={**event.payload, field: changed},
+        dest=event.dest,
+    )
+    assert not repair_event_authorizes(feature.meta, stale, root=root)
 
 
 def test_admission_refuses_missing_approval_without_moving_feature(

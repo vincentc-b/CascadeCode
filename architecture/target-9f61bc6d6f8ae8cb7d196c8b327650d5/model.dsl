@@ -2307,6 +2307,15 @@ code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Functio
     }
 }
 
+code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Observe the original forge review and normalized required checks outside the lifecycle lock, then fence exact current-generation verification before closeout." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.repair-postcheck"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "reconcile_open_review_repair"
+    }
+}
+
 code_watchdog_verify = element "verify_incident_postcheck" "Function" "Atomically convert one exact deferred incident to verified history while preserving prior attempts." {
     properties {
         "cascade.semanticId" "element.code.watchdog.verify"
@@ -2367,6 +2376,15 @@ code_feature_open_review_repair = element "admit_open_review_repair" "Function" 
         "cascade.parent" "element.component.feature-team"
         "cascade.sourcePath" "cascade/feature/repair.py"
         "cascade.sourceSymbol" "admit_open_review_repair"
+    }
+}
+
+code_feature_inspect_open_review_repair = element "inspect_open_review_repair" "Function" "Read the canonical live-owner action and refuse a replay whose complete request digest changed under the same request identity." {
+    properties {
+        "cascade.semanticId" "element.code.feature.inspect-open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "inspect_open_review_repair"
     }
 }
 
@@ -2787,6 +2805,12 @@ code_epic_review_repair_request_to_feature_admission = code_epic_review_repair_r
     }
 }
 
+code_epic_review_repair_request_to_feature_inspection = code_epic_review_repair_request -> code_feature_inspect_open_review_repair "Joins a live owner only after the canonical request digest still matches" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-feature-inspection"
+    }
+}
+
 code_epic_supervise_to_mismatch_route = code_epic_supervise -> code_epic_mismatch_route "Routes exact completed-parent mismatch" {
     properties {
         "cascade.semanticId" "relationship.code-epic-supervise-to-parent-lifecycle-mismatch-route"
@@ -2889,7 +2913,7 @@ code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget
     }
 }
 
-code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event, request/review/claim bindings, live action and committed active-document introduction." {
+code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event, request/review/claim bindings, current live action, mutation owner and committed active-document introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-authority"
         "cascade.parent" "element.component.watchdog"
@@ -2898,9 +2922,30 @@ code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "J
     }
 }
 
+code_feature_repair_verify = element "mark_feature_repair_verified" "Function" "Persist only an independently verified receipt naming the exact current action, repair generation and corrected checked source head." {
+    properties {
+        "cascade.semanticId" "element.code.feature.repair-verify"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "mark_feature_repair_verified"
+    }
+}
+
 code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_repair_authority "Checks generation-bound Feature repair" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-authority-to-repair-authority"
+    }
+}
+
+code_boss_feature_to_repair_postcheck = code_boss_feature -> code_watchdog_repair_postcheck "Requests fresh verification before the lifecycle critical section" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-watchdog-repair-postcheck"
+    }
+}
+
+code_watchdog_repair_postcheck_to_feature_verify = code_watchdog_repair_postcheck -> code_feature_repair_verify "Fences the unchanged action and evidence digest before marking verified" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-repair-postcheck-to-feature-repair-verify"
     }
 }
 
