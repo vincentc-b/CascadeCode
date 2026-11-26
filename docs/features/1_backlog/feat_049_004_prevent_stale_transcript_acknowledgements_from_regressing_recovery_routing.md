@@ -70,8 +70,8 @@ The additional detail reproduction used an oversized emoji body and caller-edite
 | Landscape/context: cascade-landscape, cascade-context | No new actor or external system is proposed; confirm against final diff. |
 | Containers: cascade-containers | Existing publisher SQLite and transcript JSONL/index boundaries remain; no new service/store is authorized. |
 | Components: cascade-supervisor-components, cascade-war-room-components | Retain publisher/transcript ownership; reconcile synchronization and calls if changed. |
-| Code: cascade-watchdog-code, cascade-dashboard-code; cascade-workspace-code if move boundary changes | Update real source symbols, relationships, declaration kinds and contract for mapping freshness, receipt append/drain and any changed move/rewrite boundary. Preserve integrated resume_transcript_room_move node and retirement relationship. |
-| Behavior: cascade/watchdog/DESIGN.md, cascade/war_room/DESIGN.md, cascade/workspace/DESIGN.md and recovery-progress owner | Trace source-lock release, graph fence, publisher transaction, delayed ack, restart and failure. Resolve the existing recovery-progress directory ownership gap if it remains in the affected design scope; do not duplicate design ownership. |
+| Code: cascade-watchdog-code, cascade-dashboard-code; cascade-workspace-code if move boundary changes | Update real source symbols, relationships, declaration kinds and contract for mapping freshness, receipt append/drain, `transcript_pages.read_transcript_detail` cursor validation and any changed move/rewrite boundary. Preserve integrated resume_transcript_room_move node and retirement relationship. |
+| Behavior: cascade/watchdog/DESIGN.md, cascade/war_room/DESIGN.md, cascade/workspace/DESIGN.md and recovery-progress owner | Trace source-lock release, graph fence, publisher transaction, delayed ack, restart and failure; document normal multibyte detail continuation and typed malformed-boundary refusal. Resolve the existing recovery-progress directory ownership gap if it remains in the affected design scope; do not duplicate design ownership. |
 
 ## Sequencing and scope
 
