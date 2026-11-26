@@ -33,6 +33,8 @@ epic_049
 
 ## Scope
 
+Repair the existing stale-acknowledgement acceptance gap only.
+
 ## Intent
 
 Repair the stale transcript acknowledgement race found during post-merge review of completed feat_049_002 at 7f7df0e8fe125fa7178dacb8ce47b2bb3c4553fe. This implements the existing Epic durability and truthful-routing contract; it adds no product scope.
@@ -65,18 +67,15 @@ Depends on completed feat_049_002. Feature 3 acceptance and Epic completion rema
 
 ## Data structures
 
-TBD.
+Preserve public v1 receipt, entry and acknowledgement identity fields. Feature planning must specify any internal freshness token or transaction precondition and its persistence/restart semantics before dispatch.
 
 ## API contracts
 
-TBD.
+Keep progress/transcript routes and read budgets unchanged. Every acknowledgement writer must enforce the same stale-update rule.
 
 ## Logic flow
 
-```mermaid
-flowchart TD
-  A[Start] --> B[End]
-```
+Planned correction: committed receipt -> fenced durable transcript acknowledgement -> race-safe publisher mapping -> immutable progress aliases. Delayed or unavailable evidence preserves the current mapping or pending delivery. Feature planning owns the concrete transaction/lock and failure protocol.
 
 ## Task breakdown
 
@@ -84,7 +83,7 @@ _(empty — Feature Team mints tasks after dispatch)_
 
 ## Risks & upward questions
 
-None.
+Graph-fence release precedes publisher mapping, and incarnation IDs are opaque. Avoid lock inversion and a freshness-check/write race. Final API fixtures, producer design ownership and completed Task-record corrections remain explicit upstream gaps.
 
 ## Decision log
 
