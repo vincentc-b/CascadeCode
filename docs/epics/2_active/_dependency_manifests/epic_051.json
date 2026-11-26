@@ -484,6 +484,431 @@
           "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025"
         }
       ]
+    },
+    {
+      "revision": 2,
+      "recorded_at": "2026-11-26T20:00:38.625289+00:00",
+      "target_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "none_required": false,
+      "dependencies": [
+        {
+          "dependency_id": "dep_pyyaml",
+          "version": "6.0.3",
+          "source": "existing installed Python distribution: /opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info",
+          "digest": "sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'PyYAML'\"'\"'); assert d.version=='\"'\"'6.0.3'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"'); print('\"'\"'PyYAML'\"'\"', d.version)'",
+          "requested_range": ">=6",
+          "resolved_version": "6.0.3",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages",
+          "lock_references": [
+            "pyproject.toml",
+            "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/RECORD"
+          ],
+          "integrity_reference": "sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "version": "1.0.37",
+          "source": "existing installed Python distribution: /opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info",
+          "digest": "sha256:53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'cursor-sdk'\"'\"'); assert d.version=='\"'\"'1.0.37'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58'\"'\"'; importlib.import_module('\"'\"'cursor_sdk'\"'\"'); print('\"'\"'cursor-sdk'\"'\"', d.version)'",
+          "requested_range": ">=0.1",
+          "resolved_version": "1.0.37",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages",
+          "lock_references": [
+            "pyproject.toml",
+            "/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/RECORD"
+          ],
+          "integrity_reference": "sha256:53f3708c1b93b19aec199decdfae8e1cccc39490400aa37c7e41077199ee3e58"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "version": "1.2.14",
+          "source": "existing installed Python distribution: /opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info",
+          "digest": "sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'langgraph'\"'\"'); assert d.version=='\"'\"'1.2.14'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad'\"'\"'; importlib.import_module('\"'\"'langgraph'\"'\"'); print('\"'\"'langgraph'\"'\"', d.version)'",
+          "requested_range": ">=0.2",
+          "resolved_version": "1.2.14",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages",
+          "lock_references": [
+            "pyproject.toml",
+            "/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/RECORD"
+          ],
+          "integrity_reference": "sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "version": "3.1.1",
+          "source": "existing installed Python distribution: /opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info",
+          "digest": "sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'langgraph-checkpoint-sqlite'\"'\"'); assert d.version=='\"'\"'3.1.1'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968'\"'\"'; importlib.import_module('\"'\"'langgraph.checkpoint.sqlite'\"'\"'); print('\"'\"'langgraph-checkpoint-sqlite'\"'\"', d.version)'",
+          "requested_range": ">=2",
+          "resolved_version": "3.1.1",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages",
+          "lock_references": [
+            "pyproject.toml",
+            "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/RECORD"
+          ],
+          "integrity_reference": "sha256:acc17a0f0a1faf300d72bc3c294519760f814191b113187a23dfd19a4dc76968"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "version": "9.0.3",
+          "source": "existing installed Python distribution: /opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info",
+          "digest": "sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"'); print('\"'\"'pytest'\"'\"', d.version)'",
+          "requested_range": ">=8",
+          "resolved_version": "9.0.3",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages",
+          "lock_references": [
+            "pyproject.toml",
+            "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/RECORD"
+          ],
+          "integrity_reference": "sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7"
+        },
+        {
+          "dependency_id": "dep_playwright",
+          "version": "1.64.0",
+          "source": "existing installed Python distribution: /home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info",
+          "digest": "sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'playwright'\"'\"'); assert d.version=='\"'\"'1.64.0'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"'); print('\"'\"'playwright'\"'\"', d.version)'",
+          "requested_range": "==1.64.0",
+          "resolved_version": "1.64.0",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/home/ubuntu/.local/lib/python3.12/site-packages",
+          "lock_references": [
+            "/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD",
+            "/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD"
+          ],
+          "integrity_reference": "sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8"
+        },
+        {
+          "dependency_id": "dep_python",
+          "version": "3.12.8",
+          "source": "existing host executable: /opt/conda/bin/python3.12",
+          "digest": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest()=='\"'\"'0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; out=subprocess.check_output(['\"'\"'/opt/conda/bin/python3.12'\"'\"', '\"'\"'--version'\"'\"'],text=True); assert '\"'\"'3.12.8'\"'\"' in out; print(out.strip())'",
+          "requested_range": ">=3.12",
+          "resolved_version": "3.12.8",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/bin/python3.12",
+          "lock_references": [
+            "README.md",
+            "/opt/conda/bin/python3.12"
+          ],
+          "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612"
+        },
+        {
+          "dependency_id": "dep_git",
+          "version": "2.34.1",
+          "source": "existing host executable: /usr/bin/git",
+          "digest": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/git'\"'\"').read_bytes()).hexdigest()=='\"'\"'07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9'\"'\"'; out=subprocess.check_output(['\"'\"'/usr/bin/git'\"'\"', '\"'\"'--version'\"'\"'],text=True); assert '\"'\"'2.34.1'\"'\"' in out; print(out.strip())'",
+          "requested_range": "existing Git with temporary repository support",
+          "resolved_version": "2.34.1",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/usr/bin/git",
+          "lock_references": [
+            "README.md",
+            "/usr/bin/git"
+          ],
+          "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9"
+        },
+        {
+          "dependency_id": "dep_node",
+          "version": "20.20.2",
+          "source": "existing host executable: /usr/bin/node",
+          "digest": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/node'\"'\"').read_bytes()).hexdigest()=='\"'\"'6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd'\"'\"'; out=subprocess.check_output(['\"'\"'/usr/bin/node'\"'\"', '\"'\"'--version'\"'\"'],text=True); assert '\"'\"'20.20.2'\"'\"' in out; print(out.strip())'",
+          "requested_range": "existing Node for War Room JS tests",
+          "resolved_version": "20.20.2",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/usr/bin/node",
+          "lock_references": [
+            "README.md",
+            "/usr/bin/node"
+          ],
+          "integrity_reference": "sha256:6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "version": "28.0.0",
+          "source": "existing host executable: /usr/bin/docker",
+          "digest": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib,subprocess; assert hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/docker'\"'\"').read_bytes()).hexdigest()=='\"'\"'acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; out=subprocess.check_output(['\"'\"'/usr/bin/docker'\"'\"', '\"'\"'version'\"'\"', '\"'\"'--format'\"'\"', '\"'\"'{{.Server.Version}}'\"'\"'],text=True); assert '\"'\"'28.0.0'\"'\"' in out; print(out.strip())'",
+          "requested_range": "existing Docker client and reachable daemon",
+          "resolved_version": "28.0.0",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/usr/bin/docker",
+          "lock_references": [
+            "README.md",
+            "/usr/bin/docker"
+          ],
+          "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "version": "2026.09.19-playwright",
+          "source": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import json,subprocess; image='\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'; v=json.loads(subprocess.check_output([\"/usr/bin/docker\",\"image\",\"inspect\",image],text=True))[0]; assert image in v[\"RepoDigests\"]; assert v[\"Os\"]==\"linux\" and v[\"Architecture\"]==\"amd64\"; print(image)'",
+          "requested_range": "structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "resolved_version": "2026.09.19-playwright",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/var/lib/docker (existing daemon image store)",
+          "lock_references": [
+            "cascade/workspace/c4_render.py:STRUCTURIZR_IMAGE_DIGEST"
+          ],
+          "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
+        },
+        {
+          "dependency_id": "dep_chromium",
+          "version": "156.0.8078.4",
+          "source": "existing Playwright Chromium build 1248",
+          "digest": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "Existing workspace-host installation; verification only",
+          "operation": "printf '%s\\n' 'Installation is not configured or authorized by this declaration' >&2; exit 1",
+          "cleanup_plan": "No installation or upgrade is performed; retain the existing shared installation. Verification leaves no persistent artifacts.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import pathlib,hashlib; from playwright.sync_api import sync_playwright; assert hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'\"'\"').read_bytes()).hexdigest()=='\"'\"'377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025'\"'\"'\nwith sync_playwright() as p:\n b=p.chromium.launch(headless=True,args=[\"--no-sandbox\"]); assert b.version==\"156.0.8078.4\"; print(b.version); b.close()'",
+          "requested_range": "Playwright 1.64.0 bundled Chromium 1248",
+          "resolved_version": "156.0.8078.4",
+          "expected_verification_result": "Exit 0 after exact installed version and integrity identity checks.",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+          "lock_references": [
+            "/home/ubuntu/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome"
+          ],
+          "integrity_reference": "sha256:377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025"
+        }
+      ]
     }
   ]
 }
