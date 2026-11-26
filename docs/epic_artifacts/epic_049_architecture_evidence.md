@@ -1438,3 +1438,40 @@ confirm unchanged scope; both saved role sign-offs still name Epic `03280933`.
 ownership, final API/receipt acceptance and terminal Epic publication recovery
 remain open. No new sign-off or publication is claimed. Return control to child
 execution and supervisor integration.
+
+## Architect integrated storage repair review
+
+Reviewed canonical Feature 2 revision
+`52a59707a0b27a8ef83e86bc06df2e36c66221e0` against its integrated source,
+including Task 5 at `a32d84ab`. The War Room and Workspace design changes agree
+with the traced normal and restart paths: `_repair_pending` syncs the complete
+tail before `_commit_intent`; `_rewrite_messages` commits an exact replacement
+intent before mutation and `_finish_rewrite` rejects conflicting bytes; room
+movement retains a fingerprint and target incarnation through owner publication.
+Terminal retirement calls `resume_transcript_room_move` when the registered
+checkout is absent, verifying destination bytes and routing before index reset.
+The focused test scenarios exist in `tests/war_room/test_durable_chat_store.py`.
+The Feature's 70 passing tests and pinned-renderer result are reported evidence;
+this read-only source review did not rerun them or exercise browser navigation.
+
+Diagram-impact reconciliation confirms the Manager inventory immediately above.
+`cascade-context` and `cascade-containers` need no topology change for this repair:
+it adds no actor, runtime or store boundary. The War Room/supervisor component
+owners remain unchanged. Native Dashboard Code declarations now describe
+journaled rewrite and movement, but `resume_transcript_room_move` still has no
+distinct node or retirement relationship. Task 4 already owns that gap, the
+Dashboard/Workspace source-contract reconciliation, and actual Explore, Level up,
+deep-link and pinned-source checks. War Room and Workspace recovery prose and
+the move sequence describe current behavior without delivery attribution. No
+duplicate team notification or active-child edit is needed; final API fixtures,
+receipt retry/conflict/stale-ack acceptance and Code navigation remain open.
+
+Validation: canonical Epic/Feature reads, empty architecture amendment list,
+source/design diff and normal/failure trace, and all six saved publication
+references matching both their committed digests and this checkout. Both role
+sign-offs still name Epic `03280933`. This work-record-only change needs no model
+edit or render; `git diff --check` passed. Epic scope, sign-offs and the saved
+publication request remain unchanged. Terminal publication recovery, canonical
+Task-record corrections and producer design ownership remain unresolved. Final
+Feature acceptance is not claimed. Return control to child execution and
+supervisor integration.
