@@ -8,6 +8,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -95,6 +96,24 @@ def test_fenced_source_lookup_leaves_pending_intent_for_writer_repair(
         assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 0
     finally:
         connection.close()
+
+
+def test_fenced_source_lookup_does_not_initialize_missing_index(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    index = chat_store._index_path("epic_001", root=root)
+
+    with pytest.raises(TranscriptPendingError, match="index is unavailable"):
+        with fenced_transcript_source_acknowledgement(
+            "epic_001",
+            source_key="receipt-1",
+            root=root,
+            deadline=time.monotonic() + 0.2,
+        ):
+            pytest.fail("missing index cannot produce routing")
+
+    assert not index.exists()
 
 
 @pytest.mark.parametrize("written", [0, 17, -1])
@@ -378,6 +397,93 @@ append_transcript_message('epic_001', author='system', body='once', root=Path(__
         assert connection.execute("SELECT count(*) FROM events").fetchone()[0] == 1
     finally:
         connection.close()
+
+
+def test_fenced_lookup_second_process_flock_obeys_deadline(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    append_transcript_message(
+        "epic_001", author="system", body="once", root=root, source_key="receipt-1"
+    )
+    lock_path = chat_store._index_path("epic_001", root=root).with_suffix(".lock")
+    script = """
+import fcntl, sys
+with open(sys.argv[1], 'a+b') as handle:
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    print('locked', flush=True)
+    sys.stdin.read(1)
+"""
+    blocker = subprocess.Popen(
+        [sys.executable, "-c", script, str(lock_path)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert blocker.stdout is not None
+        assert blocker.stdout.readline().strip() == "locked"
+        started = time.monotonic()
+        with pytest.raises(TranscriptPendingError, match="deadline"):
+            with fenced_transcript_source_acknowledgement(
+                "epic_001",
+                source_key="receipt-1",
+                root=root,
+                deadline=started + 0.2,
+            ):
+                pytest.fail("contended OS fence must remain pending")
+        elapsed = time.monotonic() - started
+        assert 0.12 <= elapsed < 0.75
+    finally:
+        assert blocker.stdin is not None
+        blocker.stdin.write("x")
+        blocker.stdin.flush()
+        assert blocker.wait(timeout=5) == 0
+
+    with fenced_transcript_source_acknowledgement(
+        "epic_001",
+        source_key="receipt-1",
+        root=root,
+        deadline=time.monotonic() + 1.0,
+    ) as acknowledgement:
+        assert acknowledgement["message_id"]
+
+
+def test_append_sqlite_writer_contention_obeys_deadline_then_replays(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    append_transcript_message(
+        "epic_001", author="system", body="first", root=root, source_key="receipt-1"
+    )
+    blocker = sqlite3.connect(chat_store._index_path("epic_001", root=root))
+    blocker.execute("BEGIN IMMEDIATE")
+    try:
+        started = time.monotonic()
+        with pytest.raises(TranscriptPendingError, match="index is busy"):
+            append_transcript_message(
+                "epic_001",
+                author="system",
+                body="second",
+                root=root,
+                source_key="receipt-2",
+                deadline=started + 0.2,
+            )
+        elapsed = time.monotonic() - started
+        assert 0.12 <= elapsed < 0.75
+    finally:
+        blocker.rollback()
+        blocker.close()
+
+    append_transcript_message(
+        "epic_001", author="system", body="second", root=root, source_key="receipt-2"
+    )
+    assert [row["source_key"] for row in read_messages("epic_001", root=root)] == [
+        "receipt-1",
+        "receipt-2",
+    ]
 
 
 def test_split_roots_keep_jsonl_with_product_and_fence_with_tracking(
