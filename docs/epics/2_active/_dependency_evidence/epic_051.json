@@ -254,6 +254,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_19632a02886cf00d7ffefd424204f1808ae605d22bee17b0bfeef5f22688d7f1",
+      "dependency_id": "dep_pytest",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:9c7a22ad51ed7356bc10366a80d3620bf7a018c60407ba5b8a2902f1db6fb774",
+      "recipe_revision": "sha256:acd461dbd141e75efdbe967ebab618b5098b15b13920ab0a2b90560f76431eda",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, pathlib, hashlib; d=m.distribution('\"'\"'pytest'\"'\"'); assert d.version=='\"'\"'9.0.3'\"'\"'; assert hashlib.sha256((pathlib.Path(d._path)/\"RECORD\").read_bytes()).hexdigest()=='\"'\"'b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7'\"'\"'; importlib.import_module('\"'\"'pytest'\"'\"'); print('\"'\"'pytest'\"'\"', d.version)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-26T20:00:52.602152+00:00",
+      "completed_at": "2026-11-26T20:00:54.041948+00:00",
+      "result": "succeeded",
+      "redacted_output": "pytest 9.0.3\n",
+      "selected_version": "9.0.3",
+      "integrity_reference": "sha256:b27302b307f7be9f789280d5a12892e035278b364767ffc5616aa816d092f8c7",
+      "lock_references": [
+        "pyproject.toml",
+        "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/RECORD"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
