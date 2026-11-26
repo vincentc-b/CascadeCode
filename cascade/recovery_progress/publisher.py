@@ -96,6 +96,14 @@ def _set_busy_deadline(connection: sqlite3.Connection, deadline: float) -> None:
     connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
 
 
+def _execute_with_deadline(
+    connection: sqlite3.Connection, sql: str, deadline: float | None
+) -> sqlite3.Cursor:
+    if deadline is not None:
+        _set_busy_deadline(connection, deadline)
+    return connection.execute(sql)
+
+
 def _begin_immediate(connection: sqlite3.Connection, deadline: float) -> None:
     _set_busy_deadline(connection, deadline)
     connection.execute("BEGIN IMMEDIATE")
@@ -176,20 +184,17 @@ def _connect(root: Path, *, deadline: float | None = None) -> sqlite3.Connection
     timeout = 0.1 if deadline is None else _remaining_seconds(deadline)
     connection = sqlite3.connect(base / "writer-index.sqlite3", timeout=timeout)
     connection.row_factory = sqlite3.Row
-    if deadline is not None:
-        _set_busy_deadline(connection, deadline)
-    connection.executescript(
-        """
-        PRAGMA journal_mode=WAL;
-        PRAGMA synchronous=NORMAL;
-        CREATE TABLE IF NOT EXISTS receipts (
+    statements = (
+        "PRAGMA journal_mode=WAL",
+        "PRAGMA synchronous=NORMAL",
+        """CREATE TABLE IF NOT EXISTS receipts (
             receipt_id TEXT PRIMARY KEY,
             source_kind TEXT NOT NULL,
             source_key TEXT NOT NULL,
             sequence INTEGER NOT NULL,
             imported_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS entries (
+        )""",
+        """CREATE TABLE IF NOT EXISTS entries (
             entry_id TEXT PRIMARY KEY,
             entry_revision TEXT NOT NULL,
             action_id TEXT NOT NULL,
@@ -199,14 +204,14 @@ def _connect(root: Path, *, deadline: float | None = None) -> sqlite3.Connection
             blocker_priority INTEGER NOT NULL,
             material_at TEXT,
             payload TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS aliases (
+        )""",
+        """CREATE TABLE IF NOT EXISTS aliases (
             work_id TEXT NOT NULL,
             entry_id TEXT NOT NULL,
             PRIMARY KEY (work_id, entry_id)
-        );
-        CREATE TABLE IF NOT EXISTS dirty (work_id TEXT PRIMARY KEY);
-        CREATE TABLE IF NOT EXISTS transcript_milestones (
+        )""",
+        "CREATE TABLE IF NOT EXISTS dirty (work_id TEXT PRIMARY KEY)",
+        """CREATE TABLE IF NOT EXISTS transcript_milestones (
             receipt_id TEXT PRIMARY KEY,
             entry_id TEXT NOT NULL,
             graph_id TEXT NOT NULL,
@@ -214,11 +219,16 @@ def _connect(root: Path, *, deadline: float | None = None) -> sqlite3.Connection
             incarnation TEXT NOT NULL,
             append_sequence INTEGER NOT NULL,
             recorded_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        """
+        )""",
+        "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     )
-    return connection
+    try:
+        for statement in statements:
+            _execute_with_deadline(connection, statement, deadline)
+        return connection
+    except BaseException:
+        connection.close()
+        raise
 
 
 def _canonical_action_id(

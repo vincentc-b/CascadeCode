@@ -45,7 +45,8 @@ semantics.
   dirty owners or one second. The best-effort fast path has a 250 ms deadline.
   Each entry point carries that single monotonic deadline through transcript
   append/deduplication, publisher and graph locks, and both SQLite stores; it
-  does not start another blocking acquisition after exhaustion. Immutable pages
+  refreshes each potentially blocking SQLite statement from the remaining
+  allowance and does not start another blocking acquisition after exhaustion. Immutable pages
   retain explicit lag and completeness when work remains. Filesystem reads,
   appends and fsyncs already admitted under the deadline are not interruptible
   and are measured separately from bounded lock waits.
@@ -77,6 +78,7 @@ semantics.
 | [`drain_recovery_progress`](publisher.py) | Fairly replay retained receipts and dirty aliases during startup and before slower Watchdog work, preserving the bounded cursor when evidence is pending. |
 | [`record_transcript_milestone`](publisher.py) | Apply an already committed acknowledgement through the same fenced private mapping path and refresh existing entry references. |
 | [`_record_transcript_milestone`](publisher.py) | Validate immutable acknowledgement identity and insert or refresh current incarnation and append sequence while the War Room source lookup keeps the graph fence held. |
+| [`_publisher_lock`, `_connect`](publisher.py) | Admit process-local writer ownership and the disposable publisher SQLite connection with the caller's remaining monotonic deadline, refreshing the busy timeout before each schema statement; already admitted directory and database opens remain filesystem work. |
 | [`begin_live_observation`, `refresh_live_observation`, `end_live_observation`](live.py) | Retain process-generation-bound invocation and executor evidence used by projection; observations do not grant repair authority. |
 
 The publisher SQLite file is
@@ -100,7 +102,8 @@ sequenceDiagram
     participant F as Immutable progress pages
     L->>L: Commit receipt under lifecycle lock
     L-->>P: Notify after releasing source lock
-    P->>W: Append/deduplicate recovery source key
+    P->>P: Set one monotonic fast-path or drain deadline
+    P->>W: Append/deduplicate recovery source key with remaining time
     W-->>P: Durable acknowledgement after graph fence release
     P->>I: Publisher lock; BEGIN IMMEDIATE
     P->>W: Acquire graph fence; read current source-key route
@@ -112,6 +115,9 @@ sequenceDiagram
     else move, rewrite, append, import or room is pending
         W-->>P: Pending
         P->>I: Leave mapping absent/unchanged; retain replay eligibility
+    else shared deadline is exhausted or a lock/SQLite wait is contended
+        P->>I: Roll back partial publisher work
+        P-->>L: Leave authoritative receipt eligible for replay
     end
 ```
 
@@ -146,7 +152,7 @@ mint a mapping or discard the authoritative receipt.
 | `REQ-RECOVERY-PROGRESS-001` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py) | Verified for exact evidence joins, bounded publication, aliases and replay. |
 | `REQ-RECOVERY-PROGRESS-002` | [milestone integration](../../tests/recovery_progress/test_transcript_milestones.py) and [transcript store](../../tests/war_room/test_durable_chat_store.py) | Verified for first insertion, delayed fast-path/drain/public writers, conflicts, pending state, room movement and current fenced routing. |
 | `REQ-RECOVERY-PROGRESS-003` | [milestone restart/replay scenarios](../../tests/recovery_progress/test_transcript_milestones.py) | Verified for committed receipt replay and pending evidence without fabricated routing. |
-| `REQ-RECOVERY-PROGRESS-004` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py), [milestone integration](../../tests/recovery_progress/test_transcript_milestones.py) and [transcript store](../../tests/war_room/test_durable_chat_store.py) | Verified against configured receipt, owner, pass and fast-path bounds, including publisher thread/SQLite contention and graph thread/process fence contention followed by replay. |
+| `REQ-RECOVERY-PROGRESS-004` | [publisher scenarios](../../tests/recovery_progress/test_publisher.py), [milestone integration](../../tests/recovery_progress/test_transcript_milestones.py) and [transcript store](../../tests/war_room/test_durable_chat_store.py) | Deterministic elapsed-time scenarios measure bounded publisher thread/SQLite and graph thread/process-fence contention, then verify replay completion. They do not establish a hard bound for already admitted filesystem opens, source reads, JSONL append or fsync. |
 
 ## Child Designs and Directory Coverage
 

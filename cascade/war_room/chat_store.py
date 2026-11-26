@@ -66,6 +66,17 @@ def _set_index_deadline(
     connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
 
 
+def _execute_index(
+    connection: sqlite3.Connection,
+    sql: str,
+    parameters: tuple[object, ...] = (),
+    *,
+    deadline: float | None = None,
+) -> sqlite3.Cursor:
+    _set_index_deadline(connection, deadline)
+    return connection.execute(sql, parameters)
+
+
 @contextmanager
 def graph_transcript_fence(
     graph_id: str, *, root: Path, deadline: float | None = None
@@ -121,28 +132,24 @@ def _connect_index(
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=_remaining_seconds(deadline))
     connection.row_factory = sqlite3.Row
-    busy_ms = max(1, int(_remaining_seconds(deadline) * 1000))
-    connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
-    connection.execute("PRAGMA journal_mode=WAL")
-    connection.execute("PRAGMA synchronous=FULL")
-    connection.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS state (
+    statements = (
+        "PRAGMA journal_mode=WAL",
+        "PRAGMA synchronous=FULL",
+        """CREATE TABLE IF NOT EXISTS state (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             incarnation TEXT NOT NULL,
             room_path TEXT,
             indexed_end INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS events (
+        )""",
+        """CREATE TABLE IF NOT EXISTS events (
             append_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
             message_id TEXT NOT NULL UNIQUE,
             source_key TEXT UNIQUE,
             byte_offset INTEGER NOT NULL,
             byte_length INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS events_offset
-            ON events(byte_offset);
-        CREATE TABLE IF NOT EXISTS pending_intent (
+        )""",
+        "CREATE INDEX IF NOT EXISTS events_offset ON events(byte_offset)",
+        """CREATE TABLE IF NOT EXISTS pending_intent (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             room_path TEXT NOT NULL,
             expected_offset INTEGER NOT NULL,
@@ -150,8 +157,8 @@ def _connect_index(
             digest TEXT NOT NULL,
             message_id TEXT NOT NULL,
             source_key TEXT
-        );
-        CREATE TABLE IF NOT EXISTS move_intent (
+        )""",
+        """CREATE TABLE IF NOT EXISTS move_intent (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             source_path TEXT NOT NULL,
             destination_path TEXT NOT NULL,
@@ -160,8 +167,8 @@ def _connect_index(
             digest TEXT NOT NULL,
             target_incarnation TEXT NOT NULL,
             phase TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS rewrite_intent (
+        )""",
+        """CREATE TABLE IF NOT EXISTS rewrite_intent (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             room_path TEXT NOT NULL,
             original_length INTEGER NOT NULL,
@@ -169,20 +176,28 @@ def _connect_index(
             replacement BLOB NOT NULL,
             replacement_digest TEXT NOT NULL,
             target_incarnation TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS legacy_import_buffer (
+        )""",
+        """CREATE TABLE IF NOT EXISTS legacy_import_buffer (
             singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
             start_offset INTEGER NOT NULL,
             data BLOB NOT NULL
-        );
-        """
+        )""",
     )
-    connection.execute(
-        "INSERT OR IGNORE INTO state(singleton, incarnation) VALUES (1, ?)",
-        (uuid.uuid4().hex,),
-    )
-    connection.commit()
-    return connection
+    try:
+        for statement in statements:
+            _execute_index(connection, statement, deadline=deadline)
+        _execute_index(
+            connection,
+            "INSERT OR IGNORE INTO state(singleton, incarnation) VALUES (1, ?)",
+            (uuid.uuid4().hex,),
+            deadline=deadline,
+        )
+        _set_index_deadline(connection, deadline)
+        connection.commit()
+        return connection
+    except BaseException:
+        connection.close()
+        raise
 
 
 def _connect_existing_index(
@@ -199,8 +214,6 @@ def _connect_existing_index(
             f"file:{path}?mode=ro", uri=True, timeout=_remaining_seconds(deadline)
         )
         connection.row_factory = sqlite3.Row
-        busy_ms = max(1, int(_remaining_seconds(deadline) * 1000))
-        connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
         expected = {
             "state": {"singleton", "incarnation", "room_path", "indexed_end"},
             "events": {"append_sequence", "message_id", "source_key"},
@@ -212,7 +225,11 @@ def _connect_existing_index(
         for table, columns in expected.items():
             present = {
                 str(row["name"])
-                for row in connection.execute(f"PRAGMA table_info({table})")
+                for row in _execute_index(
+                    connection,
+                    f"PRAGMA table_info({table})",
+                    deadline=deadline,
+                )
             }
             if not columns.issubset(present):
                 raise TranscriptPendingError("transcript index schema is incompatible")
@@ -996,8 +1013,10 @@ def fenced_transcript_source_acknowledgement(
         )
         try:
             pending = any(
-                connection.execute(
-                    f"SELECT 1 FROM {table} WHERE singleton = 1"
+                _execute_index(
+                    connection,
+                    f"SELECT 1 FROM {table} WHERE singleton = 1",
+                    deadline=effective_deadline,
                 ).fetchone()
                 is not None
                 for table in (
@@ -1009,14 +1028,18 @@ def fenced_transcript_source_acknowledgement(
             )
             if pending:
                 raise TranscriptPendingError("transcript routing is pending")
-            event = connection.execute(
+            event = _execute_index(
+                connection,
                 """SELECT append_sequence, message_id FROM events
                    WHERE source_key = ?""",
                 (source_key,),
+                deadline=effective_deadline,
             ).fetchone()
-            state = connection.execute(
+            state = _execute_index(
+                connection,
                 """SELECT incarnation, room_path, indexed_end FROM state
-                   WHERE singleton = 1"""
+                   WHERE singleton = 1""",
+                deadline=effective_deadline,
             ).fetchone()
             if event is None or state is None or not state["room_path"]:
                 raise TranscriptPendingError("source event is not durably indexed")

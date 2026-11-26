@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from cascade.recovery_progress import publisher
 from cascade.recovery_progress.live import (
     begin_live_observation,
     end_live_observation,
@@ -329,6 +330,27 @@ def test_drain_sqlite_writer_lock_uses_remaining_budget_then_replays(
 
     assert drain_recovery_progress(root)["imported_receipts"] == 1
     assert drain_recovery_progress(root)["imported_receipts"] == 0
+
+
+def test_connect_refreshes_remaining_budget_for_each_schema_statement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    observed: list[int] = []
+    original = publisher._set_busy_deadline
+    ticks = iter(range(1_000, 2_000, 10))
+    monkeypatch.setattr(publisher.time, "monotonic", lambda: next(ticks) / 1_000)
+
+    def record(connection: sqlite3.Connection, deadline: float) -> None:
+        original(connection, deadline)
+        observed.append(int(connection.execute("PRAGMA busy_timeout").fetchone()[0]))
+
+    monkeypatch.setattr(publisher, "_set_busy_deadline", record)
+    connection = publisher._connect(root, deadline=2.0)
+    connection.close()
+
+    assert len(observed) == 8
+    assert all(later < earlier for earlier, later in zip(observed, observed[1:]))
 
 
 def test_owner_limit_leaves_explicit_lag_for_fair_continuation(tmp_path: Path) -> None:

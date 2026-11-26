@@ -486,6 +486,45 @@ def test_append_sqlite_writer_contention_obeys_deadline_then_replays(
     ]
 
 
+def test_index_schema_and_fenced_lookup_refresh_remaining_budget_per_statement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    append_transcript_message(
+        "epic_001", author="system", body="once", root=root, source_key="receipt-1"
+    )
+    observed: list[int] = []
+    original = chat_store._set_index_deadline
+    ticks = iter(range(1_000, 10_000, 10))
+    monkeypatch.setattr(chat_store.time, "monotonic", lambda: next(ticks) / 1_000)
+
+    def record(
+        connection: sqlite3.Connection, deadline: float | None
+    ) -> None:
+        original(connection, deadline)
+        if deadline is not None:
+            observed.append(
+                int(connection.execute("PRAGMA busy_timeout").fetchone()[0])
+            )
+
+    monkeypatch.setattr(chat_store, "_set_index_deadline", record)
+    schema = chat_store._connect_index(
+        "epic_002", root=root, deadline=9.0
+    )
+    schema.close()
+    schema_refreshes = len(observed)
+    assert schema_refreshes == 11
+
+    with fenced_transcript_source_acknowledgement(
+        "epic_001", source_key="receipt-1", root=root, deadline=9.0
+    ) as acknowledgement:
+        assert acknowledgement["message_id"]
+
+    assert len(observed) - schema_refreshes == 12
+    assert all(later < earlier for earlier, later in zip(observed, observed[1:]))
+
+
 def test_split_roots_keep_jsonl_with_product_and_fence_with_tracking(
     tmp_path: Path,
 ) -> None:
