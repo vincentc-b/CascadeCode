@@ -18,6 +18,7 @@ from cascade.war_room.chat_store import (
     append_transcript_message,
     move_transcript_room,
     read_messages,
+    remove_message,
 )
 from tests.support import add_doc, make_repo
 
@@ -136,6 +137,34 @@ def test_replay_after_index_commit_returns_the_committed_line(tmp_path: Path) ->
 
     assert replay == committed
     assert path.read_bytes() == before
+
+
+def test_human_rollback_rebuild_preserves_other_source_keys(tmp_path: Path) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    human = append_transcript_message(
+        "epic_001", author="human", body="remove me", root=root
+    )
+    append_transcript_message(
+        "epic_001",
+        author="epic_manager",
+        body="keep me",
+        root=root,
+        source_key="role_reply:epic_001:message:reply-1",
+    )
+
+    remove_message("epic_001", human["id"], root=root)
+    append_transcript_message(
+        "epic_001",
+        author="epic_manager",
+        body="duplicate presentation",
+        root=root,
+        source_key="role_reply:epic_001:message:reply-1",
+    )
+
+    assert [row["body"] for row in read_messages("epic_001", root=root)] == [
+        "keep me"
+    ]
 
 
 def test_two_real_processes_deduplicate_one_source(tmp_path: Path) -> None:

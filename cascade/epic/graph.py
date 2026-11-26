@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
-from cascade.agent.graph_turn import clear_turn_model_override, run_coro_sync, run_planning_role_turn
+from cascade.agent.graph_turn import run_coro_sync, run_planning_role_turn
 from cascade.epic.checkpoint import get_checkpointer, thread_config
 from cascade.epic.registry import epic_tools
 from cascade.epic.state import EpicGraphState
@@ -226,12 +227,12 @@ def _ingest_node(state: EpicGraphState) -> dict:
 
 def _manager_node(state: EpicGraphState) -> dict:
     content = _planning_role_content("epic_manager", state)
-    return {"messages": [{"role": "epic_manager", "content": content}]}
+    return {"messages": [{"role": "epic_manager", "content": content, "id": uuid.uuid4().hex}]}
 
 
 def _architect_node(state: EpicGraphState) -> dict:
     content = _planning_role_content("epic_architect", state)
-    return {"messages": [{"role": "epic_architect", "content": content}]}
+    return {"messages": [{"role": "epic_architect", "content": content, "id": uuid.uuid4().hex}]}
 
 
 def _planning_role_content(role: str, state: EpicGraphState) -> str:

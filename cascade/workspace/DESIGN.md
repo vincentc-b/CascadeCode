@@ -133,11 +133,15 @@ token. Matching registered tokens may be refreshed for at most 30 seconds at a
 time and never beyond claim expiry; exit, observed process death, changed process
 identity, or worker restart removes live support. Inaccessible process identity
 is unknown rather than live. `_invoke_role_turn` reads the message count,
-invokes the graph, then forwards the new message slice to
+invokes the graph, then forwards the new message slice, persisted checkpoint
+configuration and starting message ordinal to
 [append_planning_turn_to_chat](../war_room/planning_transcript.py).
 Checkpoint state survives restart while the local lock and queue evidence do not.
-An interruption after checkpoint commit but before chat append leaves history
-to the explicit [transcript sync](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts).
+Epic and Feature role messages carry a durable ID before checkpoint commit. An
+interruption after that commit but before chat append leaves the same role-reply
+source identity for explicit writer
+[transcript sync](../war_room/DESIGN.md#recovery-summaries-and-planning-transcripts);
+the sync performs no provider turn.
 Creating an Epic or Feature integration worktree resolves the current room before
 registry publication, then calls
 [move_transcript_room](../war_room/chat_store.py) to copy committed history and

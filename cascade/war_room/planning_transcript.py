@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Mapping
 
 from cascade.comments.types import AGENT_AUTHORS
-from cascade.war_room.chat_store import append_transcript_message, read_messages
+from cascade.war_room.chat_store import (
+    append_transcript_message,
+    mark_message_legacy_unknown,
+    read_messages,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -45,10 +50,14 @@ def append_planning_turn_to_chat(
     new_messages: list[dict],
     *,
     root,
+    checkpoint_config: Mapping[str, object] | None = None,
+    message_offset: int = 0,
+    provenance: str = "direct",
 ) -> None:
     """Mirror manager/architect (or feature roles) output into the graph chat JSONL."""
 
-    for msg in new_messages:
+    checkpoint_id = _checkpoint_id(checkpoint_config)
+    for relative_ordinal, msg in enumerate(new_messages):
         role = str(msg.get("role") or "")
         body = str(msg.get("content") or "").strip()
         presentable = _presentable_message(role, body)
@@ -60,6 +69,20 @@ def append_planning_turn_to_chat(
             author=author,
             body=text,
             root=root,
+            source_key=_role_reply_source_key(
+                graph_id,
+                msg,
+                checkpoint_id=checkpoint_id,
+                message_ordinal=message_offset + relative_ordinal,
+            ),
+            occurred_at=_message_time(msg),
+            provenance=provenance,
+            metadata={
+                "kind": "role_reply",
+                "checkpoint_id": checkpoint_id,
+                "message_ordinal": message_offset + relative_ordinal,
+                "checkpoint_message_id": _message_id(msg),
+            },
         )
 
 
@@ -70,25 +93,74 @@ def sync_planning_transcript_to_chat(graph_id: str, *, root: Path) -> None:
     if tier is None:
         return
     try:
-        graph_messages = _load_graph_messages(graph_id, tier, root=root)
+        graph_messages, checkpoint_config = _load_graph_messages(graph_id, tier, root=root)
     except Exception:
         _log.exception("failed to load planning graph messages for %s", graph_id)
         raise
     if not graph_messages:
         return
     existing = read_messages(graph_id, root=root)
-    seen = {(row.get("author"), row.get("body")) for row in existing}
-    for msg in graph_messages:
+    legacy_matches: dict[tuple[object, object], list[str]] = {}
+    for row in existing:
+        if row.get("source_key") or row.get("provenance") == "reconciled":
+            continue
+        message_id = row.get("id")
+        if isinstance(message_id, str):
+            legacy_matches.setdefault((row.get("author"), row.get("body")), []).append(
+                message_id
+            )
+    for message_ordinal, msg in enumerate(graph_messages):
         role = str(msg.get("role") or "")
         body = str(msg.get("content") or "").strip()
         presentable = _presentable_message(role, body)
         if presentable is None:
             continue
         author, text = presentable
-        if (author, text) in seen:
+        legacy_ids = legacy_matches.get((author, text))
+        if legacy_ids:
+            mark_message_legacy_unknown(graph_id, legacy_ids.pop(0), root=root)
             continue
-        append_transcript_message(graph_id, author=author, body=text, root=root)
-        seen.add((author, text))
+        append_planning_turn_to_chat(
+            graph_id,
+            [msg],
+            root=root,
+            checkpoint_config=checkpoint_config,
+            message_offset=message_ordinal,
+            provenance="reconciled",
+        )
+
+
+def _checkpoint_id(config: Mapping[str, object] | None) -> str | None:
+    configurable = config.get("configurable") if config else None
+    if not isinstance(configurable, Mapping):
+        return None
+    value = configurable.get("checkpoint_id")
+    return value if isinstance(value, str) and value else None
+
+
+def _message_id(message: Mapping[str, object]) -> str | None:
+    value = message.get("id")
+    return value if isinstance(value, str) and value else None
+
+
+def _message_time(message: Mapping[str, object]) -> str | None:
+    value = message.get("ts")
+    return value if isinstance(value, str) and value else None
+
+
+def _role_reply_source_key(
+    graph_id: str,
+    message: Mapping[str, object],
+    *,
+    checkpoint_id: str | None,
+    message_ordinal: int,
+) -> str | None:
+    durable_id = _message_id(message)
+    if durable_id is not None:
+        return f"role_reply:{graph_id}:message:{durable_id}"
+    if checkpoint_id is not None:
+        return f"role_reply:{graph_id}:checkpoint:{checkpoint_id}:{message_ordinal}"
+    return None
 
 
 def _tier_for_graph_id(graph_id: str) -> str | None:
@@ -99,7 +171,9 @@ def _tier_for_graph_id(graph_id: str) -> str | None:
     return None
 
 
-def _load_graph_messages(graph_id: str, tier: str, *, root: Path) -> list[dict]:
+def _load_graph_messages(
+    graph_id: str, tier: str, *, root: Path
+) -> tuple[list[dict], Mapping[str, object]]:
     repo = Path(root).resolve()
     if tier == "epic":
         from cascade.epic.checkpoint import thread_config
@@ -113,10 +187,11 @@ def _load_graph_messages(graph_id: str, tier: str, *, root: Path) -> list[dict]:
 
         graph = ensure_feature_graph(graph_id, root=repo)
         config = thread_config(graph_id)
-    values = graph.get_state(config).values or {}
+    snapshot = graph.get_state(config)
+    values = snapshot.values or {}
     raw = values.get("messages") or []
     out: list[dict] = []
     for item in raw:
         if isinstance(item, dict):
             out.append(item)
-    return out
+    return out, snapshot.config or config

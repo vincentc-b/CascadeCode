@@ -50,6 +50,12 @@ an uncertain room owner stay pending without truncation.
 ownership, including a backlog Feature's parent and a completed Epic's surviving
 tracking checkout. History and a current recovery summary have different
 evidence sources; an authored conclusion does not change an action's state.
+Epic and Feature role nodes persist a durable message ID. Direct kickoff and
+explicit writer backfill use that ID with checkpoint lineage and message ordinal
+as the role-reply source identity. Replaying one reply returns its committed row,
+while distinct replies with identical author and body remain distinct. An older
+author/body-only match is retained with null occurrence time and
+`legacy_unknown` provenance rather than being assigned a fabricated identity.
 
 `DEC-WARROOM-TRANSCRIPT-002`: JSONL remains authoritative. A writer-only SQLite
 index under the canonical tracking runtime root records message/source
@@ -75,10 +81,10 @@ the transcript library within the same Python runtime.
 | [handle_get_chat](sidecar_routes.py) | Validates the graph ID and returns the existing JSONL rows through `read_messages`; no sync occurs on GET. |
 | [read_messages / _chat_read_path](chat_store.py) | Resolve the registered room without building the merged board, read the whole file and ignore malformed JSON lines. Missing history returns an empty list. This interface has no pagination or source-byte bound. |
 | [graph_transcript_fence / _connect_index](chat_store.py) | Lock a graph at a stable tracking-root path across processes and open its writer-only full-synchronous intent/offset index. The SQLite file is not a GET surface. |
-| [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback rewrite uses the same fence, fsyncs replacement and parent directory, and changes incarnation. |
+| [append_transcript_message / remove_message](chat_store.py) | Reconcile only an exact pending tail, durably stage intent, append and fsync JSONL, then commit uniqueness/offset before acknowledgement. Rollback and legacy-label rewrites use the same fence, fsync the replacement and parent directory, retain other source keys, and change incarnation. |
 | [move_transcript_room](chat_store.py) | Copy only matching committed history, publish the lifecycle owner switch inside the graph fence, rebuild offsets and change incarnation. Conflicting destination bytes remain untouched and pending. |
-| [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py). Provider failure details become a bounded system message. |
-| [sync_planning_transcript_to_chat](planning_transcript.py) | Explicitly load the owning graph checkpoint and append absent author/body pairs. This can coalesce separate identical replies; it is not durable event-identity deduplication. |
+| [append_planning_turn_to_chat](planning_transcript.py) | Sanitize and append new role messages supplied by [graph invocation](../workspace/kickoff.py), carrying checkpoint ID, persisted ordinal and durable message ID. Provider failure details become a bounded system message without exposing raw output. |
+| [sync_planning_transcript_to_chat](planning_transcript.py) | Explicit writer work loads the owning graph checkpoint and replays the same stable role-reply source keys. It does not invoke a role or run from GET. |
 
 ```mermaid
 sequenceDiagram
@@ -91,7 +97,7 @@ sequenceDiagram
     K->>G: Invoke admitted role turn
     G->>G: Persist role messages
     G-->>K: Return
-    K->>T: New message slice
+    K->>T: New message slice + checkpoint lineage/ordinal
     T->>F: Fence graph; reconcile exact pending tail
     F->>F: Commit exact-line intent and expected offset
     F->>C: Append line and fsync
@@ -100,8 +106,8 @@ sequenceDiagram
     UI->>C: Read existing rows through chat route
     alt Return-to-append interruption
         K->>T: Explicit checkpoint sync
-        T->>G: Read saved messages
-        T->>F: Replay through the same durable append boundary
+        T->>G: Read saved messages and durable IDs
+        T->>F: Replay the same source keys through durable append
     else Crash before index commit
         T->>F: Retry
         F->>C: Complete only matching empty/partial intended tail

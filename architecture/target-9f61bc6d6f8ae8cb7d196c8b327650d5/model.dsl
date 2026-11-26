@@ -331,7 +331,7 @@ cascade_uses_renderer = cascade -> structurizr "Validates and renders local arch
     }
 }
 
-code_epic_graph = element "epic: ensure_epic_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+code_epic_graph = element "epic: ensure_epic_graph" "Function" "Compiles sequential role nodes whose authored replies receive durable IDs before checkpoint persistence." {
     properties {
         "cascade.semanticId" "element.code.epic.graph"
         "cascade.parent" "element.component.epic-team"
@@ -445,7 +445,7 @@ code_epic_rel_35 = code_epic_runtime -> code_epic_provider "Dispatches through s
     }
 }
 
-code_feature_graph = element "feature: ensure_feature_graph" "Function" "Compiles sequential role nodes with LangGraph StateGraph." {
+code_feature_graph = element "feature: ensure_feature_graph" "Function" "Compiles sequential role nodes whose authored replies receive durable IDs before checkpoint persistence." {
     properties {
         "cascade.semanticId" "element.code.feature.graph"
         "cascade.parent" "element.component.feature-team"
@@ -673,7 +673,7 @@ code_task_rel_49 = code_task_runtime -> code_task_provider "Dispatches through s
     }
 }
 
-code_teams_epic = element "teams: ensure_epic_graph" "Function" "Creates the epic team graph with scoped state and SQLite checkpoints." {
+code_teams_epic = element "teams: ensure_epic_graph" "Function" "Creates the Epic graph; role-reply IDs persist with its scoped SQLite checkpoint state." {
     properties {
         "cascade.semanticId" "element.code.teams.epic"
         "cascade.parent" "element.component.teams"
@@ -682,7 +682,7 @@ code_teams_epic = element "teams: ensure_epic_graph" "Function" "Creates the epi
     }
 }
 
-code_teams_feature = element "teams: ensure_feature_graph" "Function" "Creates the feature team graph with scoped state and SQLite checkpoints." {
+code_teams_feature = element "teams: ensure_feature_graph" "Function" "Creates the Feature graph; role-reply IDs persist with its scoped SQLite checkpoint state." {
     properties {
         "cascade.semanticId" "element.code.teams.feature"
         "cascade.parent" "element.component.teams"
@@ -3225,6 +3225,15 @@ code_dashboard_chat_index = element "_connect_index" "Function" "Opens the write
     }
 }
 
+code_dashboard_chat_rewrite = element "_rewrite_messages" "Function" "Fences rollback and legacy-label rewrites, fsyncs replacement JSONL and rebuilds source-key offsets under a new incarnation." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.chat.rewrite"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/chat_store.py"
+        "cascade.sourceSymbol" "_rewrite_messages"
+    }
+}
+
 code_dashboard_chat_move = element "move_transcript_room" "Function" "Copies committed JSONL history and switches routing with a new incarnation under the graph fence." {
     properties {
         "cascade.semanticId" "element.code.dashboard.chat.move"
@@ -3234,7 +3243,7 @@ code_dashboard_chat_move = element "move_transcript_room" "Function" "Copies com
     }
 }
 
-code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "Mirrors sanitized authored messages after graph invocation returns." {
+code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "Mirrors sanitized authored messages with checkpoint lineage, ordinal and durable message identity after graph invocation returns." {
     properties {
         "cascade.semanticId" "element.code.dashboard.transcript"
         "cascade.parent" "element.component.dashboard"
@@ -3243,7 +3252,7 @@ code_dashboard_transcript = element "append_planning_turn_to_chat" "Function" "M
     }
 }
 
-code_dashboard_backfill = element "sync_planning_transcript_to_chat" "Function" "Reads checkpoint messages on explicit sync and deduplicates author/body pairs." {
+code_dashboard_backfill = element "sync_planning_transcript_to_chat" "Function" "Replays checkpointed role identities on explicit writer sync and labels ambiguous legacy author/body matches." {
     properties {
         "cascade.semanticId" "element.code.dashboard.backfill"
         "cascade.parent" "element.component.dashboard"
@@ -3417,6 +3426,18 @@ dashboard_chat_append_to_index = code_dashboard_chat_append -> code_dashboard_ch
     }
 }
 
+dashboard_chat_rewrite_to_fence = code_dashboard_chat_rewrite -> code_dashboard_chat_fence "Fences rollback and legacy-label rewrites across processes" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-fence"
+    }
+}
+
+dashboard_chat_rewrite_to_index = code_dashboard_chat_rewrite -> code_dashboard_chat_index "Advances incarnation and rebuilds durable source-key offsets" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-chat-rewrite-to-index"
+    }
+}
+
 dashboard_chat_move_to_fence = code_dashboard_chat_move -> code_dashboard_chat_fence "Fences room copy and owner switch" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-chat-move-to-fence"
@@ -3441,13 +3462,13 @@ workspace_retire_to_dashboard_chat_move = code_workspace_retire -> code_dashboar
     }
 }
 
-dashboard_backfill_to_dashboard_chat_read = code_dashboard_backfill -> code_dashboard_chat_read "Reads existing rows for deduplication" {
+dashboard_backfill_to_dashboard_chat_read = code_dashboard_backfill -> code_dashboard_chat_read "Reads existing rows only to identify explicitly ambiguous legacy matches" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-backfill-to-dashboard-chat-read"
     }
 }
 
-dashboard_backfill_to_dashboard_chat_append = code_dashboard_backfill -> code_dashboard_chat_append "Appends absent author/body pairs" {
+dashboard_backfill_to_dashboard_chat_append = code_dashboard_backfill -> code_dashboard_chat_append "Replays each stable checkpoint message identity" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-backfill-to-dashboard-chat-append"
     }

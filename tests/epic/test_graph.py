@@ -65,6 +65,12 @@ def test_adapter_text_becomes_role_message(
     manager = next(m for m in state["messages"] if m.get("role") == "epic_manager")
     assert manager["content"].startswith("epic_manager:")
     assert "Plan" in manager["content"]
+    authored = [
+        message
+        for message in state["messages"]
+        if message.get("role") in {"epic_manager", "epic_architect"}
+    ]
+    assert len({message["id"] for message in authored}) == 2
 
 
 def test_per_role_model_ids_and_source_in_prompt(

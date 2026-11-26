@@ -65,6 +65,12 @@ def test_adapter_text_becomes_role_message(
     lead = next(m for m in state["messages"] if m.get("role") == "feature_lead")
     assert lead["content"].startswith("feature_lead:")
     assert "Scope" in lead["content"]
+    authored = [
+        message
+        for message in state["messages"]
+        if message.get("role") in {"feature_lead", "feature_architect"}
+    ]
+    assert len({message["id"] for message in authored}) == 2
 
 
 def test_per_role_model_ids_and_source_in_prompt(

@@ -355,12 +355,15 @@ def _import_legacy(
                 raise TranscriptPendingError("legacy transcript contains an invalid line") from exc
             if not isinstance(value, dict) or not isinstance(value.get("id"), str):
                 raise TranscriptPendingError("legacy transcript line has no durable message id")
+            source_key = value.get("source_key")
+            if not isinstance(source_key, str) or not source_key:
+                source_key = None
             try:
                 connection.execute(
                     """INSERT INTO events
                        (message_id, source_key, byte_offset, byte_length)
-                       VALUES (?, NULL, ?, ?)""",
-                    (value["id"], start, len(line)),
+                       VALUES (?, ?, ?, ?)""",
+                    (value["id"], source_key, start, len(line)),
                 )
             except sqlite3.IntegrityError as exc:
                 raise TranscriptPendingError("legacy transcript repeats a message id") from exc
@@ -516,8 +519,13 @@ def append_message(graph_id: str, body: str, *, root: Path) -> dict:
     return append_transcript_message(graph_id, author="human", body=text, root=root)
 
 
-def remove_message(graph_id: str, message_id: str, *, root: Path) -> None:
-    """Drop one message from the sidecar by id (e.g. rollback after failed graph ingest)."""
+def _rewrite_messages(
+    graph_id: str,
+    *,
+    root: Path,
+    transform: Callable[[dict], dict | None],
+) -> None:
+    """Rewrite rows and rebuild their durable index under the graph fence."""
 
     with graph_transcript_fence(graph_id, root=root):
         repo = _chat_repo(graph_id, root=root)
@@ -532,6 +540,7 @@ def remove_message(graph_id: str, message_id: str, *, root: Path) -> None:
         if not path.is_file():
             return
         kept: list[str] = []
+        changed = False
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if not stripped:
@@ -541,9 +550,20 @@ def remove_message(graph_id: str, message_id: str, *, root: Path) -> None:
             except json.JSONDecodeError:
                 kept.append(stripped)
                 continue
-            if isinstance(row, dict) and row.get("id") == message_id:
+            if not isinstance(row, dict):
+                kept.append(stripped)
                 continue
-            kept.append(stripped)
+            replacement = transform(row)
+            if replacement is None:
+                changed = True
+                continue
+            encoded = json.dumps(
+                replacement, ensure_ascii=False, separators=(",", ":")
+            )
+            kept.append(encoded)
+            changed = changed or encoded != stripped
+        if not changed:
+            return
         if kept:
             temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
             with temporary.open("w", encoding="utf-8") as handle:
@@ -569,6 +589,39 @@ def remove_message(graph_id: str, message_id: str, *, root: Path) -> None:
             _import_legacy(connection, path)
         finally:
             connection.close()
+
+
+def remove_message(graph_id: str, message_id: str, *, root: Path) -> None:
+    """Drop one message from the sidecar by id (e.g. rollback after failed graph ingest)."""
+
+    _rewrite_messages(
+        graph_id,
+        root=root,
+        transform=lambda row: None if row.get("id") == message_id else row,
+    )
+
+
+def mark_message_legacy_unknown(
+    graph_id: str, message_id: str, *, root: Path
+) -> None:
+    """Label an author/body-only role match without claiming a stable identity."""
+
+    def mark(row: dict) -> dict:
+        if row.get("id") != message_id or row.get("source_key"):
+            return row
+        if row.get("provenance") == "legacy_unknown":
+            return row
+        return {
+            **row,
+            "event_schema_version": 1,
+            "kind": "role_reply",
+            "source_key": None,
+            "occurred_at": None,
+            "appended_at": row.get("appended_at") or row.get("ts"),
+            "provenance": "legacy_unknown",
+        }
+
+    _rewrite_messages(graph_id, root=root, transform=mark)
 
 
 class TaskTierChatError(Exception):

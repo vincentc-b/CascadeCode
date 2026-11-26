@@ -169,7 +169,7 @@ custom "cascade-dashboard-code" {
         "cascade.codeComponent" "element.component.dashboard"
     }
     include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader
-    include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_index code_dashboard_chat_move code_dashboard_transcript code_dashboard_backfill
+    include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_chat_read code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
 }
 
