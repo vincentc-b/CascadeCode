@@ -3006,3 +3006,65 @@ twelve pinned Git-blob digest checks, exact saved request digest and
 sign-offs are unchanged. Acceptance and renewed sign-off remain withheld pending
 integrated contention proof, record corrections, design/publication reconciliation
 and broader documentation-refresh proof. Return control to child delivery.
+
+## Manager integration review of Feature 1 and Feature 2 completion events
+
+Reviewed the newly integrated Epic baseline
+`28af0cf7a4a17b29667229f21baec6311d8d9332`, following the merge commits for
+Feature 1 and Feature 2. Canonical Epic plan remains
+`9663684255700d5178bdd369c97cb8d5a6f4ed6a`; canonical reads confirm both
+Features completed. Revisions `dc47068c`, `7f7df0e8` and the post-review
+correction `ecd390f4` are now Epic ancestors. Feature 4's `a3d4a42b` and
+Feature 3's `99be54b1` / `822f5e7e` remain outside Epic ancestry. This is an
+integration-state change, not closure of the outstanding acceptance gates.
+
+Source inspection confirms the current baseline still reads a fenced transcript
+acknowledgement and releases that fence before committing its publisher mapping;
+first insertion also lacks the later atomic routing protocol. Graph thread/OS
+acquisition is blocking and `_connect_index` initializes schema with a 30-second
+SQLite timeout. The stale-private-ack and malformed UTF-8 corrections are
+present, but do not establish the stronger atomic routing or contention bounds.
+The active Feature 5 plan at `a90648ca8033e8e4ce63acf099a994a702763852`
+retains both contracts and its implementation-then-architecture sequence.
+Cascade enqueued `epic_049:manager:f1_f2_integrated_28af0cf7` to Feature 5 with
+these ancestry distinctions and the required final integrated baseline. No
+scope amendment, new decision or renewed sign-off is warranted.
+
+Design review covered the merged changes in `cascade/DESIGN.md`,
+`cascade/epic/DESIGN.md`, `cascade/feature/DESIGN.md`, `cascade/task/DESIGN.md`,
+`cascade/war_room/DESIGN.md`, `cascade/watchdog/DESIGN.md` and
+`cascade/workspace/DESIGN.md`, with root design interfaces and current publisher
+and transcript-fence source. This is an incremental review, not final design
+acceptance. The Watchdog budget and stale-routing assertions must be reconciled
+with the pending repairs. `cascade/recovery_progress/DESIGN.md` is absent on
+this baseline and its persisted mapping still names the Cascade parent; retain
+the existing Epic-owned integration reconciliation instead of creating a second
+owner ahead of the queued child designs.
+
+Diagram impact: context and container boundaries retain the same operator,
+supervisor, War Room and repository stores. Component/native Code changes in
+the merged source cover Dashboard, Task, Watchdog, Workspace and Teams;
+final integration must reconcile their source ownership and relationships with
+the remaining corrections. The Task start-notification/live-token ordering
+still awaits Feature 3. War Room append-intent and move/rewrite restart flows
+have source-linked behavioral diagrams; their presence does not close atomic
+mapping, contention or held-final-reply acceptance. No render or browser
+navigation was rerun in this turn, and earlier child evidence is not represented
+as proof on this incomplete integrated baseline.
+
+Both preserved publication requests are unchanged; all twelve pinned Git-blob
+digests, including their plan blobs, match. Feature 3's reported terminal
+publication failure remains the latest result; these merges establish no
+architecture approval. Fresh exact publication remains dependent on final
+source/design review and publication-service recovery. Completed canonical
+record corrections and broader documentation-refresh proof remain open.
+
+Validation on `28af0cf7`: `/opt/conda/bin/python3.12 -m pytest -q
+tests/recovery_progress/test_publisher.py
+tests/recovery_progress/test_transcript_milestones.py
+tests/war_room/test_durable_chat_store.py
+tests/war_room/test_transcript_pages_api.py tests/workspace/test_c4_source.py`
+passed **70 tests in 75.78 seconds**. This is focused integration regression
+evidence, not contention or final operational acceptance. `git diff --check`
+passed. Only this review artifact changed; Epic requirements and historical
+sign-offs remain unchanged. Return control to supervised child integration.
