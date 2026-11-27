@@ -1,0 +1,60 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "trigger": "FeatureMinted feat_051_006 / Manager publication handoff",
+  "reviewed_plan_revision": "366005a41de130912448fed2c1bccc83c947aa49",
+  "reviewed_checkout_revision": "9d176203",
+  "request": "docs/epic_artifacts/epic_051_architecture_review_366005a4.json",
+  "request_file_sha256": "e5bc2f77b9c486e85a3f26ea3b4e2a66b19ffc0a5199f0c4c9a5bba1e185aa30",
+  "replayed_unchanged": true,
+  "receipt": {
+    "operation_id": "architecture-publication-6697af0067972f6fb669ee5506126512a635823731565198a8ba0ace178960ae",
+    "status": "ready",
+    "render_operation_id": "c4-render-e0e31ce98ee3413fbed9540ba54e38a7069a64cf2b48a6422f98770e257f310d",
+    "baseline_render_operation_id": null,
+    "review_unit_id": "architecture-review-d4d6cfea0d5b6aedf4901e4525bf3d587ee88618a2898cd2e09c80c6177f78f3",
+    "reviewed_tuple_digest": "d4d6cfea0d5b6aedf4901e4525bf3d587ee88618a2898cd2e09c80c6177f78f3",
+    "amendment_id": null,
+    "reason_code": null,
+    "message": "validated architecture review published"
+  },
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/war_room/DESIGN.md"
+  ],
+  "design_review": {
+    "prior_full_review": "docs/epic_artifacts/epic_051_architect_feature_5_review.json",
+    "result": "Reviewed the root ownership correction, package navigation/shared contracts, Watchdog observation, Task retry metadata and War Room projection bounds. No source, design or model change since the saved request; current behavior and explicit implementation gaps remain accurate. No new historical attribution, requirement ownership transfer or interface change.",
+    "diagram_impact": {
+      "context_landscape": "cascade-context and cascade-landscape: unchanged people, systems and external dependencies; no implementation diff.",
+      "containers": "cascade-containers: unchanged runtime and persistence boundaries; no store, process or isolation change.",
+      "components": "cascade-supervisor-components, cascade-team-components and cascade-war-room-components: unchanged collaborators and cross-boundary observation/verification interfaces.",
+      "code": "All native Code view declarations, source kinds, symbols, parents and pins are unchanged. The per-view and source-symbol inventory in epic_051_architect_feature_5_review.json remains the follow-up acceptance contract.",
+      "behavior": "Existing normal, refusal and restart traces remain applicable to identical source bytes. Feature 5 owns integration-required and cross-Feature recovery acceptance; Feature 6 owns persisted and passive-response bounds. No speculative behavior added to designs."
+    }
+  },
+  "verification": [
+    "Canonical read_doc confirmed Epic revision 366005a41de130912448fed2c1bccc83c947aa49; read_architecture_amendments returned [].",
+    "Canonical list_children reports Features 1-4 completed, Feature 5 active and Feature 6 backlog depending on Feature 5.",
+    "All six publication references match pinned Git bytes, declared SHA-256 digests and current checkout bytes.",
+    "git diff 1e23d79d64b6f939aa828a529f50b0c316d27ef6 -- cascade architecture tests is empty.",
+    "Parsed the saved JSON directly from disk and called publish_architecture_review unchanged, including expected_generation=null. Operation ID, render ID and reviewed tuple digest match the prior pending receipt; status is now ready with a review_unit_id.",
+    "No new runtime test, local render or browser run for this unchanged replay. Source-contract validation and 13 browser journeys remain prior evidence, including the recorded cold-readiness timeout.",
+    "git diff --check passed for the evidence-only update."
+  ],
+  "handoffs": {
+    "epic_architect": "This request is published; do not keep replaying it as pending. After Features 5/6 integrate, review the final source/design/model diff and publish exact newly reviewed references through the normal revision-pinned workflow.",
+    "feature_5": "Existing delivery-consumer, cross-Feature unchanged-red/restart and material-change acceptance remains required. Individual Task contract verification stays with the Feature owners after this Epic role's prior content_access_denied.",
+    "feature_6": "After Feature 5, close the existing scalar/payload bound gap with collision-safe authoritative identity semantics, bounded persistence and passive legacy/fallback responses.",
+    "epic_manager": "Publication for plan 366005a4 is ready. Keep completion gated on both follow-ups and final integrated architecture verification/publication."
+  },
+  "limitations": [
+    "Ready publication does not establish accepted-lineage promotion or Epic completion.",
+    "Known lifecycle fixture failures and recorded recovery/cold-browser timeouts are not cleared by this replay.",
+    "No new sign-off attempted: the already-approved plan is unchanged and prior post-approval sign-off calls were declined.",
+    "No dependency installation, child/trunk modification, runtime-ledger edit or accepted-snapshot rewrite."
+  ]
+}

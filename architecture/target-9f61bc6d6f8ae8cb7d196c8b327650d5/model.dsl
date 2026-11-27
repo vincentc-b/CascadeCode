@@ -1714,7 +1714,7 @@ code_dashboard_open_reviews = element "handle_get_open_reviews" "Function" "Retu
     }
 }
 
-code_dashboard_review_projection = element "feature_review_views" "Function" "Builds shared board, room, and open-review projections with original identity, accountable owners, delivery phase, bounded CI/feedback evidence, and typed prerequisites." {
+code_dashboard_review_projection = element "feature_review_views" "Function" "Builds shared board, room, and open-review projections with original identity, accountable owners, delivery phase, row-capped CI/feedback evidence, and typed prerequisites; string generations retain input length." {
     properties {
         "cascade.semanticId" "element.code.dashboard.review-projection"
         "cascade.parent" "element.component.dashboard"
@@ -4405,7 +4405,7 @@ code_watchdog_review_evidence_health = element "_review_health" "Function" "Clas
     }
 }
 
-code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Persist a bounded normalized health observation in the canonical review registry for later read-only presentation." {
+code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Persist a normalized health observation with capped rows and selected text in the canonical review registry; check-name keys and string generations retain input length." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-evidence-record"
         "cascade.parent" "element.component.watchdog"
@@ -4483,7 +4483,7 @@ code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_
     }
 }
 
-code_watchdog_health_to_evidence_record = code_watchdog_review_health -> code_watchdog_review_evidence_record "Persists the bounded current observation before classification can route work" {
+code_watchdog_health_to_evidence_record = code_watchdog_review_health -> code_watchdog_review_evidence_record "Persists the current observation with row and selected-text caps before classification can route work" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-evidence-record"
     }

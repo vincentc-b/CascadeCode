@@ -1,0 +1,54 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_manager",
+  "trigger": "FeaturePlanningStarted feat_051_005",
+  "reviewed_source_revision": "dcf55df7",
+  "reviewed_initial_plan_revision": "62dcc64af14bab9a50524ad74bcb1493bf64e400",
+  "saved_plan_revision": "366005a41de130912448fed2c1bccc83c947aa49",
+  "reviewed_feature_5_revision": "04edd7165032c8e52d8451b0e88e5fa4cfdc6aea",
+  "created_feature_6_revision": "672e5045dc9f1bc4a896cd1624910955c2e93fb8",
+  "decision": "dec_011",
+  "disposition": "Feature 5 retains its four sequenced Tasks. Feature 6 depends on Feature 5 and owns the existing bounded-evidence requirement gap. Epic completion remains gated.",
+  "canonical_actions": [
+    "Read Epic, Feature 5 and architecture amendments; no open architecture amendment returned.",
+    "Minted feat_051_006 through Cascade with dependency feat_051_005 and bounded scope/acceptance/diagram inventory.",
+    "Read then wrote the full Epic body through Cascade; saved Feature breakdown, planning handoff and payload-gap ownership.",
+    "Recorded dec_011 through Cascade and read back the saved Epic and Feature 6.",
+    "Removed duplicate template headings and placeholder flow from the new Feature through read_doc/write_doc; no direct board filesystem edit."
+  ],
+  "reviewed_design_sections": [
+    "DESIGN.md: Feature lifecycle and review evidence boundaries",
+    "cascade/DESIGN.md: delivery-and-review-boundaries",
+    "cascade/watchdog/DESIGN.md: review-health evidence and downstream recovery",
+    "cascade/task/DESIGN.md: upstream review observation and retry fence",
+    "cascade/war_room/DESIGN.md: REQ-WARROOM-REVIEW-002 and passive review projection"
+  ],
+  "design_disposition": "No design/model edit: this turn assigns implementation and verification against the current documented gaps. Inspected dispatch consumers still use feature_review_pending; Task observation selection still uses same-Feature ownership; persistence/projection still lack string-generation bounds. Proposed fixes stay in canonical work records. No implementation or architecture acceptance claimed.",
+  "diagram_impact": {
+    "landscape_context": "cascade-landscape and cascade-context retain actors/external boundaries; both follow-ups verify this against their final diff.",
+    "containers": "cascade-containers retains current review/action/checkpoint stores and runtime boundaries; verify normal/restart ownership.",
+    "components": "Feature 5 owns execution-gate and Watchdog-to-Task relationships in supervisor/team views. Feature 6 owns producer/registry/passive-consumer implications including War Room components.",
+    "code": "Feature 5 owns Watchdog/Task and affected Boss gates/fences; Feature 6 owns Watchdog evidence writer and Dashboard projection. HTTP, Feature, Epic, Workspace and Teams views receive source-specific review where interfaces change. Both require real declaration kinds, symbols, ownership and model/contract parity.",
+    "behavior": "Feature 5 traces unverified wait, unchanged-red restart and material-change reevaluation. Feature 6 traces bounded normal persistence/read and oversized or legacy unavailable evidence including request/postcheck fallbacks.",
+    "delivery_verification": "Source contracts, bounded pinned render, actual Explore to native Code, Level up, deep links, pinned source, stale-symbol checks and measured warm reuse remain Task acceptance. No new render or browser run was necessary for this planning-only turn."
+  },
+  "verification": {
+    "local_design_file_links": 309,
+    "broken_file_links": 0,
+    "canonical_handoff_and_decision_present": true,
+    "whitespace": "git diff dcf55df7 --check passed before this receipt; final check repeated with receipt",
+    "runtime_tests": "Not rerun: no production source/model/design changes in this turn."
+  },
+  "handoffs": {
+    "feature_5": "Preserve planning readiness and supported stacking; verify actual dependent Task paths, restart and one changed-evidence reevaluation with normal activation/approval. Reconcile own final architecture inventory.",
+    "feature_6": "Choose explicit scalar/serialized-size bounds after tracing authoritative consumers; preserve identity equality and zero generations, bound legacy/fallback passive reads, and keep invalid evidence unavailable rather than green or authorized.",
+    "epic_architect": "Saved Feature 4 publication remains pending in its last receipt. Preserve the original request and pins; this plan revision changes the current-plan guard. Reconcile through supported publication workflow and separately reviewed current request if stale. Final integrated publication remains required."
+  },
+  "limitations": [
+    "No child implementation, completion, accepted architecture publication or live deployment claimed.",
+    "Known 17 lifecycle fixture failures, five historical architecture failures, full Recovery-gate timeout and separate isolated pass remain recorded; no clearing evidence produced here.",
+    "Cold browser readiness timeout and historical terminal publication recovery remain distinct from pending publication.",
+    "No post-approval sign-off retry: prior attempts are known to refuse and do not recover publication.",
+    "No dependency installation, other-team/trunk filesystem mutation, accepted-snapshot rewrite or direct lifecycle ledger repair."
+  ]
+}

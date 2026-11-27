@@ -5,7 +5,7 @@ Only unrelated operational-panel requests are stubbed; architecture requests
 use the production HTTP routes and real renderer. Results stay in .cascade/.
 """
 from pathlib import Path
-import json,time,threading,sys,subprocess
+import json,time,threading,sys,subprocess,runpy
 from playwright.sync_api import sync_playwright
 from cascade.board.context import set_project_context
 from cascade.workspace import ProjectContext
@@ -18,6 +18,8 @@ server=serve(root=root,port=0);thread=threading.Thread(target=server.serve_forev
 delivery='--integrated-delivery' in sys.argv
 repair='--integrated-repair' in sys.argv
 health='--review-health' in sys.argv
+integrated_ui='--integrated-ui' in sys.argv
+consumer_gates='--consumer-gates' in sys.argv
 result={'paths':[], 'http_errors':[], 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()};started=time.monotonic()
 try:
  with sync_playwright() as p:
@@ -63,17 +65,36 @@ try:
     ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.required-checks','_required_checks'),
     ('supervisor','boss','cascade-boss-code','element.code.boss.repair-postcheck-gate','_current_open_review_postcheck_matches'),
     ('supervisor','task-team','cascade-task-code','element.code.task.upstream-review-fence','record_upstream_review_observation')]
-   result['visible_observation_views']=[]
+  if integrated_ui:
+   cases = list(runpy.run_path(str(root/'docs/task_artifacts/task_051_004_004_architecture_browser.py'))['PATHS'])
+   cases += [
+    ('war-room','dashboard','cascade-dashboard-code','element.code.dashboard.open-reviews','handle_get_open_reviews'),
+    ('war-room','dashboard','cascade-dashboard-code','element.code.dashboard.review-ui','createOpenReviewsPane'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.feature','try_complete_feature')]
+  if consumer_gates:
+   cases = [
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.dependency-delivery-gate','_dependency_review_pending'),
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.feature-dispatch-gate','feature_dispatch_blockers'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.feature-delivery-execution-predicate','feature_delivery_satisfies_integration'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.dependency-delivery-gate','_deps_met'),
+    ('supervisor','feature-team','cascade-feature-code','element.code.feature.retry','retry_task'),
+    ('supervisor','task-team','cascade-task-code','element.code.task.upstream-review-dependency','_dependent_feature_for_task')]
+  if health or integrated_ui or consumer_gates:
+   result['visible_component_relationships']=[]
    for key in ('cascade-supervisor-components','cascade-team-components'):
     select_view(key)
-    page.locator('[aria-label="relationship relationship.watchdog-records-task-review-evidence"]').wait_for()
-    result['visible_observation_views'].append(key)
+    relationships=['relationship.watchdog-records-task-review-evidence']
+    if integrated_ui:
+     relationships += ['relationship.epic-uses-workspace-queue','relationship.boss-uses-watchdog-postcheck','relationship.watchdog-verifies-feature-repair']
+    for relationship in relationships:
+     page.locator(f'[aria-label="relationship {relationship}"]').wait_for()
+     result['visible_component_relationships'].append({'view':key,'relationship':relationship})
   for container,component,cv,node,symbol in cases:
    tick=time.monotonic();select_view('cascade-context');target('element.system.cascade');assert 'cascade-containers' in view.input_value()
    target('element.container.'+container)
    # Supervisor exposes a focused team view as another destination; use the real chooser when shown.
    if 'components' not in view.input_value():
-    page.locator('#architecture-drill-choices button').filter(has_text='cascade-supervisor-components').click()
+    page.locator('#architecture-drill-choices button').filter(has_text=f'cascade-{container}-components').click()
    target('element.component.'+component)
    if cv not in view.input_value():
     page.locator('#architecture-drill-choices button').filter(has_text=cv).click()
@@ -83,8 +104,8 @@ try:
    page.reload(wait_until='domcontentloaded');page.locator('#architecture-ready:not([hidden])').wait_for(timeout=30000)
    assert page.locator(f'[aria-label="element {node}"]').get_attribute('aria-pressed')=='true'
    page.locator('#architecture-target-detail button',has_text='Open pinned source').click()
-   preview=page.locator('#architecture-document-preview-body');preview.filter(has_text='def '+symbol).wait_for()
-   assert 'def '+symbol in preview.inner_text()
+   preview=page.locator('#architecture-document-preview-body');preview.filter(has_text=symbol).wait_for()
+   assert symbol in preview.inner_text()
    page.locator('#architecture-back').click();assert 'components' in view.input_value()
    result['paths'].append({'component':component,'view':cv,'node':node,'symbol':symbol,'deep_link_restored':True,'pinned_source_opened':True,'level_up':True,'elapsed_seconds':time.monotonic()-tick})
   after=json.loads(ledger.read_text());result['render_operations_after']=len(after.get('operations',{}))
@@ -95,5 +116,5 @@ try:
 finally:
  server.shutdown();server.server_close();thread.join(timeout=5);set_project_context(None)
  result['total_seconds']=time.monotonic()-started
- (root/('.cascade/epic051-health-browser.json' if health else '.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
+ (root/('.cascade/epic051-consumer-gates-browser.json' if consumer_gates else '.cascade/epic051-integrated-ui-browser.json' if integrated_ui else '.cascade/epic051-health-browser.json' if health else '.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
  print(json.dumps(result,indent=2),flush=True)

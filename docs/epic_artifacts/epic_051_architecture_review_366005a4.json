@@ -1,0 +1,162 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "366005a41de130912448fed2c1bccc83c947aa49",
+  "proposal": {
+    "owner_work_id": "epic_051",
+    "authorized_owner": "epic_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": ".",
+    "design_owner_directory": ".",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_051",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/epics/2_active/epic_051_keep_feature_teams_accountable_through_review_merge_and_repa.md",
+      "revision": "366005a41de130912448fed2c1bccc83c947aa49",
+      "content_digest": "4c0a22d992b88d8954753d8ea11fa07a7da41cd024f28e0498567b98410a7f43"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "owning_work": "epic_051",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "DESIGN.md",
+        "revision": "b1e90dcb67166b680b9bf74c89d081156178b6ab"
+      },
+      "content_digest": "2906440a994d0ebf81b1179e4905a401e486620485281663607d1c6553a21017"
+    },
+    "proposed_model": {
+      "contract": {
+        "reference": {
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "owning_work": "epic_051",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6"
+        },
+        "content_digest": "6b338cbe2a260a6a56d677a2858418b3bd30f3ac69b29d3f7fce62d2e1a9f925"
+      },
+      "sources": [
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6"
+          },
+          "content_digest": "84f891d6593f1ceaa47536341dd716a6f601431e20034e78880ba2e8165bac31"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6"
+          },
+          "content_digest": "74478782d595f63b4b5fe4b2a24dade34ebe6d001a914a486e3185a3082ee3c2"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6"
+          },
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a"
+        }
+      ],
+      "source_closure_digest": "979224cb9675bdcad7df84894de6a7b2a91e700f3deec4b1a837f069c7d43b6b",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180.0,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "44f52aed3aec243ad4e2b11d6d21d7457ff2e4bb6502a987f6df630a6e7e4ab9",
+      "render_identity": "d3d3223d32b9ba9c4070f9edb45ab3201852341021b4a08868471618ce8d4d3d"
+    },
+    "requirement_citations": [
+      "REQ-ROOT-010",
+      "REQ-REVIEW-REPAIR-001",
+      "REQ-REVIEW-REPAIR-002",
+      "REQ-CASCADE-RECOVERY-001",
+      "REQ-BOSS-CLOSEOUT-001",
+      "REQ-WORKSPACE-TURN-EVIDENCE-001",
+      "REQ-REVIEW-DELIVERY-001",
+      "REQ-FEATURE-REPAIR-002",
+      "REQ-WATCHDOG-REPAIR-POSTCHECK-001",
+      "REQ-REVIEW-EVIDENCE-001",
+      "REQ-REVIEW-EVIDENCE-002",
+      "REQ-WATCHDOG-REVIEW-001",
+      "REQ-TASK-DELIVERY-003",
+      "REQ-WARROOM-REVIEW-001",
+      "REQ-WARROOM-REVIEW-002",
+      "REQ-WARROOM-REVIEW-003"
+    ],
+    "decision_citations": [
+      "DEC-CASCADE-RECOVERY-001",
+      "DEC-BOSS-CLOSEOUT-001",
+      "DEC-WORKSPACE-TURN-EVIDENCE-001",
+      "DEC-REVIEW-EVIDENCE-001",
+      "DEC-WATCHDOG-REVIEW-001",
+      "DEC-TASK-DELIVERY-003",
+      "DEC-WARROOM-REVIEW-001",
+      "DEC-WARROOM-REVIEW-002"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-boss-code",
+      "cascade-workspace-code",
+      "cascade-landscape",
+      "cascade-feature-code",
+      "cascade-epic-code",
+      "cascade-watchdog-code",
+      "cascade-task-code",
+      "cascade-war-room-components",
+      "cascade-dashboard-code",
+      "cascade-war-room-http-code"
+    ],
+    "affected_work_ids": [
+      "epic_051"
+    ],
+    "architecture_impact": "diagram_change",
+    "impact_reason": "Integrated operator review presentation and authenticated repair add six native source-linked Function nodes and eight Code relationships. Existing component views retain Watchdog-to-Task observation, Epic-to-Workspace queue, Boss-to-Watchdog postcheck and Watchdog-to-Feature verification. This review corrects scalar-bound descriptions against production behavior and links terminal source persistence. Context/container/store and existing component ownership are unchanged. The reviewed plan explicitly retains Feature 5 delivery-consumer/cross-Feature acceptance plus the unfulfilled bounded-evidence requirement; publishing current architecture does not assert completion. Historical pending requests and accepted snapshots remain intact. Current source kinds, owners, references and confined pinned render validate; browser verification and exact measured results are recorded separately. Warm browser verification passed 13 paths across eight Code views, deep-link/source/Level-up and the four retained relationships in both component views with unchanged render-operation count; the cold readiness timeout remains an explicit runtime limitation. Current plan review assigns delivery-consumer/cross-Feature acceptance to Feature 5 and the bounded-evidence gap to Feature 6 in sequence. Only root design ownership prose changed; no source/model/interface or persistence change since the recorded 13-path browser evidence. The root design now links the existing package and child ownership explicitly. Child Task contents returned content_access_denied; Feature-level acceptance is reviewed, and the Feature owners must verify their individual Task contracts. This is a separately reviewed request after the original request returned stale_revision, not a replacement replay or completion claim."
+  }
+}

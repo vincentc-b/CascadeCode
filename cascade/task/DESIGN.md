@@ -371,17 +371,16 @@ release and unrelated Task failure ownership.
 ```mermaid
 flowchart TD
     Red[Normalized upstream blocker and evidence generation] --> Persist[Queued Task action metadata]
-    Persist --> Compare{Already evaluated?}
+    Persist --> Relationship{Route and declared dependency still current?}
+    Relationship -->|no| Gates[Ordinary recovery gates]
+    Relationship -->|yes| Verify{Exact repair postcheck verified?}
+    Verify -->|yes| Gates
+    Verify -->|no| Compare{Already evaluated?}
     Compare -->|same| Wait[Retain queue; no claim or attempt]
-    Compare -->|changed| Relationship[Recheck route and declared dependency]
-    Relationship -->|proven and red| Evaluate[Record evaluated generation without claim]
-    Relationship -->|not proven| Gates[Ordinary recovery gates]
+    Compare -->|changed| Evaluate[Record evaluated generation without claim]
     Evaluate --> Wait
     Gates -->|eligible| Attempt[Ordinary Task action claim]
     Gates -->|unrelated Task failure| TaskOwner[Keep normal Task recovery actionable]
-    Persist --> Verify{Exact repair postcheck verified?}
-    Verify -->|no| Wait
-    Verify -->|yes| Gates
 ```
 
 `REQ-TASK-DELIVERY-002`: A queued delivery is valid only for its exact Task

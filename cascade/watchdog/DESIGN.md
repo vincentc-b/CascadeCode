@@ -413,9 +413,9 @@ ownership.
 ```mermaid
 flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]
-    Snapshot --> Persist[Bound and persist current observation]
+    Snapshot --> Persist[Validate lossless bounds; persist observation]
     Persist -->|write succeeds| Classify[Normalized evidence classification]
-    Persist -->|missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
+    Persist -->|invalid identity, missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
     Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
     Identity --> Fence[Prove route and dependency; record affected queued Tasks]
     Fence --> Task[Task-owned generation comparison and verified release]

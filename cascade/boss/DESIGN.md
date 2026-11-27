@@ -74,6 +74,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
+| [_complete_verified_repair_source](rollup.py) | After the fresh closeout gate, persist the retained active source document as completed before retirement; absent or already terminal source is an idempotent no-op. |
 | [reconcile_open_review_repair](../watchdog/incident_postcheck.py) | Collect fresh forge/check evidence before the lifecycle lock and persist an unchanged exact-generation verification receipt. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
 | [_current_open_review_postcheck_matches](rollup.py) | Bind the fresh postcheck result to the greatest scoped repair action before any closeout side effect. |
@@ -156,8 +157,8 @@ work. This migration is action-boundary work, not a board poll. Existing
 architecture tuple, affected-work, comment, provider and dependency gates
 remain authoritative.
 
-[BossView](view.py) identifies candidates without requiring a Git ancestry
-probe or forge poll on a read. Its Task dependency filter consumes the same
+[BossView](view.py) identifies candidates without a forge poll. Its Task
+dependency filter consumes the same
 persisted [Feature delivery projection](../review.py) as canonical dispatch, so
 a closed row, missing or stale generation, or accepted commit absent from the
 intended target is not advertised as dispatchable. The projection's local Git

@@ -422,7 +422,7 @@ The Task agent may read the parent Feature for types and APIs. It may **not** re
 
 Each requirement and decision has one owning design and a stable identifier. A parent owns system goals, cross-cutting constraints, shared contracts, and interfaces between children. A meaningful child directory owns its distinct behavior, state, interfaces, and decisions; the parent links to and summarizes that child without copying its owned detail. Moving ownership updates references in the same change.
 
-This root document is currently the owning design for the repository. Until focused changes introduce child designs, it covers the production packages under `cascade/`, executable verification under `tests/`, role and workflow guidance under `skills/` (including the trivial `skills/design/templates/` directory), and work-record infrastructure under `docs/`. Generated or runtime-only paths such as `cascade.egg-info/`, `__pycache__/`, and `.cascade/` do not own designs and are covered by this root. A new child `DESIGN.md` transfers only the boundary and identifiers it explicitly claims.
+This root document owns system goals, cross-cutting constraints and interfaces between repository boundaries. The [package design](cascade/DESIGN.md) and its linked child designs own production behavior under `cascade/`. This root covers executable verification under `tests/`, role and workflow guidance under `skills/` (including the trivial `skills/design/templates/` directory), and work-record infrastructure under `docs/` where no child design claims a distinct boundary. Generated or runtime-only paths such as `cascade.egg-info/`, `__pycache__/`, and `.cascade/` do not own designs and are covered by this root. Each child `DESIGN.md` owns only the boundary and identifiers it explicitly claims.
 
 The diagrams in [Product workflow](#21-product-workflow), [The 3-Tier Directory Structure](#3-the-3-tier-directory-structure), [Agent Lifecycles](#5-agent-lifecycles), [LangGraph Topology](#6-langgraph-topology), and [Workspace supervisor](#94-workspace-supervisor) are the current architecture views. The repository-owned C4 source, semantic identity rules, derived artifact schema, provenance boundary, failure states, and downstream review/viewer contracts live under [`architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/`](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md). Rendered exports remain hash-verified derived artifacts rather than an authority; consumers must retain the source-diff fallback whenever verified interaction is unavailable.
 
@@ -679,6 +679,16 @@ Dependencies live on the plan, not in the watchdog's head:
 - Repeated in the body's breakdown / Depends-on section
 - A node is dispatchable only when every listed ID is in `3_completed`
 - The Boss may sequence work; it may not invent edges that are not on the `.md`
+
+Lifecycle dependency readiness does not establish delivery. Integration-required
+execution also consumes the [shared Feature delivery contract](cascade/DESIGN.md#delivery-and-review-boundaries).
+The [Watchdog dependency gate](cascade/watchdog/DESIGN.md#feature-delivery-dependency-gate)
+and Boss candidate projection require current intended-target evidence; explicit
+stacked Feature dispatch retains its separate predecessor-base policy. Queued
+Tasks in declared same-Epic dependent Features retain upstream review generations
+through the [Task delivery fence](cascade/task/DESIGN.md#durable-delivery-collaborators),
+which rechecks ownership and route before waiting and spends no retry attempt on
+unchanged upstream evidence.
 
 ### 9.2 Git as the revision store
 

@@ -1,0 +1,81 @@
+{
+  "paths": [
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.dependency-delivery-gate",
+      "symbol": "_dependency_review_pending",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 15.03923871810548
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.feature-dispatch-gate",
+      "symbol": "feature_dispatch_blockers",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 17.72933959378861
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.feature-delivery-execution-predicate",
+      "symbol": "feature_delivery_satisfies_integration",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 17.999521472956985
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.dependency-delivery-gate",
+      "symbol": "_deps_met",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 10.18762257299386
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.retry",
+      "symbol": "retry_task",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 22.733225481119007
+    },
+    {
+      "component": "task-team",
+      "view": "cascade-task-code",
+      "node": "element.code.task.upstream-review-dependency",
+      "symbol": "_dependent_feature_for_task",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 16.923513778019696
+    }
+  ],
+  "http_errors": [],
+  "source_revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1",
+  "initial_ready_seconds": 14.546043485868722,
+  "render_operations_before": 9,
+  "visible_component_relationships": [
+    {
+      "view": "cascade-supervisor-components",
+      "relationship": "relationship.watchdog-records-task-review-evidence"
+    },
+    {
+      "view": "cascade-team-components",
+      "relationship": "relationship.watchdog-records-task-review-evidence"
+    }
+  ],
+  "render_operations_after": 9,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_051\nCode revision\n5a0c5d2c4299089c275017c21af9de2a2452cbc1\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n5a0c5d2c4299089c275017c21af9de2a2452cbc1\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 120.0168371789623
+}
