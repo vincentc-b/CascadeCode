@@ -26,8 +26,38 @@
   "role": "epic_architect",
   "trigger": "FeatureCompleted feat_051_003",
   "reviewed_implementation_base": "e4c465dd",
-  "status": "reviewed_publication_required",
-  "historical_publication_replay": {"request":"docs/epic_artifacts/epic_051_architecture_review_7b5e3881.json","receipt":{"operation_id":"architecture-publication-d2953d66cc37e0ae96d438d5acf8e4d0a5d2adce136523a826e80b778f2bae2f","status":"pending","render_operation_id":"c4-render-262f1d7ac56fc2debb0a236f9497cf7b72a17761402756ad196036043dfb6e38","baseline_render_operation_id":null,"review_unit_id":null,"reviewed_tuple_digest":"2a56fdfd5988064409d137f6373c016325d5d4d97ca800dcfe55bb8f0363ee74","amendment_id":null,"reason_code":null,"message":"bounded architecture render is pending"},"interpretation":"Replayed unchanged once this turn. Pending receipt remains historical; its model pins predate Feature 3 and cannot establish current acceptance."},
+  "status": "publication_pending",
+  "publication": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_feature_3.json",
+    "submitted": true,
+    "receipt": {
+      "operation_id": "architecture-publication-abff6b21629df1a83c66b71b9cbd5e561c5324e883b38b0bdb9479af99f05c37",
+      "status": "pending",
+      "render_operation_id": "c4-render-0ff71bae324b548d67dfcd1741d9e46d376f217e165f56cc1b59001f34225602",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "6e33615e3a0202cec7cecc5978ff297c662026bf72dbe685726d6833093a8732",
+      "amendment_id": null,
+      "reason_code": null,
+      "message": "bounded architecture render is pending"
+    },
+    "handoff": "On a later Architect turn replay this saved request unchanged. Pending is durable and is not acceptance. If Feature 4 integrates, review that diff separately before publishing newer pins. Preserve this receipt and earlier requests."
+  },
+  "historical_publication_replay": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_7b5e3881.json",
+    "receipt": {
+      "operation_id": "architecture-publication-d2953d66cc37e0ae96d438d5acf8e4d0a5d2adce136523a826e80b778f2bae2f",
+      "status": "pending",
+      "render_operation_id": "c4-render-262f1d7ac56fc2debb0a236f9497cf7b72a17761402756ad196036043dfb6e38",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "2a56fdfd5988064409d137f6373c016325d5d4d97ca800dcfe55bb8f0363ee74",
+      "amendment_id": null,
+      "reason_code": null,
+      "message": "bounded architecture render is pending"
+    },
+    "interpretation": "Replayed unchanged once this turn. Pending receipt remains historical; its model pins predate Feature 3 and cannot establish current acceptance."
+  },
   "scope": "Integrated Feature 3 architecture reconciliation; approved plan and Feature scope unchanged.",
   "design_result": "Root health summary now covers failed checks, actionable feedback and confirmed conflicts. Watchdog flow exposes Task observation; Task design explicitly bounds selection to queued Tasks owned by the observed Feature and links focused verification. Shared, Boss, Feature, Epic and Workspace ownership, execution, persistence and recovery descriptions remain consistent with inspected source.",
   "diagram_impact": {
@@ -50,7 +80,8 @@
     "Validated final source contract: 266 elements, 330 relationships, 24 views. Five integrated Function nodes, eight additional relationships including this review edge; no removed semantic IDs or changed existing source symbols, paths or component owners.",
     "80 Markdown heading links resolve; each of seven new review-evidence, Watchdog-review and Task-delivery requirement/decision IDs has exactly one owning design declaration.",
     "Real pinned render passed; rendered source kinds and all native Code/component owners passed. New observation relationship appears in both component views. Six proposal references match committed bytes and SHA-256 digests.",
-    "Actual pinned render ready in 84.51s; all five new Function nodes passed context/container/component/Code navigation, selected-node deep-link reload, pinned source opening and Level up. Observation edge visible in both component views. Total 161.02s; warm path times 12.65\u201316.95s; render operations stayed 7 -> 7. Measurements are not latency promises."
+    "Actual pinned render ready in 84.51s; all five new Function nodes passed context/container/component/Code navigation, selected-node deep-link reload, pinned source opening and Level up. Observation edge visible in both component views. Total 161.02s; warm path times 12.65\u201316.95s; render operations stayed 7 -> 7. Measurements are not latency promises.",
+    "Final canonical read confirmed plan 7b5e3881 unchanged. Six committed publication references match Git and checkout bytes. publish_architecture_review admitted the current request with expected_generation=null and returned durable pending; no accepted publication or promotion is claimed."
   ],
   "limitations": [
     "Feature 4 is not integrated into this checkout. Complete repair/retirement, operational UI and cross-Feature dependency acceptance remain outstanding.",
@@ -63,7 +94,8 @@
     "supervisor": "Integrate validated Feature 4 between parent turns; board completion alone does not establish checkout integration.",
     "final_acceptance_owner": "Assess the full real-Git same-review red-to-green repair and retirement journey, split roots, passive UI/authenticated action, integration-required dependency consumers and meaningful activation/approval fixtures after Feature 4 integration. The scripted-normalization test with substituted admission is not the complete journey.",
     "architecture_test_owner": "Reconcile the five historical architecture expectations against revision-pinned fixtures without rewriting accepted snapshots or reverting current design to historical attribution.",
-    "architecture_runtime": "Earlier terminal failed publication recovery and reconciliation remain separate from the pending/current requests. Preserve supported recovery and accepted-lineage guards."
+    "architecture_runtime": "Earlier terminal failed publication recovery and reconciliation remain separate from the pending/current requests. Preserve supported recovery and accepted-lineage guards.",
+    "epic_architect": "Replay docs/epic_artifacts/epic_051_architecture_review_feature_3.json unchanged on a later turn to discover completion. Reconcile any newly integrated Feature 4 diff separately before selecting newer pins."
   },
   "reviewed_implementation_revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2",
   "render": {
