@@ -353,6 +353,7 @@ def test_open_review_projects_canonical_repair_and_bounded_failed_check_evidence
             }
         ],
         "truncated": False,
+        "omitted": 0,
     }
     assert row["repair"] == {
         "request_id": "review-health:failed-build",
@@ -406,6 +407,240 @@ def test_open_review_projects_canonical_repair_and_bounded_failed_check_evidence
     assert verified["repair"]["executing"] is False
     assert verified["evidence"]["source"] == "verification_postcheck"
     assert verified["evidence"]["health_state"] == "green"
+
+
+def test_open_reviews_preserve_distinct_names_and_report_omitted_rows(
+    war_room_server,
+):
+    base, root = war_room_server
+    names = [f"check-{index:02d}" for index in range(18)] + [
+        "same-prefix-A",
+        "same-prefix-B",
+        "tail-20",
+        "tail-21",
+    ]
+    checks = {name: {"status": "success", "generation": 0} for name in names}
+    assert record_feature_review_evidence(
+        "feat_001",
+        {
+            "review_health": {"state": "green", "checks": names},
+            "required_check_policy": {"available": True, "required": names},
+            "required_check_results": {
+                "available": True,
+                "generation": "🧪" * 64,
+                "statuses": {name: "success" for name in names},
+                "checks": checks,
+            },
+            "review_feedback": {"available": True, "actionable": False},
+        },
+        root=root,
+    )
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    evidence = {item["id"]: item for item in payload["reviews"]}["feat_001"]["evidence"]
+    projected_names = [row["name"] for row in evidence["ci"]["checks"]]
+    assert len(projected_names) == 20
+    assert "same-prefix-A" in projected_names
+    assert "same-prefix-B" in projected_names
+    assert evidence["ci"]["truncated"] is True
+    assert evidence["ci"]["omitted"] == 2
+    assert len(json.dumps(evidence, ensure_ascii=False).encode("utf-8")) < 32 * 1024
+
+
+def test_open_reviews_preserve_scalar_boundaries_and_refuse_unicode_overflow(
+    war_room_server,
+):
+    base, root = war_room_server
+
+    for generation in (0, "🧪" * 64, int("9" * 64)):
+        reviews = _representative_registry()
+        reviews["feat_001"].update(
+            review_health={"state": "green", "checks": ["🧪" * 64]},
+            required_check_policy={
+                "available": True,
+                "required": ["🧪" * 64],
+            },
+            required_check_results={
+                "available": True,
+                "statuses": {"🧪" * 64: "success"},
+                "checks": {
+                    "🧪" * 64: {
+                        "status": "success",
+                        "generation": generation,
+                    }
+                },
+            },
+            review_feedback={"available": True},
+            review_observed_at="2026-11-27T12:00:00+00:00",
+        )
+        _write_reviews(root, reviews)
+
+        _status, payload = _get_json(f"{base}/api/open-reviews")
+        evidence = {row["id"]: row for row in payload["reviews"]}["feat_001"][
+            "evidence"
+        ]
+        assert evidence["health_state"] == "green"
+        assert evidence["ci"]["checks"] == [
+            {
+                "name": "🧪" * 64,
+                "status": "success",
+                "generation": generation,
+                "observed_at": None,
+            }
+        ]
+
+    reviews = _representative_registry()
+    reviews["feat_001"].update(
+        review_health={"state": "green", "checks": ["🧪" * 64 + "x"]},
+        required_check_policy={
+            "available": True,
+            "required": ["🧪" * 64 + "x"],
+        },
+        required_check_results={
+            "available": True,
+            "statuses": {"🧪" * 64 + "x": "success"},
+            "checks": {
+                "🧪" * 64 + "x": {"status": "success", "generation": 0}
+            },
+        },
+        review_feedback={"available": True},
+        review_observed_at="2026-11-27T12:00:00+00:00",
+    )
+    _write_reviews(root, reviews)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    open_row = {row["id"]: row for row in payload["reviews"]}["feat_001"]
+    _status, board = _get_json(f"{base}/api/board")
+    board_row = next(
+        item
+        for column in board["features"].values()
+        for item in column
+        if item["id"] == "feat_001"
+    )
+    _status, room = _get_json(f"{base}/api/doc/feat_001")
+
+    assert open_row["evidence"] == board_row["review"]["evidence"]
+    assert open_row["evidence"] == room["meta"]["review"]["evidence"]
+    assert open_row["evidence"]["health_state"] == "unavailable"
+    assert open_row["evidence"]["freshness"] == "unknown"
+    assert open_row["next_prerequisite"] == "refresh_review_observation"
+
+
+@pytest.mark.parametrize(
+    "generation",
+    ["🧪" * 64 + "x", int("9" * 65)],
+)
+def test_open_reviews_refuse_over_limit_string_and_integer_generations(
+    war_room_server, generation
+):
+    base, root = war_room_server
+    reviews = _representative_registry()
+    reviews["feat_001"].update(
+        review_health={"state": "green", "checks": ["build"]},
+        required_check_policy={"available": True, "required": ["build"]},
+        required_check_results={
+            "available": True,
+            "statuses": {"build": "success"},
+            "checks": {"build": {"status": "success", "generation": generation}},
+        },
+        review_feedback={"available": True},
+        review_observed_at="2026-11-27T12:00:00+00:00",
+    )
+    _write_reviews(root, reviews)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    row = {item["id"]: item for item in payload["reviews"]}["feat_001"]
+    assert row["evidence"]["health_state"] == "unavailable"
+    assert row["next_prerequisite"] == "refresh_review_observation"
+
+
+def test_open_reviews_refuse_oversized_legacy_observation_payload(
+    war_room_server,
+):
+    base, root = war_room_server
+    reviews = _representative_registry()
+    reviews["feat_001"].update(
+        review_health={"state": "green", "checks": ["build"]},
+        required_check_policy={"available": True, "required": ["build"]},
+        required_check_results={
+            "available": True,
+            "statuses": {"build": "success"},
+            "checks": {"build": {"status": "success", "generation": 0}},
+            "legacy_detail": "x" * (32 * 1024),
+        },
+        review_feedback={"available": True},
+        review_observed_at="2026-11-27T12:00:00+00:00",
+    )
+    _write_reviews(root, reviews)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    row = {item["id"]: item for item in payload["reviews"]}["feat_001"]
+    assert row["evidence"]["health_state"] == "unavailable"
+    assert row["evidence"]["ci"]["checks"] == []
+    assert row["next_prerequisite"] == "refresh_review_observation"
+
+
+@pytest.mark.parametrize("fallback", ["registry", "repair_request", "postcheck"])
+def test_open_reviews_bound_oversized_legacy_and_repair_fallbacks(
+    war_room_server, fallback
+):
+    base, root = war_room_server
+    oversized = "🧪" * 65
+    reviews = _representative_registry()
+    if fallback == "registry":
+        reviews["feat_001"].update(
+            review_health={"state": "green"},
+            required_check_policy={"available": True},
+            required_check_results={
+                "available": True,
+                "checks": {"build": {"status": "success", "generation": oversized}},
+            },
+        )
+        _write_reviews(root, reviews)
+    else:
+        action = {
+            "kind": "feature_repair",
+            "repair_route": "open_review",
+            "action_id": f"feature_repair:feat_001:{fallback}",
+            "request_id": fallback,
+            "feature_id": "feat_001",
+            "generation": 1,
+            "phase": "verified" if fallback == "postcheck" else "delivery_pending",
+        }
+        checks = {"build": {"status": "success", "generation": oversized}}
+        if fallback == "repair_request":
+            action["request_evidence"] = {
+                "review_health": {
+                    "observation": {
+                        "health_state": "green",
+                        "blocker": {"checks": checks},
+                    }
+                }
+            }
+        else:
+            action["verification_postcheck"] = {
+                "verified": True,
+                "required_check_results": {"available": True, "checks": checks},
+            }
+        _write_repair(root, action)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    evidence = {item["id"]: item for item in payload["reviews"]}["feat_001"]["evidence"]
+    assert evidence["health_state"] == "unavailable"
+    assert evidence["health_reason"] == "review_evidence_out_of_bounds"
+    assert evidence["ci"] == {
+        "policy_status": "unavailable",
+        "results_status": "unavailable",
+        "checks": [],
+        "truncated": False,
+        "omitted": 0,
+    }
+    assert evidence["freshness"] == "unknown"
+    assert evidence["next_prerequisite"] == "refresh_review_observation"
+    row = {item["id"]: item for item in payload["reviews"]}["feat_001"]
+    assert row["next_prerequisite"] == "refresh_review_observation"
+    if fallback == "postcheck":
+        assert row["repair"]["verified"] is False
 
 
 def test_open_reviews_read_does_not_mutate_or_invoke_forge_or_provider(

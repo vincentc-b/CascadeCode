@@ -453,17 +453,34 @@ generation, while pending, missing, stale, approval-only and unavailable evidenc
 remains a non-provider wait. The existing team adapter and Feature action ledger
 own admission and restart deduplication; this package boundary adds no scheduler,
 CI runner, provider launcher or merge authority.
-Watchdog caps rows and selected text fields and persists each current normalized
-observation in the canonical review registry before classification can route work.
-The [War Room projection contract](war_room/DESIGN.md#accountable-open-review-projection)
-identifies the remaining check-name and generation size gap. Persistence failure remains
+Watchdog bounds each current normalized observation and persists it in the
+canonical review registry before classification can route work. The
+[War Room projection contract](war_room/DESIGN.md#accountable-open-review-projection)
+defines the lossless check-name, generation and serialized-size limits. Persistence failure remains
 a typed evidence-unavailable wait, so War Room and delivery projections never
 derive repair authority from an observation they cannot inspect after restart.
+The shared [`feature_review_views`](review.py) reader applies the same lossless
+name, generation and normalized-payload bounds to current rows and to legacy,
+repair-request and verification-postcheck fallbacks. It returns at most twenty
+sorted checks plus an omitted count. An invalid fallback cannot retain green,
+verified or fresh presentation and instead names `refresh_review_observation`;
+Board, Feature-room and HTTP consumers receive that same result without a forge,
+provider, lifecycle or ledger write.
 Affected queued Task actions in same-Epic dependent Features retain the upstream
 blocker, exact review route and material evidence generation through the
 [Task delivery fence](task/DESIGN.md#durable-delivery-collaborators).
 Watchdog observes evidence, Task owns retry charging, and the independent repair
 postcheck remains the only release evidence.
+
+After restart the registry and action ledger remain the only inputs to this
+passive path. [`_review_health`](tracking.py) requires the exact review identity,
+head pair and a non-boolean generation-bearing result for every required check;
+[`_route_actionable_review_health`](review_health.py) binds those facts to one
+repair generation. [`_required_checks`](watchdog/incident_postcheck.py) repeats
+the exact-head and generation checks against fresh forge evidence, and
+[`mark_feature_repair_verified`](feature/repair.py) accepts only its matching
+independent receipt. Display row omission never changes those authoritative
+comparisons.
 
 `REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
 relationship before delegating recovery. Durable attempts, acknowledgements and

@@ -21,15 +21,12 @@ review; a review without generation metadata is represented as generation zero.
 Feature metadata remains explicit `unknown` or `unavailable`. Presentation does
 not infer green checks from an empty set or infer freshness without a persisted
 observation time. Check detail is limited to twenty sorted, single-line rows and
-bounded scalar fields so persisted forge payloads cannot expand a response
-without limit. The open-review endpoint returns at most one hundred rows and
-marks an omitted tail as `truncated`.
-
-Implementation gap against this bound: persisted check-name keys and string
-generations are not length-limited. The response caps displayed names at eighty
-characters but passes generation strings through unchanged. The row cap therefore
-does not establish a total payload bound; authoritative identities must retain
-their equality semantics when enforcing limits.
+reports the omitted count. Check names and string generations retain exact
+identity through 256 UTF-8 bytes; integer generations retain at most 64 decimal
+digits, including zero. A normalized persisted observation is at most 32 KiB.
+Oversized or malformed authoritative identity is projected as unavailable, not
+truncated into another identity or inferred green. The open-review endpoint
+returns at most one hundred rows and marks an omitted tail as `truncated`.
 
 `REQ-WARROOM-REVIEW-003`: `POST /api/open-reviews/repair` accepts only a
 request-scoped authenticated local human and one complete, bounded repair
@@ -51,7 +48,7 @@ board serialization, and Feature document serialization consume that shared
 projection. They do not call tracking transport, refresh forge evidence, start a
 provider, enqueue work, or publish recovery progress. Product-root review
 identity and tracking-root plans/actions remain joined through the configured
-project context. The authorized Watchdog health pass persists a row-capped
+project context. The authorized Watchdog health pass persists a bounded
 observation through [`record_feature_review_evidence`](../review.py) after its
 forge query; unavailable publication remains a typed health wait rather than
 allowing an action to proceed with evidence that readers cannot inspect.
@@ -88,9 +85,19 @@ sequenceDiagram
     R-->>UI: Accountable state and typed prerequisite
     alt Missing or stale health evidence
         R-->>UI: Explicit unknown/unavailable or stale evidence
+    else Oversized or malformed current, legacy, request, or postcheck evidence
+        R-->>UI: Unavailable, not fresh or verified; refresh_review_observation
     end
     Note over UI,A: No forge query, provider start, queue write, or lifecycle mutation
 ```
+
+The same flow applies after process restart: the reader reloads the registry and
+action ledger, validates the complete selected evidence payload before projecting
+it, and never repairs either file. A valid normalized observation retains exact
+names and generations while displaying only its sorted row window. An oversized
+legacy row or fallback postcheck produces no green rows, no verified repair flag,
+unknown freshness and the safe refresh prerequisite until an authorized Watchdog
+observation replaces it.
 
 ```mermaid
 sequenceDiagram

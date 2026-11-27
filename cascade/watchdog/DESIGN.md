@@ -372,14 +372,22 @@ subject to the single-writer and ordinary repair gates.
 uses [merge_request_snapshot](../tracking.py) for the normalized original-review
 identity, exact heads, mergeability, policy, current check generations and human
 feedback. Before classification can route work,
-[record_feature_review_evidence](../review.py) caps check rows, heads, feedback
-counts and diagnostic text and stores the current observation in the canonical
-review registry. Check-name keys and string generations retain their input
-lengths; the [projection bound](../war_room/DESIGN.md#accountable-open-review-projection)
-documents this implementation gap. The registry write is serialized and atomically
-replaced. If the review record is missing or persistence fails, reconciliation
-returns the typed `review_evidence_persistence_failed` prerequisite and does not
-route repair from evidence that read-only consumers cannot later inspect.
+[record_feature_review_evidence](../review.py) bounds check names, generations,
+heads, feedback counts and diagnostic text and stores the current observation in
+the canonical review registry. Exact check names and string generations are
+limited to 256 UTF-8 bytes, integer generations to 64 decimal digits, check
+presentation to twenty rows plus an omitted count, and the serialized normalized
+observation to 32 KiB. Oversized or malformed authoritative identity writes a
+bounded unavailable marker when the registry remains writable and refuses the
+observation. The registry write is serialized and atomically replaced. If the
+review record is missing or persistence fails, reconciliation returns the typed
+`review_evidence_persistence_failed` prerequisite and does not route repair from
+evidence that read-only consumers cannot later inspect.
+Classification also requires every target-required check to carry the observed
+source head and a nonempty, non-boolean generation; a status-only green map is
+stale evidence. The independent repair postcheck repeats that rule for the fresh
+source/target pair before the Feature ledger can record verification. Integer
+zero remains a valid generation.
 [_route_actionable_review_health](../review_health.py) constructs the material
 identity and calls
 [request_feature_review_repair](../team_supervision.py), whose existing action
@@ -405,9 +413,9 @@ ownership.
 ```mermaid
 flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]
-    Snapshot --> Persist[Cap rows and selected text; persist observation]
+    Snapshot --> Persist[Validate lossless bounds; persist observation]
     Persist -->|write succeeds| Classify[Normalized evidence classification]
-    Persist -->|missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
+    Persist -->|invalid identity, missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
     Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
     Identity --> Fence[Prove route and dependency; record affected queued Tasks]
     Fence --> Task[Task-owned generation comparison and verified release]
@@ -429,6 +437,10 @@ the existing direct-parent adapter and Feature action remain visible in their
 owning team Code views in the
 [authoritative views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 Verification: [review-health tests](../../tests/test_review_health.py).
+The postcheck cases in
+[parent lifecycle postcheck tests](../../tests/watchdog/test_parent_lifecycle_postcheck.py)
+cover changed heads, red results and malformed generations without weakening the
+exact repair-generation fence.
 
 ## Recovery admission and active-path authority
 
