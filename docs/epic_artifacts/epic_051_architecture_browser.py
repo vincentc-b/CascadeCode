@@ -17,6 +17,7 @@ repo=RepositoryContext(root=root,repository_key=canonical.target.repository_key)
 server=serve(root=root,port=0);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();base=f'http://127.0.0.1:{server.server_port}'
 delivery='--integrated-delivery' in sys.argv
 repair='--integrated-repair' in sys.argv
+health='--review-health' in sys.argv
 result={'paths':[], 'http_errors':[], 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()};started=time.monotonic()
 try:
  with sync_playwright() as p:
@@ -55,6 +56,18 @@ try:
     ('supervisor','boss','cascade-boss-code','element.code.boss.open-review-repair-identity','_require_open_review_repair_identity'),
     ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.repair-postcheck','reconcile_open_review_repair'),
     ('supervisor','workspace','cascade-workspace-code','element.code.workspace.queue-kickoff','kickoff_graph_queue_event')]
+  if health:
+   cases = [
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.review-evidence-health','_review_health'),
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.actionable-review-health','_route_actionable_review_health'),
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.required-checks','_required_checks'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.repair-postcheck-gate','_current_open_review_postcheck_matches'),
+    ('supervisor','task-team','cascade-task-code','element.code.task.upstream-review-fence','record_upstream_review_observation')]
+   result['visible_observation_views']=[]
+   for key in ('cascade-supervisor-components','cascade-team-components'):
+    select_view(key)
+    page.locator('[aria-label="relationship relationship.watchdog-records-task-review-evidence"]').wait_for()
+    result['visible_observation_views'].append(key)
   for container,component,cv,node,symbol in cases:
    tick=time.monotonic();select_view('cascade-context');target('element.system.cascade');assert 'cascade-containers' in view.input_value()
    target('element.container.'+container)
@@ -82,5 +95,5 @@ try:
 finally:
  server.shutdown();server.server_close();thread.join(timeout=5);set_project_context(None)
  result['total_seconds']=time.monotonic()-started
- (root/('.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
+ (root/('.cascade/epic051-health-browser.json' if health else '.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
  print(json.dumps(result,indent=2),flush=True)

@@ -86,8 +86,9 @@ original review, checkout, branch, queue and checkpoint remain registered.
 Ordinary and startup queue delivery use the same read-only delivery projection:
 idle polls and generic messages advance the durable cursor without a role turn,
 while an admitted repair or interrupted checkpoint resumes the same graph under
-its existing writer lock. Current review health checks route conflict recovery,
-but a green source check and a merged review do not establish the later target
+its existing writer lock. Current review health checks route failed required
+checks, actionable feedback and confirmed conflicts through the same admitted
+repair owner. A green source check and a merged review do not establish the later target
 integration's CI or the operator checkout's sync state. Without a
 recognized/authenticated forge CLI, Cascade retains the local merge path for
 offline workspaces.

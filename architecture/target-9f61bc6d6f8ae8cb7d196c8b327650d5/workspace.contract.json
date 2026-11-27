@@ -405,6 +405,7 @@
     {"dsl_identifier": "watchdog_reads_board", "semantic_id": "relationship.watchdog-reads-board", "source": "watchdog_component", "destination": "board_component", "fragment": "model.dsl"},
     {"dsl_identifier": "watchdog_dispatches_teams", "semantic_id": "relationship.watchdog-dispatches-teams", "source": "watchdog_component", "destination": "team_component", "fragment": "model.dsl"},
     {"dsl_identifier": "watchdog_uses_task_budget", "semantic_id": "relationship.watchdog-uses-task-budget", "source": "watchdog_component", "destination": "task_team", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_records_task_review_evidence", "semantic_id": "relationship.watchdog-records-task-review-evidence", "source": "watchdog_component", "destination": "task_team", "fragment": "model.dsl"},
     {"dsl_identifier": "teams_use_task_budget", "semantic_id": "relationship.teams-use-task-budget", "source": "team_component", "destination": "task_team", "fragment": "model.dsl"},
     {"dsl_identifier": "teams_use_agent", "semantic_id": "relationship.teams-use-agent", "source": "team_component", "destination": "agent_component", "fragment": "model.dsl"},
     {"dsl_identifier": "teams_use_collaboration", "semantic_id": "relationship.teams-use-collaboration", "source": "team_component", "destination": "collaboration_component", "fragment": "model.dsl"},

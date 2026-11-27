@@ -209,6 +209,12 @@ watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-o
     }
 }
 
+watchdog_records_task_review_evidence = watchdog_component -> task_team "Records upstream review blocker and evidence generation on owned queued Task actions; Task owns retry and verified release" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-records-task-review-evidence"
+    }
+}
+
 teams_use_task_budget = team_component -> task_team "Reserves and settles cumulative allowance for each review validator operation" {
     properties {
         "cascade.semanticId" "relationship.teams-use-task-budget"

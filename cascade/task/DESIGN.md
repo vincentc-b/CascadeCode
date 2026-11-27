@@ -357,7 +357,13 @@ the Watchdog's normalized blocker and evidence identities, while
 evaluated only when the Boss gate returns the completed-parent mismatch. Release
 requires the matching Feature repair action's independent `verified` postcheck;
 a green poll alone is not merge or intended-target evidence. This adds neither a
-ledger nor a scheduler.
+ledger nor a scheduler. The observer selects queued Tasks owned by the observed
+Feature; this metadata boundary does not select Tasks in other Features by
+dependency. The Watchdog-to-Task edge in `cascade-team-components` exposes the
+observation interface, and `cascade-task-code` exposes its persistence entry
+point. Verification: [queued-delivery tests](../../tests/task/test_rollup_queue.py)
+cover unchanged evidence, changed generations, verified release and unrelated
+Task failure ownership.
 
 ```mermaid
 flowchart TD

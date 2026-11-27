@@ -345,13 +345,18 @@ deliveries owned by that Feature. Watchdog supplies the normalized blocker and
 material generation but does not claim or retry a downstream Task. The
 [Task delivery contract](../task/DESIGN.md#durable-delivery-collaborators) owns
 generation comparison, attempt charging and release after the independent
-verified repair postcheck.
+verified repair postcheck. The Watchdog-to-Task observation edge is visible in
+`cascade-supervisor-components` and `cascade-team-components`; each endpoint
+opens its owning Code view. Task persistence nodes retain their Task component
+ownership.
 
 ```mermaid
 flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]
     Snapshot --> Classify[Normalized evidence classification]
     Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
+    Identity --> Fence[Record evidence on owned queued Task actions]
+    Fence --> Task[Task-owned generation comparison and verified release]
     Identity --> Repair[Join one Feature repair generation]
     Repair --> Publish[Guarded exact-head publication]
     Publish --> Pending[New head checks pending]
