@@ -12,6 +12,7 @@ import pytest
 import cascade.review_health as review_health
 import cascade.review_rebase as review_rebase
 import cascade.tracking as tracking
+from cascade.review import review_record_for_feature
 from cascade.review_health import reconcile_open_review_health
 from cascade.task.action_recovery import load_action
 from cascade.task_rollup import queue_task_merge
@@ -52,6 +53,223 @@ def test_open_mergeable_github_review_reaches_healthy_path_with_supported_fields
     assert reconcile_open_review_health(root) == [
         {"owner_id": "feat_035_001", "outcome": "healthy"}
     ]
+
+
+def _green_check_snapshot(
+    turn: object, *, name: object = "build", generation: object = 0
+) -> dict[str, object]:
+    source_head = turn.observed_source_sha
+    return {
+        "state": "open",
+        "mergeability": "mergeable",
+        "source_revision": source_head,
+        "target_revision": turn.observed_target_sha,
+        "review_health": {"state": "green", "checks": [name]},
+        "required_check_policy": {"available": True, "required": [name]},
+        "required_check_results": {
+            "available": True,
+            "source_head": source_head,
+            "generation": generation,
+            "statuses": {name: "success"},
+            "checks": {
+                name: {
+                    "status": "success",
+                    "generation": generation,
+                    "source_head": source_head,
+                }
+            },
+        },
+        "review_feedback": {"available": True, "actionable": False},
+    }
+
+
+@pytest.mark.parametrize("generation", [None, "", True])
+def test_authoritative_health_refuses_missing_or_boolean_check_generation(
+    generation: object,
+) -> None:
+    snapshot = {
+        "state": "open",
+        "url": "https://example.test/pull/1",
+        "source_branch": "feat/feat_001",
+        "target_branch": "epic/epic_001",
+        "source_revision": "source-head",
+        "target_revision": "target-head",
+        "review_identity": {
+            "url": "https://example.test/pull/1",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+        },
+        "mergeability": "mergeable",
+        "required_check_policy": {
+            "available": True,
+            "source_head": "source-head",
+            "target_head": "target-head",
+            "required": ["build"],
+        },
+        "required_check_results": {
+            "available": True,
+            "source_head": "source-head",
+            "statuses": {"build": "success"},
+            "checks": {
+                "build": {
+                    "status": "success",
+                    "source_head": "source-head",
+                    "generation": generation,
+                }
+            },
+        },
+        "review_feedback": {"available": True, "actionable": False},
+    }
+
+    assert tracking._review_health(snapshot) == {
+        "state": "conflict_or_moving_target",
+        "reason": "stale_check_generation",
+    }
+
+
+def test_review_evidence_preserves_exact_utf8_boundaries_and_zero_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    name = "é" * 128
+    generation = "🧪" * 64
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        review_health,
+        "merge_request_snapshot",
+        lambda *_args: _green_check_snapshot(turn, name=name, generation=generation),
+    )
+
+    assert reconcile_open_review_health(root) == [
+        {"owner_id": "feat_035_001", "outcome": "healthy"}
+    ]
+    record = review_record_for_feature("feat_035_001", root=root)
+    assert record is not None
+    results = record["required_check_results"]
+    assert results["generation"] == generation
+    assert results["checks"][name]["generation"] == generation
+
+    monkeypatch.setattr(
+        review_health,
+        "merge_request_snapshot",
+        lambda *_args: _green_check_snapshot(turn, generation=0),
+    )
+    assert reconcile_open_review_health(root)[0]["outcome"] == "healthy"
+    record = review_record_for_feature("feat_035_001", root=root)
+    assert record["required_check_results"]["generation"] == 0
+    assert record["required_check_results"]["checks"]["build"]["generation"] == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "generation"),
+    [
+        ("é" * 129, 1),
+        ("build", "🧪" * 65),
+        ("build", 10**64),
+        ("build", True),
+    ],
+)
+def test_oversized_or_malformed_authoritative_evidence_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: object,
+    generation: object,
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        review_health,
+        "merge_request_snapshot",
+        lambda *_args: _green_check_snapshot(turn, name=name, generation=generation),
+    )
+
+    assert reconcile_open_review_health(root) == [
+        {
+            "owner_id": "feat_035_001",
+            "outcome": "waiting",
+            "wait_type": "evidence_unavailable",
+            "reason": "review_evidence_persistence_failed",
+        }
+    ]
+    record = review_record_for_feature("feat_035_001", root=root)
+    assert record is not None
+    assert record["review_health"] == {
+        "state": "unavailable",
+        "reason": "review_evidence_out_of_bounds",
+        "checks": [],
+        "checks_omitted": 0,
+    }
+
+
+def test_review_evidence_write_refusal_blocks_green_classification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        review_health,
+        "merge_request_snapshot",
+        lambda *_args: _green_check_snapshot(turn),
+    )
+    monkeypatch.setattr(
+        review_health, "record_feature_review_evidence", lambda *_args, **_kwargs: False
+    )
+
+    assert reconcile_open_review_health(root) == [
+        {
+            "owner_id": "feat_035_001",
+            "outcome": "waiting",
+            "wait_type": "evidence_unavailable",
+            "reason": "review_evidence_persistence_failed",
+        }
+    ]
+
+
+def test_normalized_review_observation_over_32_kib_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    names = ["🧪" * 63 + chr(ord("A") + index) for index in range(20)]
+    snapshot = _green_check_snapshot(turn)
+    snapshot["review_health"] = {
+        "state": "green",
+        "reason": "🧪" * 160,
+        "checks": names,
+    }
+    snapshot["required_check_policy"] = {
+        "available": True,
+        "error": "🧪" * 160,
+        "source_head": "🧪" * 80,
+        "target_head": "🧪" * 80,
+        "required": names,
+    }
+    snapshot["required_check_results"] = {
+        "available": True,
+        "error": "🧪" * 160,
+        "source_head": "🧪" * 80,
+        "generation": "🧪" * 64,
+        "statuses": {name: "🧪" * 40 for name in names},
+        "checks": {
+            name: {
+                "status": "🧪" * 40,
+                "generation": "🧪" * 64,
+                "source_head": "🧪" * 80,
+                "observed_at": "🧪" * 64,
+            }
+            for name in names
+        },
+    }
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        review_health, "merge_request_snapshot", lambda *_args: snapshot
+    )
+
+    result = reconcile_open_review_health(root)[0]
+
+    assert result["outcome"] == "waiting"
+    assert result["wait_type"] == "evidence_unavailable"
+    record = review_record_for_feature("feat_035_001", root=root)
+    assert record["review_health"]["state"] == "unavailable"
 
 
 def test_monitor_publishes_an_already_resolved_owned_review(

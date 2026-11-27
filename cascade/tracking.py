@@ -1026,9 +1026,12 @@ def _review_health(snapshot: Mapping[str, object]) -> dict[str, object]:
     if missing:
         return {"state": "missing", "checks": missing}
     checks = results.get("checks")
-    if isinstance(checks, Mapping) and any(
+    if not isinstance(checks, Mapping) or any(
         not isinstance(checks.get(name), Mapping)
         or checks[name].get("source_head") != snapshot.get("source_revision")
+        or checks[name].get("generation") is None
+        or checks[name].get("generation") == ""
+        or isinstance(checks[name].get("generation"), bool)
         for name in required
     ):
         return {

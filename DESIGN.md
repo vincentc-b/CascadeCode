@@ -88,10 +88,14 @@ idle polls and generic messages advance the durable cursor without a role turn,
 while an admitted repair or interrupted checkpoint resumes the same graph under
 its existing writer lock. Current review health checks route failed required
 checks, actionable feedback and confirmed conflicts through the same admitted
-repair owner, but first persist a normalized observation in the canonical
+repair owner, but first persist a bounded normalized observation in the canonical
 review registry. A failed persistence step remains an evidence-unavailable wait
 and cannot enqueue repair; browser and delivery reads use the persisted observation
-without polling the forge. A green source check and a merged review do not
+without polling the forge. Passive Board, Feature-room and open-review reads share
+one projection that preserves exact bounded check identities and generations,
+caps detail at twenty sorted rows with an omitted count, and turns malformed,
+oversized or legacy evidence into an unavailable refresh prerequisite. Those
+reads do not rewrite the registry or action ledger. A green source check and a merged review do not
 establish the later target integration's CI or the operator checkout's sync
 state. Without a
 recognized/authenticated forge CLI, Cascade retains the local merge path for

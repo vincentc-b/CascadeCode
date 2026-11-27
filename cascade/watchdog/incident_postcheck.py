@@ -333,6 +333,7 @@ def _required_checks(
             or check.get("source_head") != source_head
             or generation is None
             or generation == ""
+            or isinstance(generation, bool)
         ):
             return _pending("required_checks_not_green", "wait_for_required_checks")
     return {
