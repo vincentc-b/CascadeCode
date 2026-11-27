@@ -133,6 +133,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_77d1648c61ea9a5309fecd3f65b8eaaad92b1aa382a5206f782d655ae74a2ae6",
+      "dependency_id": "dep_langgraph",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:ca49495dbbbc05d619ae074d603c1b7a9a02df93b6bdba05f98670a6657f958f",
+      "recipe_revision": "sha256:9bd345b3f0038ffb75cc33ab497c1d55dd9a201567107e02e6dd73f3d4e0bb4e",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, hashlib, pathlib; assert m.version('\"'\"'langgraph'\"'\"') == '\"'\"'1.2.14'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/RECORD'\"'\"').read_bytes()).hexdigest() == '\"'\"'sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad'\"'\"'; importlib.import_module('\"'\"'langgraph.graph'\"'\"'); print('\"'\"'langgraph'\"'\"',m.version('\"'\"'langgraph'\"'\"'))'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T08:20:38.266164+00:00",
+      "completed_at": "2026-11-27T08:20:41.551543+00:00",
+      "result": "succeeded",
+      "redacted_output": "langgraph 1.2.14\n",
+      "selected_version": "1.2.14",
+      "integrity_reference": "sha256:dfbbc8fd4b15474b9cdd277be400d536977484117838952aadab92227e48a8ad",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
