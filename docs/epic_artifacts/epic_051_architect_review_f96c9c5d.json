@@ -1,0 +1,63 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "f96c9c5d7acadea1bb4ffd87e2de22dcb9f7e3f8",
+  "reviewed_feature_plan_revision": "7d7866347ad3f78c939a3c96a361cfa406a3996c",
+  "review": "Canonical Epic and Feature 3 reads and the complete Epic diff since c54121bc confirm that the handoff and dec_007 preserve approved scope. Feature 3 now has four Tasks assigned to forge normalization, one repair owner, independent postcheck and downstream suppression. Its plan carries the design/Code acceptance contract. No architecture amendment is open. The Epic source remains the baseline; canonical child status does not prove inherited implementation in this checkout.",
+  "reviewed_designs": [
+    "DESIGN.md#21-product-workflow",
+    "cascade/DESIGN.md#delivery-and-review-boundaries",
+    "cascade/watchdog/DESIGN.md#open-review-observation",
+    "cascade/watchdog/DESIGN.md#recovery-admission-and-active-path-authority",
+    "cascade/task/DESIGN.md#durable-delivery-collaborators",
+    "cascade/boss/DESIGN.md#delivery-and-closeout"
+  ],
+  "design_result": "No design edit needed for this coordination-only diff. Current prose distinguishes mergeability-only observation from required-CI and intended-target verification, describes durable action/review state and exact-generation restart fences, and links owning designs to native Code views. No new requirement or decision ownership, source symbol, component ownership or design chronology is introduced. Proposed CI and downstream behavior remains in work records.",
+  "source_traces": {
+    "normal": "tracking.merge_request_snapshot normalizes source revision, route, state and mergeability; review_health.reconcile_open_review_health treats open mergeable/clean as healthy. Conflicts fetch exact source/target heads before existing resolution admission and guarded publication. This is baseline behavior, not the proposed required-CI contract.",
+    "failure_resume": "Unavailable snapshots and unknown mergeability retain recovery prerequisites. task_rollup.retry_pending_task_merges checks live turns and validation heads before comparing a persisted parent_lifecycle_mismatch generation; unchanged mismatch skips resume_action and another attempt. Watchdog reconcile_parent_lifecycle_incident requires current durable repair identity and independent facts; verify_incident_postcheck closes only matching evidence.",
+    "publication": "C4RenderScheduler.retry preserves operation identity, exact source and queue bounds. Automatic recovery is limited to one interruption. architecture_publication._discover_publication returns non-pending rows unchanged; publish_architecture_review only reopens superseded/artifact_changed rows. Retrying the renderer alone does not reopen these failed publication operations."
+  },
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": "No actor or external responsibility changes in the handoff-only diff. Feature 3 Task 001 confirms the existing forge boundary.",
+    "cascade-containers": "No new process/runtime, store or transport in this diff; existing action/review/checkpoint persistence remains. Tasks 001/002 reconcile implemented evidence flow.",
+    "cascade-supervisor-components / cascade-team-components": "No implemented interface changed. Tasks 002-004 reconcile observer, repair, independent postcheck and downstream consumer relationships against inherited source.",
+    "cascade-watchdog-code / cascade-boss-code / cascade-teams-code / cascade-task-code": "No code/model changes since the reviewed baseline. Tasks 001-004 own real source-symbol/declaration-kind metadata, matching contract entries, renamed/deleted-symbol and component-ownership checks, actual Explore/Code, Level up, deep links, pinned source and measured warm artifact reuse. Feature/Epic/Workspace consumers must be reconciled if inherited admission interfaces change.",
+    "supplementary_behavior": "Existing baseline normal/conflict/unknown/restart diagrams still match this checkout. Tasks 002-004 own red-CI repair, exact-head independent verification and narrow downstream blocker flows in Watchdog, Boss and Task designs."
+  },
+  "verification": [
+    "Canonical read_architecture_amendments returned [].",
+    "All six publication references (plan, root design, contract and three DSL files) match committed SHA-256 digests and current checkout bytes.",
+    "git diff c54121bc..HEAD -- cascade architecture DESIGN.md is empty before review artifacts; no runtime tests, render or browser rerun is justified for this handoff-only diff.",
+    "Read source for tracking.merge_request_snapshot, review_health.reconcile_open_review_health, task_rollup.retry_pending_task_merges and _unchanged_parent_lifecycle_mismatch, incident_postcheck.reconcile_parent_lifecycle_incident and architecture publication/scheduler recovery.",
+    "Verified named affected native Code/component view keys exist in views.dsl. Prior source-contract/render/browser evidence remains in epic_051_architecture_evidence.json and epic_051_architecture_browser.json; it is baseline evidence, not new Feature implementation evidence.",
+    "Canonical sign_off_plan(f96c9c5d) declined because the Epic is already approved. No refreshed sign-off is claimed.",
+    "Submitted the separately reviewed current-plan request once through publish_architecture_review with expected_generation=null; the tool returned failed/internal_error for the same render operation, not a stale-baseline refusal.",
+    "JSON parsing and git diff --check passed for the new review artifacts."
+  ],
+  "publication": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_f96c9c5d.json",
+    "submitted": true,
+    "receipt": {
+      "operation_id": "architecture-publication-dbdbf5c0819ecad2149f013570750260e19b06aa947304d68bf56dc83425aa91",
+      "status": "failed",
+      "render_operation_id": "c4-render-516e3cbc08e02b339eea510e082945e49d6e4664e3d46fde3018a5eca7749eed",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "4c3896dc26832a049e1e54208b02454113f5cd8bd1b3268822a920a60c5b2774",
+      "amendment_id": null,
+      "reason_code": "internal_error",
+      "message": "render worker was interrupted after its automatic recovery attempt"
+    }
+  },
+  "owner_handoffs": {
+    "architecture_runtime": "Recover c4-render-516e3cbc08e02b339eea510e082945e49d6e4664e3d46fde3018a5eca7749eed through the canonical scheduler's bounded explicit retry, keeping its worker alive. Provide a supported way to reconcile the failed publication operation as well: terminal replay currently cannot reopen it. Preserve exact pins, generation checks, failure history and accepted snapshots. No exposed Cascade tool supplies these recovery actions; do not mutate ledgers or another worktree, churn plan revisions or alter pins to manufacture a new retry identity.",
+    "epic_architect": "After runtime recovery is confirmed, re-read current plan and accepted lineage and use the supported publication path. Keep this terminal receipt and request unchanged as evidence. A future pending result must be replayed identically on a later turn; this failed result must not be treated as pending.",
+    "feature_3": "Bind Task interfaces and Code metadata to actual inherited Feature 1/2 source. The feature plan names incident_postcheck._required_checks, which does not exist in this Epic checkout: verify it against inherited source or treat it as a proposed helper until implemented; do not author a dangling Code node. Tasks retain independent exact-head/check-run verification, one repair owner and budget, passive waits, and narrowly attributed downstream fences. Final UI and complete journey remain Feature 4."
+  },
+  "limitations": [
+    "Architecture publication and acceptance remain incomplete; no canonical renderer recovery occurred.",
+    "No child delivery, new required-CI implementation, end-to-end repair journey or new browser/performance evidence is claimed.",
+    "No board plan body, product source, design/model or dependency was changed. Approved Feature scope is unchanged."
+  ]
+}

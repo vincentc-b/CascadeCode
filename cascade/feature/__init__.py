@@ -16,6 +16,7 @@ from cascade.feature.state import FeatureGraphState
 from cascade.feature.wiring import accept_human_chat, load_feature_tools
 from cascade.feature.repair import (
     admit_feature_repair,
+    admit_open_review_repair,
     feature_repair,
     inspect_feature_repair,
     resume_feature_repair,
@@ -25,6 +26,7 @@ __all__ = [
     "FeatureGraphState",
     "accept_human_chat",
     "admit_feature_repair",
+    "admit_open_review_repair",
     "boot_feature",
     "clear_feature_tools",
     "ensure_feature_graph",

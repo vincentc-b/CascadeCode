@@ -1,0 +1,17 @@
+{
+  "work_id": "epic_051",
+  "reviewed_plan_revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+  "request": "docs/epic_artifacts/epic_051_architecture_review_46af22a9.json",
+  "receipt": {
+    "operation_id": "architecture-publication-61533ef81d69c9b45ee283011138c037fbfbfca0dd296504bbbd57b043657086",
+    "status": "pending",
+    "render_operation_id": "c4-render-532156b8f3bcce447c64da4da025778cfb92e380370a848a3f695058a7138304",
+    "baseline_render_operation_id": null,
+    "review_unit_id": null,
+    "reviewed_tuple_digest": "c1093491c799e33bef9780a729b0243f66c1907c7eb1fd34fefa04822897ef57",
+    "amendment_id": null,
+    "reason_code": null,
+    "message": "bounded architecture render is pending"
+  },
+  "next_action": "Replay the saved request unchanged on a later Architect turn. Do not poll in this planning turn or substitute later unreviewed references. Feature 6 implementation and final integrated verification/publication remain completion gates."
+}

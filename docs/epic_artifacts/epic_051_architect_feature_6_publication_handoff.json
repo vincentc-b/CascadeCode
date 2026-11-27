@@ -1,0 +1,63 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "trigger": "TeamMessage feat_051_006:feat_051_006:review-resolution-architecture-handoff-e21827a9",
+  "reviewed_checkout_revision": "c74ebe39",
+  "reviewed_plan_revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+  "reported_feature_publication": "e21827a9bfe7f5a35e50754ae5f2dfd3b160028b",
+  "integration": {
+    "canonical_metadata": "All six Features are completed according to list_children.",
+    "local_proof": "git merge-base --is-ancestor e21827a9bfe7f5a35e50754ae5f2dfd3b160028b HEAD returned 1. Feature 6 implementation is not integrated into this Epic checkout.",
+    "owner": "Supervisor normal integration between parent turns. No manual merge or lifecycle transition."
+  },
+  "publication": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_46af22a9.json",
+    "replayed_unchanged": true,
+    "receipt": {
+      "operation_id": "architecture-publication-61533ef81d69c9b45ee283011138c037fbfbfca0dd296504bbbd57b043657086",
+      "status": "failed",
+      "render_operation_id": "c4-render-532156b8f3bcce447c64da4da025778cfb92e380370a848a3f695058a7138304",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "c1093491c799e33bef9780a729b0243f66c1907c7eb1fd34fefa04822897ef57",
+      "amendment_id": null,
+      "reason_code": "internal_error",
+      "message": "render worker was interrupted after its automatic recovery attempt"
+    },
+    "next_action": "Terminal failure, not pending. Architecture runtime owner must recover c4-render-532156b8f3bcce447c64da4da025778cfb92e380370a848a3f695058a7138304 through supported retry and reconcile the failed publication operation. No render retry tool is exposed to this role. Do not repeatedly poll, change pins to evade failure, or rewrite accepted snapshots. Architect resumes publication after supported recovery; final Feature 6 architecture requires a separately reviewed integrated tuple."
+  },
+  "design_review": {
+    "paths": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/watchdog/DESIGN.md",
+      "cascade/war_room/DESIGN.md"
+    ],
+    "prior_full_review": "docs/epic_artifacts/epic_051_architect_feature_6_planning_review.json",
+    "result": "No design, production, model, test or design-skill changes since reviewed revision 5a0c5d2c. Re-read affected producer/reader prose and traced record_feature_review_evidence and _review_evidence_projection: unbounded name keys and string generations remain in this checkout, and postcheck/request fallback precedes registry projection. Existing model and explicit design gap describe current source accurately. Do not replace them with the reported bounded behavior before integration.",
+    "normal_failure_resume": "Current observation stores capped rows/selected text in the canonical review registry before routing; failed persistence prevents repair routing. Passive reads use stored registry/request/postcheck evidence. Persisted observations and repair generations survive restart. Feature 6's rejection, identity and aggregate bounds remain reported child evidence until integrated verification.",
+    "no_change_reason": "Evidence-only replay and handoff; no current implementation contract changed."
+  },
+  "diagram_impact": {
+    "landscape_context": "cascade-landscape/cascade-context: unchanged actors and forge/provider responsibilities in the local diff.",
+    "containers": "cascade-containers: unchanged Service, War Room and repository/action/review/checkpoint stores; no new deployment or isolation boundary.",
+    "components": "cascade-supervisor-components/cascade-team-components/cascade-war-room-components: unchanged producers, readers and repair owners. Verify non-authorizing rejected evidence after Feature 6 integration.",
+    "code": "Epic Architect owns two pending description changes in model.dsl: element.code.watchdog.review-evidence-record (record_feature_review_evidence), element.code.dashboard.review-projection (feature_review_views), plus relationship.code-watchdog-health-to-evidence-record. Reconcile 256 UTF-8 byte names/string generations, 64-digit integers, 32 KiB normalized observation, twenty rows plus omission and unavailable/refusal semantics against integrated source. Existing cascade-watchdog-code and cascade-dashboard-code nodes/views suffice according to the child handoff; preserve semantic IDs, source symbols, kinds and parents.",
+    "behavior": "Reconcile package/Watchdog/War Room normal persistence, passive legacy/request/postcheck reads, refusal and restart flows after integration, retaining Feature 5 dependency and retry fences.",
+    "verification_after_integration": "Validate source contract, pinned rendering, context/container/component-to-Code navigation, Level up, deep-link restoration and pinned source, normal and refusal/resume paths, warm artifact reuse and render bounds. Existing child acceptance ownership remains in dec_011/dec_012 and the Manager handoff; no scope or Task revision required."
+  },
+  "verification": [
+    "Canonical read_doc confirms plan 46af22a9; read_architecture_amendments returns no open amendments.",
+    "Six saved committed and current file SHA-256 pins match.",
+    "git diff 5a0c5d2c HEAD -- DESIGN.md cascade architecture tests skills/design is empty.",
+    "Parsed and replayed the saved request unchanged, including expected_generation=null; operation and tuple identities match earlier receipts.",
+    "Artifact JSON and git diff --check validated before commit. No new runtime tests, renderer or browser run for unchanged bytes."
+  ],
+  "remaining_gates": [
+    "Feature 6 normal intended-Epic integration and final integrated acceptance.",
+    "Runtime recovery of the terminal architecture render/publication failure; final integrated review and publication.",
+    "Prior architecture closure ownership-fixture failures, suite-only model_ids checkpoint failure and cold-readiness timeout retain their recorded owners and unresolved status; no new passing evidence clears them.",
+    "Human Epic completion confirmation remains separate."
+  ],
+  "handoff": "Manager retains integration/completion gates. Epic Architect reconciles the specified model descriptions and relationship after integration, verifies current implementation and publishes exact committed references. Approved plan unchanged; no accepted snapshots, child worktrees or product trunk modified."
+}

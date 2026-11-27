@@ -728,29 +728,31 @@ def _place_task_active(
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     if not evaluate_dependencies(meta, root=root, board=board).satisfied:
         return False
-    for dep_id in meta.depends_on:
-        dep = board.by_id[dep_id]
-        if dep.tier == "feature":
-            from cascade.review import feature_review_pending
-
-            if feature_review_pending(dep_id, root=root):
-                return False
-    return True
+    return not _dependency_review_pending(board, meta, root=root)
 
 
 def _dependency_review_pending(
     board: BoardIndex, meta: WorkMeta, *, root: Path
 ) -> bool:
-    """Keep review delivery separate from lifecycle dependency readiness."""
+    """Require current intended-target delivery after lifecycle readiness."""
 
-    for dep_id in meta.depends_on:
-        dep = board.by_id.get(dep_id)
-        if dep is not None and dep.tier == "feature":
-            from cascade.review import feature_review_pending
+    feature_ids = [
+        dep_id
+        for dep_id in meta.depends_on
+        if (dep := board.by_id.get(dep_id)) is not None and dep.tier == "feature"
+    ]
+    if not feature_ids:
+        return False
+    from cascade.review import (
+        feature_delivery_satisfies_integration,
+        feature_delivery_views,
+    )
 
-            if feature_review_pending(dep_id, root=root):
-                return True
-    return False
+    deliveries = feature_delivery_views(feature_ids, root=root)
+    return any(
+        not feature_delivery_satisfies_integration(deliveries[feature_id])
+        for feature_id in feature_ids
+    )
 
 
 def _active_task_count(board: BoardIndex, *, root: Path | None = None) -> int:

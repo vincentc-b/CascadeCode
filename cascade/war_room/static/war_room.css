@@ -1224,6 +1224,43 @@ button:disabled {
   color: #fbbf24;
 }
 
+.open-review-lifecycle,
+.open-review-evidence,
+.open-review-prerequisite,
+.feature-review-accountability p {
+  margin: 0.2rem 0;
+  font-size: 0.78rem;
+}
+
+.open-review-evidence,
+.feature-review-accountability {
+  color: var(--muted);
+}
+
+.open-review-repair-form {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.open-review-repair-form input {
+  min-width: 0;
+}
+
+.open-review-repair-result {
+  min-height: 1em;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.feature-review-accountability {
+  margin: 0.3rem 0;
+}
+
+.feature-review-accountability-compact p:first-child {
+  display: none;
+}
+
 .open-review-missing-url {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;

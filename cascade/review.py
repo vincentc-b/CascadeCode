@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Mapping
 from urllib.parse import urlsplit
 
 from cascade.board.errors import BoardError, GitError, NotFound
@@ -25,7 +25,7 @@ from cascade.board.store import (
     read_doc_in_worktree,
     save_doc,
 )
-from cascade.board.types import WorkMeta
+from cascade.board.types import BoardIndex, WorkMeta
 from cascade.tracking import (
     MergeRequest,
     ReviewNotFound,
@@ -38,7 +38,7 @@ from cascade.tracking import (
     push_branch,
     reply_to_merge_request,
 )
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.lock import process_lock
 from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
@@ -51,6 +51,12 @@ from cascade.workspace.integration_worktree import (
 )
 
 _LOG = logging.getLogger(__name__)
+
+_REVIEW_EVIDENCE_MAX_BYTES = 32 * 1024
+_REVIEW_EVIDENCE_MAX_IDENTITY_BYTES = 256
+_REVIEW_EVIDENCE_MAX_INTEGER_DIGITS = 64
+_REVIEW_EVIDENCE_MAX_CHECK_ROWS = 20
+_REVIEW_EVIDENCE_UNAVAILABLE = "review_evidence_out_of_bounds"
 
 
 @dataclass(frozen=True)
@@ -69,6 +75,7 @@ class OpenReview:
     url: str
     state: str
     context: OpenReviewContext
+    details: dict[str, object]
 
 
 EpicCloseStage = Literal["implementation_review_pending", "completed", "blocked"]
@@ -380,40 +387,50 @@ def _persist_epic_review_blocker(
     return blocked
 
 
-def list_open_reviews(*, root: Path) -> list[OpenReview]:
+def list_open_reviews(*, root: Path, limit: int | None = None) -> list[OpenReview]:
     """Return open registry rows without mutating durable review state."""
+
+    if limit is not None and limit < 0:
+        raise ValueError("open review limit cannot be negative")
 
     trunk = locate_trunk(root)
     state = _load(trunk)
-    board = merged_board(trunk)
+    from cascade.workspace.integration_worktree import merged_board_readonly
+
+    board = merged_board_readonly(trunk)
+    open_ids = [
+        feature_id
+        for feature_id in sorted(state)
+        if isinstance(state[feature_id], dict)
+        and not state[feature_id].get("closed")
+        and state[feature_id].get("kind") != "epic_close"
+        and _stacked_acceptance(state[feature_id]) is None
+        and _forge_acceptance(state[feature_id]) is None
+        and str(state[feature_id].get("url") or "").strip()
+    ]
+    if limit is not None:
+        open_ids = open_ids[:limit]
+    projections = feature_review_views(open_ids, root=trunk, board_snapshot=board)
     rows: list[OpenReview] = []
-    for feature_id in sorted(state):
+    for feature_id in open_ids:
         record = state[feature_id]
-        if (
-            not isinstance(record, dict)
-            or record.get("closed")
-            or record.get("kind") == "epic_close"
-            or _stacked_acceptance(record) is not None
-            or _forge_acceptance(record) is not None
-        ):
-            continue
         url = str(record.get("url") or "").strip()
-        if not url:
-            continue
         epic_id = _review_target_epic(record)
         feature_meta = board.by_id.get(feature_id)
         epic_meta = board.by_id.get(epic_id) if epic_id else None
+        projection = projections.get(feature_id) or {}
         rows.append(
             OpenReview(
                 id=feature_id,
                 url=url,
-                state="awaiting_review",
+                state=str(projection.get("state") or "awaiting_review"),
                 context=OpenReviewContext(
                     feature_id=feature_id,
                     epic_id=epic_id,
                     feature_title=feature_meta.title if feature_meta else None,
                     epic_title=epic_meta.title if epic_meta else None,
                 ),
+                details=projection,
             )
         )
     return rows
@@ -429,6 +446,225 @@ def review_record_for_feature(
     trunk = locate_trunk(root)
     record = _load(trunk).get(feature_id)
     return dict(record) if isinstance(record, dict) else None
+
+
+def _review_evidence_name(value: object) -> str:
+    """Return one exact check identity or refuse the complete observation."""
+
+    if not isinstance(value, str):
+        raise ValueError("check name must be a string")
+    if len(value.encode("utf-8")) > _REVIEW_EVIDENCE_MAX_IDENTITY_BYTES:
+        raise ValueError("check name exceeds the UTF-8 byte limit")
+    return value
+
+
+def _review_evidence_generation(value: object) -> str | int | None:
+    """Keep an authoritative generation losslessly within its scalar bound."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise ValueError("check generation must be a string or integer")
+    if isinstance(value, str):
+        if len(value.encode("utf-8")) > _REVIEW_EVIDENCE_MAX_IDENTITY_BYTES:
+            raise ValueError("string check generation exceeds the UTF-8 byte limit")
+        return value
+    if len(str(abs(value))) > _REVIEW_EVIDENCE_MAX_INTEGER_DIGITS:
+        raise ValueError("integer check generation exceeds the decimal-digit limit")
+    return value
+
+
+def _review_evidence_unavailable_marker(observed_at: str) -> dict[str, object]:
+    return {
+        "review_health": {
+            "state": "unavailable",
+            "reason": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "checks": [],
+            "checks_omitted": 0,
+        },
+        "required_check_policy": {
+            "available": False,
+            "error": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "source_head": None,
+            "target_head": None,
+            "required": [],
+            "required_omitted": 0,
+        },
+        "required_check_results": {
+            "available": False,
+            "error": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "source_head": None,
+            "generation": None,
+            "statuses": {},
+            "checks": {},
+            "checks_omitted": 0,
+        },
+        "review_feedback": {
+            "available": False,
+            "error": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "approval_state": None,
+            "actionable": False,
+            "actionable_count": 0,
+        },
+        "review_observed_at": observed_at,
+    }
+
+
+def _review_evidence_payload_within_bound(value: object) -> bool:
+    """Return whether one legacy/fallback evidence payload is safely normalizable."""
+
+    try:
+        serialized = json.dumps(
+            value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError):
+        return False
+    return len(serialized) <= _REVIEW_EVIDENCE_MAX_BYTES
+
+
+def record_feature_review_evidence(
+    feature_id: str, snapshot: Mapping[str, object], *, root: Path
+) -> bool:
+    """Persist a bounded normalized forge observation in the review registry.
+
+    Forge access belongs to the review-health worker.  Read APIs consume this
+    current observation later and therefore never need transport authority.
+    """
+
+    def text(value: object, limit: int = 160) -> str | None:
+        if not isinstance(value, str):
+            return None
+        value = " ".join(value.split())
+        return value[:limit] if value else None
+
+    observed_at = datetime.now(timezone.utc).isoformat()
+    trunk = locate_trunk(root)
+    try:
+        health_raw = snapshot.get("review_health")
+        health_raw = health_raw if isinstance(health_raw, Mapping) else {}
+        health_checks_raw = health_raw.get("checks")
+        if health_checks_raw is not None and not isinstance(health_checks_raw, list):
+            raise ValueError("health checks must be a list")
+        health_names = (
+            [_review_evidence_name(name) for name in health_checks_raw]
+            if isinstance(health_checks_raw, list)
+            else []
+        )
+        health = {
+            "state": text(health_raw.get("state"), 64) or "unknown",
+            "reason": text(health_raw.get("reason"), 160),
+            "checks": health_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS],
+            "checks_omitted": max(
+                0, len(health_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS
+            ),
+        }
+
+        policy_raw = snapshot.get("required_check_policy")
+        policy_raw = policy_raw if isinstance(policy_raw, Mapping) else {}
+        required_raw = policy_raw.get("required")
+        if required_raw is not None and not isinstance(required_raw, list):
+            raise ValueError("required checks must be a list")
+        required_names = (
+            [_review_evidence_name(name) for name in required_raw]
+            if isinstance(required_raw, list)
+            else []
+        )
+        policy = {
+            "available": policy_raw.get("available") is True,
+            "error": text(policy_raw.get("error")),
+            "source_head": text(policy_raw.get("source_head"), 80),
+            "target_head": text(policy_raw.get("target_head"), 80),
+            "required": required_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS],
+            "required_omitted": max(
+                0, len(required_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS
+            ),
+        }
+
+        results_raw = snapshot.get("required_check_results")
+        results_raw = results_raw if isinstance(results_raw, Mapping) else {}
+        statuses_raw = results_raw.get("statuses")
+        if statuses_raw is not None and not isinstance(statuses_raw, Mapping):
+            raise ValueError("check statuses must be a mapping")
+        statuses_raw = statuses_raw if isinstance(statuses_raw, Mapping) else {}
+        check_results_raw = results_raw.get("checks")
+        if check_results_raw is not None and not isinstance(
+            check_results_raw, Mapping
+        ):
+            raise ValueError("check results must be a mapping")
+        check_results_raw = (
+            check_results_raw if isinstance(check_results_raw, Mapping) else {}
+        )
+        status_names = [_review_evidence_name(name) for name in statuses_raw]
+        check_names = [_review_evidence_name(name) for name in check_results_raw]
+        normalized_generations: dict[str, str | int | None] = {}
+        for name, raw_check in check_results_raw.items():
+            if not isinstance(raw_check, Mapping):
+                raise ValueError("check result must be a mapping")
+            normalized_generations[name] = _review_evidence_generation(
+                raw_check.get("generation")
+            )
+        all_names = sorted(set(status_names) | set(check_names))
+        names = all_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]
+        checks: dict[str, object] = {}
+        statuses: dict[str, object] = {}
+        for name in names:
+            check = check_results_raw.get(name)
+            check = check if isinstance(check, Mapping) else {}
+            status = text(
+                statuses_raw.get(name)
+                or check.get("status")
+                or check.get("conclusion"),
+                40,
+            )
+            statuses[name] = status or "unknown"
+            checks[name] = {
+                "status": status or "unknown",
+                "generation": normalized_generations.get(name),
+                "source_head": text(check.get("source_head"), 80),
+                "observed_at": text(check.get("observed_at"), 64),
+            }
+        results = {
+            "available": results_raw.get("available") is True,
+            "error": text(results_raw.get("error")),
+            "source_head": text(results_raw.get("source_head"), 80),
+            "generation": _review_evidence_generation(results_raw.get("generation")),
+            "statuses": statuses,
+            "checks": checks,
+            "checks_omitted": max(0, len(all_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS),
+        }
+
+        feedback_raw = snapshot.get("review_feedback")
+        feedback_raw = feedback_raw if isinstance(feedback_raw, Mapping) else {}
+        actionable_raw = feedback_raw.get("actionable_feedback")
+        feedback = {
+            "available": feedback_raw.get("available") is True,
+            "error": text(feedback_raw.get("error")),
+            "approval_state": text(feedback_raw.get("approval_state"), 40),
+            "actionable": feedback_raw.get("actionable") is True,
+            "actionable_count": len(actionable_raw[:100])
+            if isinstance(actionable_raw, list)
+            else 0,
+        }
+        observation = {
+            "review_health": health,
+            "required_check_policy": policy,
+            "required_check_results": results,
+            "review_feedback": feedback,
+            "review_observed_at": observed_at,
+        }
+        serialized = json.dumps(
+            observation, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+        if len(serialized) > _REVIEW_EVIDENCE_MAX_BYTES:
+            raise ValueError("normalized review observation exceeds the byte limit")
+    except (TypeError, ValueError, UnicodeError):
+        _update_record(
+            trunk,
+            feature_id,
+            _review_evidence_unavailable_marker(observed_at),
+        )
+        return False
+    return _update_record(trunk, feature_id, observation) is not None
 
 
 def _load(root: Path) -> dict[str, dict[str, object]]:
@@ -581,10 +817,14 @@ def _accept_current_review_generation(
             ),
             "accepted_target_head": record.get("target_head"),
             "reconciliation_status": "accepted",
-            **({
-                "integration_target_branch": integration_target,
-                "stack_integration_sha": integration_sha,
-            } if integration_target else {}),
+            **(
+                {
+                    "integration_target_branch": integration_target,
+                    "stack_integration_sha": integration_sha,
+                }
+                if integration_target
+                else {}
+            ),
         },
     )
     return True
@@ -717,7 +957,12 @@ def _store_review_generation(
         )
         generations[str(generation)] = generation_row
         updated.update(generation_row)
-        for field in ("forge_acceptance", "stacked_acceptance", "integration_target_branch", "stack_integration_sha"):
+        for field in (
+            "forge_acceptance",
+            "stacked_acceptance",
+            "integration_target_branch",
+            "stack_integration_sha",
+        ):
             if field not in generation_row:
                 updated.pop(field, None)
         updated["generations"] = generations
@@ -768,19 +1013,29 @@ def _forge_acceptance(record: dict[str, object]) -> dict[str, object] | None:
 
 
 def _record_forge_acceptance(
-    feature_id: str, record: dict[str, object], snapshot: dict[str, object], *, root: Path,
+    feature_id: str,
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    *,
+    root: Path,
 ) -> None:
     merge_sha = snapshot.get("merge_sha")
     source = snapshot.get("source_revision")
-    if (not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)
-            or not isinstance(source, str) or not re.fullmatch(r"[0-9a-f]{40}", source)):
+    if (
+        not isinstance(merge_sha, str)
+        or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)
+        or not isinstance(source, str)
+        or not re.fullmatch(r"[0-9a-f]{40}", source)
+    ):
         return
     if not review_callback_is_current(feature_id, record, root=root, snapshot=snapshot):
         return
     receipt = {
-        "url": record.get("url"), "target_branch": record.get("target_branch"),
+        "url": record.get("url"),
+        "target_branch": record.get("target_branch"),
         "generation": int(record.get("current_generation") or 0),
-        "merge_sha": merge_sha, "source_revision": source,
+        "merge_sha": merge_sha,
+        "source_revision": source,
     }
     if _forge_acceptance(record) != receipt:
         _update_record(root, feature_id, {"forge_acceptance": receipt})
@@ -805,9 +1060,13 @@ def _feature_review_projection(
 ) -> dict[str, object]:
     receipt = _stacked_acceptance(record)
     result = {
-        "state": "merged" if record.get("closed") else
-        "awaiting_integration" if receipt else
-        "awaiting_closeout" if _forge_acceptance(record) else "awaiting_review",
+        "state": "merged"
+        if record.get("closed")
+        else "awaiting_integration"
+        if receipt
+        else "awaiting_closeout"
+        if _forge_acceptance(record)
+        else "awaiting_review",
         "url": str(record.get("url") or ""),
         "number": record.get("number"),
         "draft": bool(record.get("draft", False)),
@@ -817,41 +1076,737 @@ def _feature_review_projection(
         result["integration_feature_id"] = predecessor
         upstream = state.get(predecessor, {})
         result["integration_review_url"] = str(upstream.get("url") or "")
-    if result["state"] == "awaiting_closeout" and isinstance(record.get("closeout_blocker"), dict):
+    if result["state"] == "awaiting_closeout" and isinstance(
+        record.get("closeout_blocker"), dict
+    ):
         result["closeout_blocker"] = record["closeout_blocker"]
     return result
+
+
+FeatureDeliveryPhase = Literal[
+    "implementation_ready",
+    "review_pending",
+    "repair_requested",
+    "repair_in_progress",
+    "merge_verification_pending",
+    "verified_integrated",
+    "terminal_cancelled",
+    "terminal_closed",
+]
+
+
+def _accepted_current_generation(record: dict[str, object]) -> bool:
+    """Require the exact accepted heads of the current compatibility row."""
+
+    accepted = bool(
+        record.get("closed") is True
+        and record.get("reconciliation_status") == "accepted"
+        and record.get("accepted_merge_sha")
+        and record.get("accepted_source_head") == record.get("source_head")
+        and record.get("accepted_target_head") == record.get("target_head")
+    )
+    if not accepted:
+        return False
+    generations = record.get("generations")
+    if not isinstance(generations, dict):
+        return int(record.get("current_generation") or 0) == 0
+    current = generations.get(str(int(record.get("current_generation") or 0)))
+    if not isinstance(current, dict):
+        return False
+    fenced_fields = (
+        "url",
+        "source_branch",
+        "target_branch",
+        "source_head",
+        "target_head",
+        "accepted_merge_sha",
+        "accepted_source_head",
+        "accepted_target_head",
+        "reconciliation_status",
+    )
+    return all(current.get(field) == record.get(field) for field in fenced_fields)
+
+
+def _feature_completion_recorded(
+    feature_id: str, parent_id: str | None, root: Path
+) -> bool:
+    if not parent_id:
+        return False
+    events, _ = read_events(parent_id, 0, root=root)
+    return any(
+        event.type == "FeatureCompleted"
+        and event.payload.get("feature_id") == feature_id
+        for event in events
+    )
+
+
+def _git_ref_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    """Read local Git ancestry without fetching or changing refs."""
+
+    try:
+        return (
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                cwd=root,
+                capture_output=True,
+                timeout=5,
+                check=False,
+            ).returncode
+            == 0
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _supported_terminal_phase(
+    meta, record: dict[str, object] | None, board
+) -> FeatureDeliveryPhase | None:
+    """Recognize only existing, explicit terminal evidence."""
+
+    if (
+        meta is not None
+        and meta.status == "cancelled"
+        and meta.path.parent.name == "3_completed"
+        and meta.cancellation_step == "complete"
+        and meta.cancellation_error is None
+        and meta.cancelled_at is not None
+        and meta.cancellation_reason
+    ):
+        parent = board.by_id.get(meta.parent) if meta.parent else None
+        feedback = (
+            [item for item in parent.cancellation_feedback if item.child_id == meta.id]
+            if parent is not None
+            else []
+        )
+        if len(feedback) == 1:
+            disposition = feedback[0]
+            if (
+                disposition.child_tier == "feature"
+                and disposition.parent_id == parent.id
+                and disposition.cancelled_at == meta.cancelled_at
+                and disposition.reason == meta.cancellation_reason
+                and disposition.disposition == "continue_reduced_scope"
+                and disposition.resolved_at is not None
+            ):
+                return "terminal_cancelled"
+    disposition = record.get("terminal_disposition") if record else None
+    generations = record.get("generations") if record else None
+    if isinstance(generations, dict):
+        current = generations.get(str(int(record.get("current_generation") or 0)))
+        if (
+            not isinstance(current, dict)
+            or current.get("terminal_disposition") != disposition
+        ):
+            disposition = None
+    if disposition in {"closed", "terminal_closed"}:
+        return "terminal_closed"
+    if disposition in {"cancelled", "terminal_cancelled"}:
+        return "terminal_cancelled"
+    return None
+
+
+def _delivery_projection(
+    feature_id: str,
+    *,
+    trunk: Path,
+    board,
+    record: dict[str, object] | None,
+    repair: dict[str, object] | None,
+    reviews_enabled: bool,
+) -> dict[str, object]:
+    """Derive one Feature delivery row from already-persisted local evidence."""
+
+    meta = board.by_id.get(feature_id)
+    parent_id = (
+        str(meta.parent) if meta is not None and meta.parent is not None else None
+    )
+    record_generation = int(record.get("current_generation") or 0) if record else 0
+    repair_generation = int(repair.get("generation") or 0) if repair else 0
+    generation = max(record_generation, repair_generation)
+    review_url = str(record.get("url") or "") if record else ""
+    completed_event = _feature_completion_recorded(feature_id, parent_id, trunk)
+    terminal = _supported_terminal_phase(meta, record, board)
+
+    phase: FeatureDeliveryPhase
+    evidence_status: str
+    blocker: str | None
+    next_prerequisite: str | None
+
+    if terminal is not None:
+        phase = terminal
+        evidence_status = "explicit_terminal_disposition"
+        blocker = None
+        next_prerequisite = None
+    else:
+        repair_phase = str(repair.get("phase") or "") if repair else ""
+        exact_generation = bool(
+            record
+            and record_generation == generation
+            and _accepted_current_generation(record)
+        )
+        target_branch = f"epic/{parent_id}" if parent_id else ""
+        integration_anchor = (
+            str(
+                record.get("stack_integration_sha")
+                or record.get("accepted_merge_sha")
+                or ""
+            )
+            if record
+            else ""
+        )
+        target_integrated = bool(
+            exact_generation
+            and target_branch
+            and integration_anchor
+            and _git_ref_ancestor(trunk, integration_anchor, target_branch)
+        )
+        local_integrated = bool(
+            record is None
+            and parent_id
+            and _git_ref_ancestor(
+                trunk, integration_branch("feature", feature_id), target_branch
+            )
+        )
+
+        if (
+            target_integrated
+            or (record is None and not reviews_enabled and local_integrated)
+        ) and completed_event:
+            phase = "verified_integrated"
+            evidence_status = (
+                "accepted_current_generation"
+                if target_integrated
+                else "local_integration"
+            )
+            blocker = None
+            next_prerequisite = None
+        elif target_integrated:
+            # The accepted repair has left the publication phase even when its
+            # repair receipt is still awaiting Boss's terminal acknowledgement.
+            # Boss owns the missing completion event, so expose that exact last
+            # prerequisite instead of projecting the older delivery phase.
+            phase = "merge_verification_pending"
+            evidence_status = "accepted_current_generation"
+            blocker = "completion_event_missing"
+            next_prerequisite = "record_feature_completion"
+        elif repair and repair_phase in {"prepared", "authority_recorded"}:
+            phase = "repair_requested"
+            evidence_status = "repair_admitted"
+            blocker = "repair_not_started"
+            next_prerequisite = str(
+                repair.get("next_action") or "resume_admitted_repair"
+            )
+        elif repair and (
+            record is None
+            or record_generation != repair_generation
+            or repair_phase in {"parent_enabled", "delivery_pending"}
+        ):
+            phase = "repair_in_progress"
+            evidence_status = "repair_generation_active"
+            blocker = "repair_delivery_incomplete"
+            next_prerequisite = str(
+                repair.get("next_action") or "publish_repair_review"
+            )
+        elif (
+            exact_generation
+            or _forge_acceptance(record or {})
+            or _stacked_acceptance(record or {})
+        ):
+            phase = "merge_verification_pending"
+            evidence_status = (
+                "accepted_current_generation"
+                if exact_generation
+                else "forge_acceptance_observed"
+            )
+            blocker = (
+                "completion_event_missing"
+                if target_integrated
+                else "intended_target_not_verified"
+            )
+            next_prerequisite = (
+                "record_feature_completion"
+                if target_integrated
+                else "verify_intended_target_integration"
+            )
+        elif record is not None and (
+            record.get("closed") is True
+            or str(record.get("state") or "").lower() in {"closed", "merged"}
+        ):
+            phase = "merge_verification_pending"
+            if record_generation == 0 and not record.get("accepted_merge_sha"):
+                evidence_status = "legacy_unverified"
+            else:
+                evidence_status = "closed_unmerged"
+            blocker = "accepted_current_generation_missing"
+            next_prerequisite = "restore_review_evidence_or_record_terminal_disposition"
+        elif record is not None:
+            phase = "review_pending"
+            evidence_status = "open" if review_url else "unknown_review_evidence"
+            blocker = (
+                "review_acceptance_pending" if review_url else "review_evidence_missing"
+            )
+            next_prerequisite = (
+                "await_current_review_acceptance" if review_url else "publish_review"
+            )
+        else:
+            children_complete = bool(meta is not None) and all(
+                child_id in board.by_id
+                and board.by_id[child_id].status == "completed"
+                and board.by_id[child_id].path.parent.name == "3_completed"
+                for child_id in meta.children
+            )
+            source_completed = bool(
+                meta is not None
+                and meta.status == "completed"
+                and meta.path.parent.name == "3_completed"
+            )
+            phase = "implementation_ready"
+            if source_completed and children_complete:
+                evidence_status = "review_evidence_missing"
+                blocker = (
+                    "review_not_published"
+                    if reviews_enabled
+                    else "local_integration_pending"
+                )
+                next_prerequisite = (
+                    "publish_review" if reviews_enabled else "integrate_locally"
+                )
+            else:
+                evidence_status = "implementation_incomplete"
+                blocker = "implementation_not_ready"
+                next_prerequisite = "complete_child_delivery"
+
+    actionable = bool(
+        repair
+        and str(repair.get("phase") or "")
+        in {"prepared", "authority_recorded", "parent_enabled", "delivery_pending"}
+    )
+    return {
+        "feature_id": feature_id,
+        "accountable_owner": f"feature_team:{feature_id}",
+        "phase": phase,
+        "review_url": review_url,
+        "generation": generation,
+        # The active repair generation can advance before its review receipt.
+        # Keep publication evidence separate from the projected obligation.
+        "published_generation": record_generation if record is not None else None,
+        "evidence_status": evidence_status,
+        "blocker": blocker,
+        "next_prerequisite": next_prerequisite,
+        "actionable": actionable,
+    }
+
+
+_REPAIR_ACTIVE_PHASES = frozenset(
+    {
+        "prepared",
+        "authority_recorded",
+        "parent_enabled",
+        "delivery_pending",
+        "review_pending",
+        "integration_pending",
+        "retirement_pending",
+    }
+)
+
+
+def _bounded_text(value: object, *, limit: int = 160) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split())
+    return normalized[:limit] if normalized else None
+
+
+def _review_evidence_projection(
+    record: Mapping[str, object], repair: Mapping[str, object] | None
+) -> dict[str, object]:
+    """Expose bounded persisted health facts without consulting forge authority."""
+
+    source = "review_registry"
+    health = record.get("review_health")
+    policy = record.get("required_check_policy")
+    results = record.get("required_check_results")
+    feedback = record.get("review_feedback")
+    observed_at = record.get("review_observed_at") or record.get("observed_at")
+    bounded_payload: object = {
+        "review_health": health,
+        "required_check_policy": policy,
+        "required_check_results": results,
+        "review_feedback": feedback,
+        "review_observed_at": observed_at,
+    }
+
+    if repair is not None:
+        postcheck = repair.get("verification_postcheck")
+        request_evidence = repair.get("request_evidence")
+        request_health = (
+            request_evidence.get("review_health")
+            if isinstance(request_evidence, Mapping)
+            else None
+        )
+        observation = (
+            request_health.get("observation")
+            if isinstance(request_health, Mapping)
+            else None
+        )
+        if isinstance(postcheck, Mapping):
+            source = "verification_postcheck"
+            bounded_payload = postcheck
+            health = {"state": "green"} if postcheck.get("verified") else health
+            policy = postcheck.get("required_check_policy") or policy
+            results = postcheck.get("required_check_results") or results
+            observed_at = postcheck.get("verified_at") or repair.get("verified_at")
+        elif isinstance(observation, Mapping):
+            source = "repair_request"
+            bounded_payload = observation
+            health = {
+                "state": observation.get("health_state"),
+                "reason": observation.get("reason"),
+            }
+            blocker = observation.get("blocker")
+            if isinstance(blocker, Mapping):
+                policy = blocker.get("policy") or policy
+                checks = blocker.get("checks")
+                if checks is not None:
+                    results = {"available": True, "checks": checks}
+            observed_at = (
+                request_health.get("observed_at")
+                if isinstance(request_health, Mapping)
+                else observed_at
+            )
+
+    health = health if isinstance(health, Mapping) else {}
+    policy = policy if isinstance(policy, Mapping) else {}
+    results = results if isinstance(results, Mapping) else {}
+    feedback = feedback if isinstance(feedback, Mapping) else {}
+    health_state = _bounded_text(health.get("state")) or "unknown"
+    health_reason = _bounded_text(health.get("reason"))
+
+    raw_checks = results.get("checks")
+    check_rows: list[dict[str, object]] = []
+    evidence_unavailable = False
+    omitted = 0
+    try:
+        if not _review_evidence_payload_within_bound(bounded_payload):
+            raise ValueError("review evidence exceeds the normalized byte limit")
+        health_checks = health.get("checks")
+        if health_checks is not None:
+            if not isinstance(health_checks, list):
+                raise ValueError("health checks must be a list")
+            for name in health_checks:
+                _review_evidence_name(name)
+        required = policy.get("required")
+        if required is not None:
+            if not isinstance(required, list):
+                raise ValueError("required checks must be a list")
+            for name in required:
+                _review_evidence_name(name)
+        _review_evidence_generation(results.get("generation"))
+        raw_statuses = results.get("statuses")
+        if isinstance(raw_statuses, Mapping):
+            for name, status in raw_statuses.items():
+                _review_evidence_name(name)
+                if not isinstance(status, str):
+                    raise ValueError("check status must be a string")
+        elif raw_statuses is not None:
+            raise ValueError("check statuses must be a mapping")
+        if isinstance(raw_checks, Mapping):
+            names = sorted(_review_evidence_name(name) for name in raw_checks)
+            normalized_generations = {}
+            for name, raw_check in raw_checks.items():
+                if not isinstance(raw_check, Mapping):
+                    raise ValueError("check result must be a mapping")
+                normalized_generations[name] = _review_evidence_generation(
+                    raw_check.get("generation")
+                )
+                if raw_check.get("status") is not None and not isinstance(
+                    raw_check.get("status"), str
+                ):
+                    raise ValueError("check result status must be a string")
+                if raw_check.get("conclusion") is not None and not isinstance(
+                    raw_check.get("conclusion"), str
+                ):
+                    raise ValueError("check result conclusion must be a string")
+            omitted = max(0, len(names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS)
+            for name in names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]:
+                check = raw_checks[name]
+                check = check if isinstance(check, Mapping) else {}
+                check_rows.append(
+                    {
+                        "name": name,
+                        "status": _bounded_text(
+                            check.get("status") or check.get("conclusion"), limit=40
+                        )
+                        or "unknown",
+                        "generation": normalized_generations[name],
+                        "observed_at": _bounded_text(
+                            check.get("observed_at"), limit=64
+                        ),
+                    }
+                )
+        elif isinstance(raw_checks, list):
+            names = [_review_evidence_name(name) for name in raw_checks]
+            omitted = max(0, len(names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS)
+            check_rows = [
+                {"name": name, "status": "unknown"}
+                for name in names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]
+            ]
+        elif raw_checks is not None:
+            raise ValueError("check results must be a mapping or list")
+        persisted_omitted = results.get("checks_omitted")
+        if persisted_omitted is not None:
+            normalized_omitted = _review_evidence_generation(persisted_omitted)
+            if type(normalized_omitted) is not int or normalized_omitted < 0:
+                raise ValueError("omitted check count must be a non-negative integer")
+            omitted = max(omitted, normalized_omitted)
+        if health_state == "green" and (
+            policy.get("available") is not True
+            or results.get("available") is not True
+        ):
+            raise ValueError("green evidence requires available policy and results")
+    except (TypeError, ValueError, UnicodeError):
+        evidence_unavailable = True
+        check_rows = []
+        omitted = 0
+
+    if evidence_unavailable:
+        health_state = "unavailable"
+        health_reason = _REVIEW_EVIDENCE_UNAVAILABLE
+        policy = {"available": False}
+        results = {"available": False}
+
+    stale = health_state == "conflict_or_moving_target" or bool(
+        health_reason and "stale" in health_reason
+    )
+    observed = _bounded_text(observed_at, limit=64)
+    freshness = (
+        "unknown"
+        if evidence_unavailable
+        else "stale"
+        if stale
+        else "current"
+        if observed
+        else "unknown"
+    )
+    policy_status = (
+        "available"
+        if policy.get("available") is True
+        else "unavailable"
+        if policy.get("available") is False
+        else "unknown"
+    )
+    results_status = (
+        "available"
+        if results.get("available") is True
+        else "unavailable"
+        if results.get("available") is False
+        else "unknown"
+    )
+    feedback_status = (
+        "available"
+        if feedback.get("available") is True
+        else "unavailable"
+        if feedback.get("available") is False
+        else "unknown"
+    )
+    if health_state == "actionable_human_feedback":
+        feedback_status = "available"
+
+    return {
+        "source": source,
+        "health_state": health_state,
+        "health_reason": health_reason,
+        "ci": {
+            "policy_status": policy_status,
+            "results_status": results_status,
+            "checks": check_rows,
+            "truncated": omitted > 0,
+            "omitted": omitted,
+        },
+        "feedback": {
+            "status": feedback_status,
+            "approval_state": _bounded_text(feedback.get("approval_state"), limit=40),
+            "actionable": health_state == "actionable_human_feedback"
+            or feedback.get("actionable") is True,
+        },
+        "observed_at": observed,
+        "freshness": freshness,
+        "next_prerequisite": (
+            "refresh_review_observation" if evidence_unavailable else None
+        ),
+    }
+
+
+def _repair_projection(repair: Mapping[str, object] | None) -> dict[str, object]:
+    if repair is None:
+        return {
+            "request_id": None,
+            "action_id": None,
+            "generation": 0,
+            "phase": None,
+            "requested": False,
+            "admitted": False,
+            "acknowledged": False,
+            "executing": False,
+            "verified": False,
+            "waiting": False,
+            "refused": False,
+            "next_prerequisite": None,
+        }
+    phase = str(repair.get("phase") or "")
+    generation = repair.get("generation")
+    generation = generation if type(generation) is int and generation >= 0 else 0
+    return {
+        "request_id": _bounded_text(repair.get("request_id"), limit=160),
+        "action_id": _bounded_text(repair.get("action_id"), limit=160),
+        "generation": generation,
+        "phase": phase or None,
+        "requested": True,
+        "admitted": phase in _REPAIR_ACTIVE_PHASES or phase == "verified",
+        "acknowledged": True,
+        "executing": phase
+        in {"delivery_pending", "review_pending", "integration_pending"},
+        "verified": phase == "verified",
+        "waiting": phase == "waiting",
+        "refused": phase == "refused",
+        "next_prerequisite": _bounded_text(repair.get("next_action"), limit=160),
+    }
+
+
+def _accountable_review_projection(
+    feature_id: str,
+    record: dict[str, object],
+    *,
+    meta: WorkMeta | None,
+    delivery: dict[str, object],
+    repair: dict[str, object] | None,
+    state: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    projection = _feature_review_projection(record, state)
+    repair_view = _repair_projection(repair)
+    evidence = _review_evidence_projection(record, repair)
+    epic_id = _review_target_epic(record) or (str(meta.parent) if meta and meta.parent else None)
+    next_prerequisite = (
+        evidence.get("next_prerequisite")
+        or repair_view.get("next_prerequisite")
+        or delivery.get("next_prerequisite")
+    )
+    if evidence.get("health_state") == "unavailable" and repair_view.get("verified"):
+        repair_view = {
+            **repair_view,
+            "verified": False,
+            "waiting": True,
+            "next_prerequisite": "refresh_review_observation",
+        }
+    projection.update(
+        {
+            "original_review": {
+                "url": str(record.get("url") or ""),
+                "number": record.get("number"),
+            },
+            "accountable_feature_id": feature_id,
+            "accountable_epic_id": epic_id,
+            # Publishing the original review is durable evidence that its
+            # implementation reached review, even when a repair temporarily
+            # moves the Feature document back to the active column.
+            "implementation_status": "completed",
+            "implementation_complete": True,
+            "work_status": meta.status if meta is not None else "unknown",
+            "delivery_status": delivery.get("phase"),
+            "delivery": delivery,
+            "evidence": evidence,
+            "repair": repair_view,
+            "repair_identity": {
+                "review_url": _bounded_text(record.get("url"), limit=2048),
+                "review_forge": _bounded_text(record.get("forge"), limit=80),
+                "source_ref": _bounded_text(record.get("source_branch"), limit=256),
+                "target_ref": _bounded_text(record.get("target_branch"), limit=256),
+                "observed_source_head": _bounded_text(
+                    record.get("source_head"), limit=160
+                ),
+                "observed_target_head": _bounded_text(
+                    record.get("target_head"), limit=160
+                ),
+                "observed_review_generation": int(
+                    record.get("current_generation") or 0
+                ),
+            },
+            "next_prerequisite": next_prerequisite,
+        }
+    )
+    return projection
+
+
+def feature_delivery_view(feature_id: str, *, root: Path) -> dict[str, object]:
+    """Return the read-only delivery lifecycle for one Feature."""
+
+    return feature_delivery_views([feature_id], root=root)[feature_id]
+
+
+def feature_delivery_satisfies_integration(
+    delivery: Mapping[str, object],
+) -> bool:
+    """True only when current evidence permits integration-required execution."""
+
+    return delivery.get("phase") in {
+        "verified_integrated",
+        "terminal_cancelled",
+        "terminal_closed",
+    }
+
+
+def feature_delivery_views(
+    feature_ids: list[str] | tuple[str, ...] | set[str],
+    *,
+    root: Path,
+) -> dict[str, dict[str, object]]:
+    """Project delivery rows while sharing one review and board snapshot."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    from cascade.feature.repair import current_feature_repair_record
+    from cascade.workspace.integration_worktree import merged_board_readonly
+
+    board = merged_board_readonly(trunk)
+    reviews_enabled = review_enabled(trunk)
+    return {
+        feature_id: _delivery_projection(
+            feature_id,
+            trunk=trunk,
+            board=board,
+            record=state.get(feature_id),
+            repair=current_feature_repair_record(feature_id, root=trunk),
+            reviews_enabled=reviews_enabled,
+        )
+        for feature_id in feature_ids
+    }
 
 
 def feature_review_view(feature_id: str, *, root: Path) -> dict[str, object] | None:
     """Return operator-facing review state without polling the forge."""
 
-    trunk = locate_trunk(root)
-    state = _load(trunk)
-    record = state.get(feature_id)
-    if record is not None:
-        return _feature_review_projection(record, state)
-    if feature_review_pending(feature_id, root=trunk):
-        return {
-            "state": "preparing_review",
-            "url": "",
-            "number": None,
-            "draft": False,
-        }
-    return None
+    return feature_review_views([feature_id], root=root)[feature_id]
 
 
 def feature_review_views(
     feature_ids: list[str] | tuple[str, ...] | set[str],
     *,
     root: Path,
+    board_snapshot: BoardIndex | None = None,
 ) -> dict[str, dict[str, object] | None]:
     """Build multiple operator review views with one registry/sidecar load."""
 
     trunk = locate_trunk(root)
     state = _load(trunk)
     ids = list(feature_ids)
+    from cascade.feature.repair import latest_feature_repair_records
+    from cascade.workspace.integration_worktree import merged_board_readonly
+
+    board = board_snapshot or merged_board_readonly(trunk)
+    repairs = latest_feature_repair_records(ids, root=trunk)
+    reviews_enabled = review_enabled(trunk)
     missing = [feature_id for feature_id in ids if feature_id not in state]
-    enabled = bool(missing) and review_enabled(trunk)
+    enabled = bool(missing) and reviews_enabled
     entries = {
         entry.work_id: entry
         for entry in load_registry(trunk)
@@ -861,7 +1816,23 @@ def feature_review_views(
     for feature_id in ids:
         record = state.get(feature_id)
         if record is not None:
-            views[feature_id] = _feature_review_projection(record, state)
+            repair = repairs.get(feature_id)
+            delivery = _delivery_projection(
+                feature_id,
+                trunk=trunk,
+                board=board,
+                record=record,
+                repair=repair,
+                reviews_enabled=reviews_enabled,
+            )
+            views[feature_id] = _accountable_review_projection(
+                feature_id,
+                record,
+                meta=board.by_id.get(feature_id),
+                delivery=delivery,
+                repair=repair,
+                state=state,
+            )
             continue
         entry = entries.get(feature_id)
         pending = False
@@ -1053,9 +2024,17 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
             )
         mr = _record_to_mr(existing)
         if generation > 0:
+            if repair and repair.get("repair_route") == "open_review":
+                _require_open_review_repair_identity(repair, existing, mr)
             snapshot = merge_request_snapshot(trunk, mr)
+            if repair and repair.get("repair_route") == "open_review":
+                _require_open_review_repair_identity(
+                    repair, existing, mr, snapshot=snapshot
+                )
             _require_repair_review_route(existing, snapshot, mr)
             if snapshot.get("state") not in {"open", "opened"}:
+                if repair and repair.get("repair_route") == "open_review":
+                    raise GitError("scoped repair review is no longer open")
                 if snapshot.get("state") == "merged":
                     return mr
                 raise GitError("current repair review is not open or merged")
@@ -1110,15 +2089,25 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     prior: dict[str, object] | None = None
     reuse: MergeRequest | None = None
     route = "initial" if existing is None else "follow_up"
+    if repair and repair.get("repair_route") == "open_review" and existing is None:
+        raise GitError("scoped repair requires its recorded original review")
     if existing is not None:
         prior = _generation_projection(existing)
         prior_mr = _record_to_mr(prior)
+        if repair and repair.get("repair_route") == "open_review":
+            _require_open_review_repair_identity(repair, existing, prior_mr)
         snapshot = merge_request_snapshot(trunk, prior_mr)
+        if repair and repair.get("repair_route") == "open_review":
+            _require_open_review_repair_identity(
+                repair, existing, prior_mr, snapshot=snapshot
+            )
         _require_repair_review_route(prior, snapshot, prior_mr, intended_target=target)
         state_name = snapshot.get("state")
         if state_name in {"open", "opened"}:
             reuse = prior_mr
             route = "refresh"
+        elif repair and repair.get("repair_route") == "open_review":
+            raise GitError("scoped repair review is no longer open")
         elif state_name != "merged":
             raise GitError("historical review state is unknown or conflicting")
 
@@ -1216,6 +2205,63 @@ def _require_repair_review_route(
         raise GitError("review route conflicts with authoritative forge facts")
 
 
+def _require_open_review_repair_identity(
+    repair: dict[str, object],
+    record: dict[str, object],
+    mr: MergeRequest,
+    *,
+    snapshot: dict[str, object] | None = None,
+) -> None:
+    """Bind scoped publication to the exact review admitted for repair.
+
+    Before the first refresh the registry still projects the observed review
+    generation and heads.  After checkpointing it projects the repair
+    generation and newly pushed source head, so replay instead joins through
+    the durable publication action ID.  Both cases retain the same review URL,
+    forge, and source/target route.
+    """
+
+    repair_generation = int(repair.get("generation") or 0)
+    record_generation = int(record.get("current_generation") or 0)
+    expected = {
+        "url": repair.get("review_url"),
+        "forge": repair.get("review_forge"),
+        "source_branch": repair.get("source_ref"),
+        "target_branch": repair.get("target_ref"),
+    }
+    actual = {
+        "url": record.get("url"),
+        "forge": record.get("forge"),
+        "source_branch": record.get("source_branch"),
+        "target_branch": record.get("target_branch"),
+    }
+    if expected != actual or any(value in {None, ""} for value in expected.values()):
+        raise GitError("scoped repair review identity changed after admission")
+    if (
+        mr.url != expected["url"]
+        or mr.forge != expected["forge"]
+        or mr.source_branch != expected["source_branch"]
+        or mr.target_branch != expected["target_branch"]
+    ):
+        raise GitError("scoped repair review identity changed after admission")
+    if snapshot is not None and snapshot.get("target_revision") != record.get(
+        "target_head"
+    ):
+        raise GitError("scoped repair review target head changed")
+    if record_generation == repair_generation:
+        if record.get("action_id") != repair.get("action_id"):
+            raise GitError("scoped repair publication action changed")
+        return
+    observed_generation = repair.get("review_generation")
+    if (
+        type(observed_generation) is not int
+        or record_generation != observed_generation
+        or record.get("source_head") != repair.get("source_head")
+        or record.get("target_head") != repair.get("target_head")
+    ):
+        raise GitError("scoped repair review observation is stale")
+
+
 def _ensure_opened_toast(
     feature_id: str,
     mr: MergeRequest,
@@ -1270,15 +2316,20 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             # and must run before stacked-review recovery can short-circuit the
             # sweep for an already accepted generation.
             try:
-                effective_record = {**record, "target_branch": integration_branch("epic", epic_id)} if epic_id else record
+                effective_record = (
+                    {**record, "target_branch": integration_branch("epic", epic_id)}
+                    if epic_id
+                    else record
+                )
                 mr = _record_to_mr(effective_record)
             except (GitError, ValueError, KeyError):
                 continue
             before = bool(
-                epic_id
-                and feature_completed_recorded(feature_id, epic_id, root=trunk)
+                epic_id and feature_completed_recorded(feature_id, epic_id, root=trunk)
             )
-            if _finalize_merged_review_record(feature_id, effective_record, mr, trunk=trunk):
+            if _finalize_merged_review_record(
+                feature_id, effective_record, mr, trunk=trunk
+            ):
                 if (
                     epic_id
                     and not before
@@ -1286,7 +2337,9 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                 ):
                     finalized.append(feature_id)
             continue
-        if _stacked_acceptance(record) is None and persist_if_stacked_review_integration_gap(
+        if _stacked_acceptance(
+            record
+        ) is None and persist_if_stacked_review_integration_gap(
             feature_id, record, root=trunk, accepted=bool(record.get("closed"))
         ):
             continue
@@ -1341,9 +2394,16 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
         if str(record.get("target_branch") or "").startswith("feat/"):
             feature = merged_board(trunk).by_id.get(feature_id)
             parent_id = feature.parent if feature else None
-            before_stack = bool(parent_id and feature_completed_recorded(feature_id, parent_id, root=trunk))
+            before_stack = bool(
+                parent_id
+                and feature_completed_recorded(feature_id, parent_id, root=trunk)
+            )
             if _reconcile_stacked_acceptance(feature_id, record, snapshot, trunk=trunk):
-                if parent_id and not before_stack and feature_completed_recorded(feature_id, parent_id, root=trunk):
+                if (
+                    parent_id
+                    and not before_stack
+                    and feature_completed_recorded(feature_id, parent_id, root=trunk)
+                ):
                     finalized.append(feature_id)
                 continue
         mr = _record_to_mr(record)
@@ -1353,8 +2413,9 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             if epic_id
             else True
         )
-        if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-            _accept_current_review_generation(feature_id, record, snapshot, root=trunk)
+        if _finalize_merged_review_record(
+            feature_id, record, mr, trunk=trunk, snapshot=snapshot
+        ):
             if (
                 epic_id
                 and not before
@@ -1384,8 +2445,9 @@ def _closed_review_has_incomplete_target(
 
 def _review_target_epic(record: dict[str, object]) -> str | None:
     target = str(
-        record.get("integration_target_branch") if record.get("closed")
-        and record.get("integration_target_branch") else record.get("target_branch") or ""
+        record.get("integration_target_branch")
+        if record.get("closed") and record.get("integration_target_branch")
+        else record.get("target_branch") or ""
     )
     prefix = "epic/"
     if target.startswith(prefix):
@@ -1424,16 +2486,25 @@ def _git_ancestor(root: Path, ancestor: object, descendant: object) -> bool:
     if not all(re.fullmatch(r"[0-9a-f]{40}", item) for item in (ancestor, descendant)):
         return False
     try:
-        return subprocess.run(
-            ["git", "merge-base", "--is-ancestor", ancestor, descendant],
-            cwd=root, capture_output=True, timeout=5,
-        ).returncode == 0
+        return (
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                cwd=root,
+                capture_output=True,
+                timeout=5,
+            ).returncode
+            == 0
+        )
     except (OSError, subprocess.SubprocessError):
         return False
 
 
 def _reconcile_stacked_acceptance(
-    feature_id: str, record: dict[str, object], snapshot: dict[str, object], *, trunk: Path
+    feature_id: str,
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    *,
+    trunk: Path,
 ) -> bool:
     """Acknowledge a merged child review without confusing it with Epic delivery."""
     target = str(record.get("target_branch") or "")
@@ -1452,7 +2523,9 @@ def _reconcile_stacked_acceptance(
     feature = merged_board(trunk).by_id.get(feature_id)
     predecessor_id = target.removeprefix("feat/")
     if (
-        not feature or feature.tier != "feature" or not feature.parent
+        not feature
+        or feature.tier != "feature"
+        or not feature.parent
         or predecessor_id not in feature.depends_on
     ):
         return False
@@ -1460,18 +2533,24 @@ def _reconcile_stacked_acceptance(
     if not predecessor:
         return False
     receipt = {
-        "url": record.get("url"), "target_branch": target,
+        "url": record.get("url"),
+        "target_branch": target,
         "generation": int(record.get("current_generation") or 0),
-        "merge_sha": merge_sha, "source_revision": source,
+        "merge_sha": merge_sha,
+        "source_revision": source,
     }
     if _stacked_acceptance(record) != receipt:
         # Capture the accepted object while the predecessor branch is still
         # reachable; fetch only refs/objects, never mutate its working tree.
-        if not _git_ancestor(trunk, merge_sha, merge_sha) and not predecessor.get("closed"):
+        if not _git_ancestor(trunk, merge_sha, merge_sha) and not predecessor.get(
+            "closed"
+        ):
             try:
                 subprocess.run(
                     ["git", "fetch", "--no-tags", "origin", target],
-                    cwd=trunk, capture_output=True, timeout=20,
+                    cwd=trunk,
+                    capture_output=True,
+                    timeout=20,
                 )
             except (OSError, subprocess.SubprocessError):
                 pass
@@ -1489,23 +2568,32 @@ def _reconcile_stacked_acceptance(
         # Squash of the parent may omit the child's commit from Epic ancestry.
         # Its exact accepted source must contain the child merge, and the
         # parent's accepted integration commit must be on the Epic line.
-        anchor = predecessor.get("stack_integration_sha") or predecessor.get("accepted_merge_sha")
-        if (
-            not _git_ancestor(trunk, merge_sha, predecessor.get("accepted_source_head"))
-            or not _git_ancestor(trunk, anchor, epic_head)
-        ):
+        anchor = predecessor.get("stack_integration_sha") or predecessor.get(
+            "accepted_merge_sha"
+        )
+        if not _git_ancestor(
+            trunk, merge_sha, predecessor.get("accepted_source_head")
+        ) or not _git_ancestor(trunk, anchor, epic_head):
             return False
     # Keep the original review URL/base immutable; only the local completion
     # operation targets the Epic. No second PR or unreviewed merge is created.
+    if not _accept_current_review_generation(
+        feature_id,
+        record,
+        snapshot,
+        root=trunk,
+        integration_target=epic_branch,
+        integration_sha=anchor,
+    ):
+        return False
     integrated = {**record, "target_branch": epic_branch}
     if not _finalize_merged_review_record(
-        feature_id, integrated, _record_to_mr(integrated), trunk=trunk,
+        feature_id,
+        integrated,
+        _record_to_mr(integrated),
+        trunk=trunk,
     ):
         return True
-    _accept_current_review_generation(
-        feature_id, record, snapshot, root=trunk,
-        integration_target=epic_branch, integration_sha=anchor,
-    )
     return True
 
 
@@ -1515,6 +2603,7 @@ def _finalize_merged_review_record(
     mr: MergeRequest,
     *,
     trunk: Path,
+    snapshot: dict[str, object] | None = None,
 ) -> bool:
     from cascade.boss.rollup import try_complete_feature
 
@@ -1524,6 +2613,10 @@ def _finalize_merged_review_record(
         # The accepted source tree may still have an active feature document.
         # Publish its terminal lifecycle commit before acknowledging closure.
         push_branch(epic_root, mr.target_branch)
+        if snapshot is not None and not _accept_current_review_generation(
+            feature_id, record, snapshot, root=trunk
+        ):
+            return False
         complete = try_complete_feature(
             feature_id,
             root=trunk,
@@ -1533,7 +2626,11 @@ def _finalize_merged_review_record(
         if not complete:
             from cascade.lifecycle_review_gate import require_lifecycle_review_gate
             from cascade.workspace.architecture_review import ArchitectureProposalError
-            blocker = {"code": "closeout_pending", "message": "Merged; lifecycle closeout is pending"}
+
+            blocker = {
+                "code": "closeout_pending",
+                "message": "Merged; lifecycle closeout is pending",
+            }
             try:
                 require_lifecycle_review_gate(feature_id, "closeout", root=trunk)
             except ArchitectureProposalError as exc:
@@ -1649,11 +2746,9 @@ def poll_feature_reviews(root: Path) -> None:
                 feature_id, record, root=trunk, accepted=True
             ):
                 continue
-            if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                _accept_current_review_generation(
-                    feature_id, record, snapshot, root=trunk
-                )
-            else:
+            if not _finalize_merged_review_record(
+                feature_id, record, mr, trunk=trunk, snapshot=snapshot
+            ):
                 # Do not acknowledge completion until the local epic worktree
                 # contains the exact tree accepted by the forge.
                 continue

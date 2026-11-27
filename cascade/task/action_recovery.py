@@ -600,6 +600,30 @@ def replace_action_metadata(
         return _copy(action)
 
 
+def merge_action_metadata(
+    action_id: str, updates: Mapping[str, Any], *, root: Path
+) -> dict[str, Any]:
+    """Atomically merge descriptive fields without losing concurrent evidence."""
+
+    _validate_identity(action_id)
+    additions = _validate_metadata(updates, field="metadata updates")
+    repo = resolve_root(root)
+    with task_lifecycle_lock(root=repo):
+        payload = _read_payload(repo)
+        actions = _actions(payload)
+        action = actions.get(action_id)
+        if action is None:
+            raise ActionNotFound(action_id)
+        metadata = _validate_metadata(action.get("metadata") or {}, field="metadata")
+        metadata.update(additions)
+        action["metadata"] = metadata
+        _refresh_incident(action)
+        actions[action_id] = action
+        payload["actions"] = actions
+        _write_payload(repo, payload)
+        return _copy(action)
+
+
 def load_action(action_id: str, *, root: Path) -> dict[str, Any] | None:
     """Load a durable action and its complete append-only attempt history."""
 

@@ -21,7 +21,7 @@ component supervisor "cascade-supervisor-components" {
 // Focused implementation boundary; lifecycle and code diagrams are in the
 // owning cascade/{epic,feature,task}/DESIGN.md documents.
 component supervisor "cascade-team-components" {
-    include team_component epic_team feature_team task_team agent_component watchdog_component repository
+    include team_component epic_team feature_team task_team agent_component watchdog_component boss_component workspace_component repository
     autoLayout lr
 }
 
@@ -31,7 +31,7 @@ custom "cascade-epic-code" {
         "cascade.codeComponent" "element.component.epic-team"
     }
     include code_epic_graph code_epic_state code_epic_checkpoint code_epic_wiring code_epic_registry code_epic_guard code_epic_runtime code_epic_provider
-    include code_epic_recover code_epic_supervise code_epic_mismatch_route code_epic_prepare_checkout
+    include code_epic_recover code_epic_supervise code_epic_review_repair_request code_epic_mismatch_route code_epic_prepare_checkout
     autoLayout lr
 }
 
@@ -41,7 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
-    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_reserve
+    include code_feature_mint code_feature_recover code_feature_retry code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_latest_open_review_repair code_feature_reserve code_feature_repair_verify
     autoLayout lr
 }
 
@@ -51,7 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
-    include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
+    include code_task_actions code_task_delivery_queue code_task_mismatch code_task_upstream_review_fence code_task_upstream_dependency code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
     include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint code_task_transition_receipt code_task_execution_start code_task_transition_notify code_task_executor_live_identity
@@ -121,8 +121,9 @@ custom "cascade-watchdog-code" {
     properties {
         "cascade.codeComponent" "element.component.watchdog"
     }
-    include code_watchdog_tick code_watchdog_dispatch code_watchdog_activate_epic code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_tick code_watchdog_dispatch code_watchdog_dependency_delivery_gate code_watchdog_feature_dispatch_gate code_watchdog_activate_epic code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_repair_postcheck code_watchdog_required_checks code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_review_health code_watchdog_actionable_review code_watchdog_review_snapshot code_watchdog_review_evidence_health code_watchdog_review_evidence_record
     autoLayout lr
 }
 
@@ -132,7 +133,8 @@ custom "cascade-boss-code" {
         "cascade.codeComponent" "element.component.boss"
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
-    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_reconcile code_boss_lock code_boss_obligation code_boss_review_generation
+    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_open_review_identity code_boss_reconcile code_boss_lock code_boss_obligation code_boss_repair_postcheck_gate code_boss_delivery_view code_boss_delivery_execution_predicate code_boss_dependency_delivery_gate
+    include code_boss_review_generation code_boss_review_pending
     autoLayout lr
 }
 
@@ -150,7 +152,7 @@ custom "cascade-war-room-http-code" {
     properties {
         "cascade.codeComponent" "element.component.war-room-http"
     }
-    include code_http_serve code_http_handler code_http_identity code_http_local
+    include code_http_serve code_http_handler code_http_identity code_http_local code_http_review_repair
     autoLayout lr
 }
 
@@ -168,7 +170,7 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
     include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_post
     include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
@@ -201,6 +203,7 @@ custom "cascade-workspace-code" {
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
-    include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
+    include code_workspace_invoke code_workspace_owner_live code_workspace_queue_kickoff code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
+    include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked code_workspace_retained_feature
     autoLayout lr
 }

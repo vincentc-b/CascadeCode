@@ -1,0 +1,40 @@
+{
+  "paths": [
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.review-health",
+      "symbol": "reconcile_open_review_health",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 10.175803760997951
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.review-pending",
+      "symbol": "feature_review_pending",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 9.816775648156181
+    },
+    {
+      "component": "workspace",
+      "view": "cascade-workspace-code",
+      "node": "element.code.workspace.delivery-locked",
+      "symbol": "_run_queue_delivery_locked",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 13.221817129990086
+    }
+  ],
+  "http_errors": [],
+  "initial_ready_seconds": 65.37124949111603,
+  "render_operations_before": 3,
+  "render_operations_after": 3,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_051\nCode revision\n58e46f4f0eac1df5186c5f9562b7ef96def35e27\nWorking tree\nDirty (uncommitted edits excluded)\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n58e46f4f0eac1df5186c5f9562b7ef96def35e27\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 99.65932483715005
+}

@@ -65,7 +65,7 @@ flowchart LR
   COMMITS --> DRAFT[Draft feature MR]
   DRAFT -->|review comment| TEAM[Feature Team + fixer tasks]
   TEAM --> DRAFT
-  DRAFT -->|merged| CLOSE[Feature closes; Epic continues]
+  DRAFT -->|current acceptance and intended Epic integration proved| CLOSE[Feature closes; Epic continues]
 ```
 
 After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. That approval is durable in `.cascade/approvals.json` and releases automatic, dependency-ordered Feature execution.
@@ -77,16 +77,29 @@ Feature completion first pushes the target `epic/{epic_id}` branch and source
 `MergeRequestComment` events for the persistent Feature Team, including the MR
 URL and comment identity. The team evaluates the comment against the whole
 Feature plan, mints fixer Tasks when code must change, and can answer through
-`reply_merge_request_comment`. A merged MR releases the feature closeout gate
-and informs the Epic Team.
+`reply_merge_request_comment`. Exact current-generation review acceptance and
+independent integration proof on the intended Epic branch release the Feature
+closeout gate and inform the Epic Team.
 
-A completed-path Feature can still have an open review. Ordinary queue delivery
-for a completed team is limited to pending durable recovery actions; generic
-messages alone do not guarantee a new repair turn. Current review health checks
-route conflict recovery, but a green source check and a merged review do not
+A completed-path Feature can still have an open review, so its Feature ID,
+original review, checkout, branch, queue and checkpoint remain registered.
+Ordinary and startup queue delivery use the same read-only delivery projection:
+idle polls and generic messages advance the durable cursor without a role turn,
+while an admitted repair or interrupted checkpoint resumes the same graph under
+its existing writer lock. Current review health checks route failed required
+checks, actionable feedback and confirmed conflicts through the same admitted
+repair owner, but first persist a bounded normalized observation in the canonical
+review registry. A failed persistence step remains an evidence-unavailable wait
+and cannot enqueue repair; browser and delivery reads use the persisted observation
+without polling the forge. Passive Board, Feature-room and open-review reads share
+one projection that preserves exact bounded check identities and generations,
+caps detail at twenty sorted rows with an omitted count, and turns malformed,
+oversized or legacy evidence into an unavailable refresh prerequisite. Those
+reads do not rewrite the registry or action ledger. A green source check and a merged review do not
 establish the later target integration's CI or the operator checkout's sync
-state. Without a recognized/authenticated forge CLI, Cascade retains the local
-merge path for offline workspaces.
+state. Without a
+recognized/authenticated forge CLI, Cascade retains the local merge path for
+offline workspaces.
 
 Configuration:
 
@@ -409,7 +422,7 @@ The Task agent may read the parent Feature for types and APIs. It may **not** re
 
 Each requirement and decision has one owning design and a stable identifier. A parent owns system goals, cross-cutting constraints, shared contracts, and interfaces between children. A meaningful child directory owns its distinct behavior, state, interfaces, and decisions; the parent links to and summarizes that child without copying its owned detail. Moving ownership updates references in the same change.
 
-This root document is currently the owning design for the repository. Until focused changes introduce child designs, it covers the production packages under `cascade/`, executable verification under `tests/`, role and workflow guidance under `skills/` (including the trivial `skills/design/templates/` directory), and work-record infrastructure under `docs/`. Generated or runtime-only paths such as `cascade.egg-info/`, `__pycache__/`, and `.cascade/` do not own designs and are covered by this root. A new child `DESIGN.md` transfers only the boundary and identifiers it explicitly claims.
+This root document owns system goals, cross-cutting constraints and interfaces between repository boundaries. The [package design](cascade/DESIGN.md) and its linked child designs own production behavior under `cascade/`. This root covers executable verification under `tests/`, role and workflow guidance under `skills/` (including the trivial `skills/design/templates/` directory), and work-record infrastructure under `docs/` where no child design claims a distinct boundary. Generated or runtime-only paths such as `cascade.egg-info/`, `__pycache__/`, and `.cascade/` do not own designs and are covered by this root. Each child `DESIGN.md` owns only the boundary and identifiers it explicitly claims.
 
 The diagrams in [Product workflow](#21-product-workflow), [The 3-Tier Directory Structure](#3-the-3-tier-directory-structure), [Agent Lifecycles](#5-agent-lifecycles), [LangGraph Topology](#6-langgraph-topology), and [Workspace supervisor](#94-workspace-supervisor) are the current architecture views. The repository-owned C4 source, semantic identity rules, derived artifact schema, provenance boundary, failure states, and downstream review/viewer contracts live under [`architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/`](architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/README.md). Rendered exports remain hash-verified derived artifacts rather than an authority; consumers must retain the source-diff fallback whenever verified interaction is unavailable.
 
@@ -473,7 +486,7 @@ The Epic Manager mints Feature files into `/docs/features/1_backlog/`. The watch
 
 | | |
 |---|---|
-| **Lifecycle** | Medium-lived. Booted when a Feature is `ready_to_plan` (then moved to `2_active`). Dies when every child Task is in `3_completed` and the Feature itself is moved to completed. |
+| **Lifecycle** | Booted when a Feature is `ready_to_plan` (then moved to `2_active`). Completed-source staging can retain an idle, wakeable team while delivery is nonterminal. Retirement requires the [shared delivery proof](cascade/DESIGN.md#delivery-and-review-boundaries) and descendant cleanup gates. |
 | **Roster** | Feature Lead, Feature Architect. |
 | **Reads** | Parent Epic at `parent_rev` (git SHA) plus that commit's decision log, own Feature doc, own decision log, own comment threads, own Task list. |
 | **Does not read** | Other Features' planning transcripts or comments, Task implementation chats, unrelated Epics, the Epic War Room transcript. |
@@ -666,6 +679,16 @@ Dependencies live on the plan, not in the watchdog's head:
 - Repeated in the body's breakdown / Depends-on section
 - A node is dispatchable only when every listed ID is in `3_completed`
 - The Boss may sequence work; it may not invent edges that are not on the `.md`
+
+Lifecycle dependency readiness does not establish delivery. Integration-required
+execution also consumes the [shared Feature delivery contract](cascade/DESIGN.md#delivery-and-review-boundaries).
+The [Watchdog dependency gate](cascade/watchdog/DESIGN.md#feature-delivery-dependency-gate)
+and Boss candidate projection require current intended-target evidence; explicit
+stacked Feature dispatch retains its separate predecessor-base policy. Queued
+Tasks in declared same-Epic dependent Features retain upstream review generations
+through the [Task delivery fence](cascade/task/DESIGN.md#durable-delivery-collaborators),
+which rechecks ownership and route before waiting and spends no retry attempt on
+unchanged upstream evidence.
 
 ### 9.2 Git as the revision store
 
@@ -968,7 +991,7 @@ A path sandbox enforces the above. Prompting alone is not sufficient.
 | Object | Completes when |
 |---|---|
 | Task | `task/{id}` is merged into `feat/{parent}` (tests green) and the file is in `3_completed` |
-| Feature | Every `children` Task is completed, **no open human comment threads**, the Feature Architect writes a one-paragraph closeout, and the draft feature MR is merged (forge-backed mode) |
+| Feature | Child delivery and governing comment gates pass, the Feature Architect records closeout, and current-generation acceptance plus independent intended-Epic integration proof satisfy the [shared delivery contract](cascade/DESIGN.md#delivery-and-review-boundaries). Review-disabled delivery requires local integration proof. Completed-source staging alone is nonterminal. |
 | Epic | Every `children` Feature is completed, **no open human comment threads**, and the human confirms in the War Room |
 
 Orphans are illegal: a Feature without `parent`, a Task whose Feature is completed, a completed Epic with an active child. The watchdog flags these; it does not auto-repair strategy.

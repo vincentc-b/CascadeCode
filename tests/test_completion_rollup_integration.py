@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import cascade.review as review
 
 from cascade.automation import advance_work, poll_reviews, reset_automation_memory
 from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.boss.rollup import on_task_merged
 from cascade.watchdog.events import read_events
-from tests.support import add_doc, make_repo
+from tests.support import add_doc, commit_board, make_repo
 
 
 def _enable_automation(root: Path) -> None:
@@ -90,7 +92,7 @@ def test_task_merge_leaves_open_review_without_feature_completed_event(
     assert _feature_completed_events("epic_001", root=root) == []
 
 
-def test_tasks_first_then_merged_review_via_poll_reviews(
+def test_forge_merged_flag_without_exact_heads_stays_pending(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
@@ -113,12 +115,12 @@ def test_tasks_first_then_merged_review_via_poll_reviews(
 
     poll_reviews(root)
 
-    assert len(_feature_completed_events("epic_001", root=root)) == 1
+    assert _feature_completed_events("epic_001", root=root) == []
     state = json.loads((root / ".cascade" / "reviews.json").read_text(encoding="utf-8"))
     assert state["feat_001"]["closed"] is True
 
 
-def test_merge_recorded_before_task_merge_converges_on_task_hook(
+def test_closed_unverified_review_does_not_converge_on_task_hook(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = make_repo(tmp_path, git=False)
@@ -149,6 +151,55 @@ def test_merge_recorded_before_task_merge_converges_on_task_hook(
     assert _feature_completed_events("epic_001", root=root) == []
 
     move_doc("task_001", "completed", root=root)
+    on_task_merged("task_001", root=root)
+
+    assert _feature_completed_events("epic_001", root=root) == []
+
+
+def test_task_hook_reconciles_exact_integrated_review_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    _single_task_feature(root)
+    move_doc("feat_001", "completed", root=root)
+    commit_board(root, "target base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    (root / "delivery.txt").write_text("accepted\n", encoding="utf-8")
+    commit_board(root, "accepted merge")
+    accepted = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "feat/feat_001", accepted], cwd=root, check=True)
+    subprocess.run(["git", "branch", "epic/epic_001", accepted], cwd=root, check=True)
+    review._store_review_generation(
+        root,
+        "feat_001",
+        {
+            "url": "https://example.test/pulls/3",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": accepted,
+            "target_head": base,
+            "closed": True,
+        },
+        generation=1,
+        action_id="repair:1",
+    )
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "accepted_merge_sha": accepted,
+            "accepted_source_head": accepted,
+            "accepted_target_head": base,
+            "reconciliation_status": "accepted",
+        },
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    on_task_merged("task_001", root=root)
     on_task_merged("task_001", root=root)
 
     assert len(_feature_completed_events("epic_001", root=root)) == 1

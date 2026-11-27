@@ -1,0 +1,165 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+  "proposal": {
+    "owner_work_id": "epic_051",
+    "authorized_owner": "epic_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": ".",
+    "design_owner_directory": ".",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_051",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/epics/2_active/epic_051_keep_feature_teams_accountable_through_review_merge_and_repa.md",
+      "revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+      "content_digest": "b8545b0e9cc48710774feaeeb678f6b8b4f7b794e7de81bf2a1c2c84ae2aa56f"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "owning_work": "epic_051",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "DESIGN.md",
+        "revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1"
+      },
+      "content_digest": "7d5a384da0e549a2c1725ead24fa4801138914a776ecdb6993813055bd52a134"
+    },
+    "proposed_model": {
+      "contract": {
+        "reference": {
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "owning_work": "epic_051",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1"
+        },
+        "content_digest": "ea50c7c46b82c1a07c024ce5695f2dd4c1e6ebb465792538ecc8b734c7b9ad23"
+      },
+      "sources": [
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1"
+          },
+          "content_digest": "1b0bd671d05ce9e921ff7e4021e019f35973f1551298a314456c208dd8fab1b8"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1"
+          },
+          "content_digest": "b3df1826d4cb52c25241dea896d16ae3c6067af8a2578020ca8a9d43fdc64e5e"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1"
+          },
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a"
+        }
+      ],
+      "source_closure_digest": "e952f08caa0eb3659f5e529f607a936706ca746a38b31f0f820e83cceee89e5a",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180.0,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "f6cb51bcf86cd20d68265729ea3df80e39075e8c415f0cbc5bce618ca6083f19",
+      "render_identity": "53bb270a5c982b34807598abbb962a4e182bedb0ff1c433296f80bea730d148e"
+    },
+    "requirement_citations": [
+      "REQ-ROOT-010",
+      "REQ-REVIEW-REPAIR-001",
+      "REQ-REVIEW-REPAIR-002",
+      "REQ-CASCADE-RECOVERY-001",
+      "REQ-BOSS-CLOSEOUT-001",
+      "REQ-WORKSPACE-TURN-EVIDENCE-001",
+      "REQ-REVIEW-DELIVERY-001",
+      "REQ-FEATURE-REPAIR-002",
+      "REQ-WATCHDOG-REPAIR-POSTCHECK-001",
+      "REQ-REVIEW-EVIDENCE-001",
+      "REQ-REVIEW-EVIDENCE-002",
+      "REQ-WATCHDOG-REVIEW-001",
+      "REQ-TASK-DELIVERY-003",
+      "REQ-WARROOM-REVIEW-001",
+      "REQ-WARROOM-REVIEW-002",
+      "REQ-WARROOM-REVIEW-003",
+      "REQ-WATCHDOG-DISPATCH-001"
+    ],
+    "decision_citations": [
+      "DEC-CASCADE-RECOVERY-001",
+      "DEC-BOSS-CLOSEOUT-001",
+      "DEC-WORKSPACE-TURN-EVIDENCE-001",
+      "DEC-REVIEW-EVIDENCE-001",
+      "DEC-WATCHDOG-REVIEW-001",
+      "DEC-TASK-DELIVERY-003",
+      "DEC-WARROOM-REVIEW-001",
+      "DEC-WARROOM-REVIEW-002",
+      "DEC-REVIEW-DELIVERY-001",
+      "DEC-WATCHDOG-DISPATCH-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-boss-code",
+      "cascade-workspace-code",
+      "cascade-landscape",
+      "cascade-feature-code",
+      "cascade-epic-code",
+      "cascade-watchdog-code",
+      "cascade-task-code",
+      "cascade-war-room-components",
+      "cascade-dashboard-code",
+      "cascade-war-room-http-code"
+    ],
+    "affected_work_ids": [
+      "epic_051"
+    ],
+    "architecture_impact": "diagram_change",
+    "impact_reason": "Integrated Feature delivery consumers and same-Epic dependent Task review fences add six native source-linked Function nodes and eight relationships. Reviewed current plan 46af22a9 and Feature 6 bounded-evidence contract 75d8da32. Root dependency summary now links the shared execution gate; Boss read prose matches local ancestry checks; Task behavior rechecks route and ownership before generation waiting. Current actor, container, persistent-store and component ownership boundaries are unchanged. Source/model kinds, parents and symbols validate; 278 elements, 346 relationships and 24 views render under unchanged pinned resource limits. Feature 6 implementation and final integrated verification remain outstanding; this proposal does not claim the bounded-evidence requirement is delivered. Baseline closure-fixture owner failures and one suite-order missing-checkpoint failure remain recorded separately from passing focused and isolated tests. Same-pin warm browser verification passed all six added nodes across four Code views, context/container/component traversal, deep-link restoration, pinned-source opening and Level up. Both supervisor and team component views expose the dependent Task observation relationship. Initial readiness measured 14.55s and six journeys 120.02s total, with render operations unchanged at 9. The cold readiness timeout remains an explicit runtime gap; warm success does not clear it."
+  }
+}

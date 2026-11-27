@@ -1,0 +1,154 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "7b5e38818f284add8b9c6aa4523f1478f7d77d48",
+  "proposal": {
+    "owner_work_id": "epic_051",
+    "authorized_owner": "epic_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": ".",
+    "design_owner_directory": ".",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_051",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/epics/2_active/epic_051_keep_feature_teams_accountable_through_review_merge_and_repa.md",
+      "revision": "7b5e38818f284add8b9c6aa4523f1478f7d77d48",
+      "content_digest": "c19865be3783c30ba0786eb72c1427be09f4dbc0f9bbcd5b00e1e193f5384304"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "owning_work": "epic_051",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "DESIGN.md",
+        "revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2"
+      },
+      "content_digest": "87403a757f904990b6f48b113276621835b4bcd132e7495a9c0d0b384bd4b659"
+    },
+    "proposed_model": {
+      "contract": {
+        "reference": {
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "owning_work": "epic_051",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2"
+        },
+        "content_digest": "5e5cf261bff3ae4eb62bee3eb40eddca41dac6d7634a597d2281f6ee9d506649"
+      },
+      "sources": [
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2"
+          },
+          "content_digest": "4296b5de12fe6c3d17c4af7cbc14e0909e8c6e7cab9e89c8d1428410c24aa779"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2"
+          },
+          "content_digest": "4994b48fffb9cb5845f79342921b8b4f7d9e1d42e6a6448ebfcf45cf7484f2c2"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_051",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2"
+          },
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a"
+        }
+      ],
+      "source_closure_digest": "6404a35d6e76ade12b5f8d8e21b21a5cb29843e75838fbf1ad74b0e1014d76ad",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180.0,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "e5b88c262a40873e501f3369e240791d6bbfae7dd10bb052eaffbe1cc081b9b3",
+      "render_identity": "aa6d292bbc3f1522150f49f00265091c9dacfdab6f079fa8e4c4a7f236ab18f3"
+    },
+    "requirement_citations": [
+      "REQ-ROOT-010",
+      "REQ-REVIEW-REPAIR-001",
+      "REQ-REVIEW-REPAIR-002",
+      "REQ-CASCADE-RECOVERY-001",
+      "REQ-BOSS-CLOSEOUT-001",
+      "REQ-WORKSPACE-TURN-EVIDENCE-001",
+      "REQ-REVIEW-DELIVERY-001",
+      "REQ-FEATURE-REPAIR-002",
+      "REQ-WATCHDOG-REPAIR-POSTCHECK-001",
+      "REQ-REVIEW-EVIDENCE-001",
+      "REQ-REVIEW-EVIDENCE-002",
+      "REQ-WATCHDOG-REVIEW-001",
+      "REQ-TASK-DELIVERY-003"
+    ],
+    "decision_citations": [
+      "DEC-CASCADE-RECOVERY-001",
+      "DEC-BOSS-CLOSEOUT-001",
+      "DEC-WORKSPACE-TURN-EVIDENCE-001",
+      "DEC-REVIEW-EVIDENCE-001",
+      "DEC-WATCHDOG-REVIEW-001",
+      "DEC-TASK-DELIVERY-003"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-boss-code",
+      "cascade-workspace-code",
+      "cascade-landscape",
+      "cascade-feature-code",
+      "cascade-epic-code",
+      "cascade-watchdog-code",
+      "cascade-task-code"
+    ],
+    "affected_work_ids": [
+      "epic_051"
+    ],
+    "architecture_impact": "diagram_change",
+    "impact_reason": "Integrated review-health behavior adds five source-linked Function nodes and seven Code relationships for authoritative forge evidence, actionable repair routing, fresh closeout verification and Task observation metadata. This review adds a component relationship exposing Watchdog-to-Task observation in both supervisor/team views, preserves native Code ownership, updates the Watchdog behavior flow and root health summary, and documents same-Feature selection explicitly. System/context and container/store boundaries are unchanged. Publication pins the reviewed current plan and integrated committed model/design; the earlier pending request and accepted snapshots are preserved. Final Feature 4 integration, complete repair/retirement and cross-Feature dependency acceptance remain outstanding. Validation passed 73 lifecycle and 40 C4 checks, rendered source kinds/owners and five actual context-to-Code, deep-link, pinned-source and Level-up journeys; both component views expose the observation edge and warm navigation reuses render artifacts."
+  }
+}

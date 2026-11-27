@@ -1,0 +1,126 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "trigger": "FeaturePlanningStarted feat_051_005",
+  "reviewed_plan_revision": "366005a41de130912448fed2c1bccc83c947aa49",
+  "reviewed_feature_5_revision": "04edd7165032c8e52d8451b0e88e5fa4cfdc6aea",
+  "reviewed_feature_6_revision": "672e5045dc9f1bc4a896cd1624910955c2e93fb8",
+  "reviewed_integration_head": "600e3a25",
+  "design_revision": "b1e90dcb67166b680b9bf74c89d081156178b6ab",
+  "disposition": "Feature-level handoff and scope separation reviewed. No Epic completion or individual Task-contract approval claimed.",
+  "canonical_review": [
+    "Read current Epic and Features 5/6 through Cascade. No architecture amendments returned.",
+    "Manager dec_011 preserves Feature 5's four sequenced Tasks and assigns existing REQ-WARROOM-REVIEW-002 gap to Feature 6 after Feature 5. No scope expansion or further plan change needed.",
+    "read_doc for task_051_005_001, task_051_005_002, task_051_005_003 and task_051_005_004 each returned content_access_denied. Did not read denied content through filesystem or another route. The canonical Feature spec supplies intended Task breakdown and architecture acceptance; individual Task contents remain unverified by this role.",
+    "Read final Epic revision again before sign_off_plan. The call declined because the Epic is already approved; no new sign-off claimed."
+  ],
+  "reviewed_designs": [
+    "DESIGN.md: repository design ownership, architecture and lifecycle summaries",
+    "cascade/DESIGN.md: architecture ownership and delivery/review boundaries",
+    "cascade/watchdog/DESIGN.md: open-review observation and recovery/postcheck boundary",
+    "cascade/task/DESIGN.md: upstream review fence and durable delivery collaborators",
+    "cascade/war_room/DESIGN.md: accountable open-review projection"
+  ],
+  "design_changes": "Corrected root ownership paragraph to describe the existing package/child hierarchy and link cascade/DESIGN.md. No requirement IDs, behavior, model, code or child design changed. Proposed gate/fence/bounding policy stays in work records. Reviewed changed prose for delivery attribution and chronology; none added. No new directory boundary or transferred requirement ownership.",
+  "source_traces": {
+    "normal": "Watchdog dispatch first evaluates lifecycle dependencies and then feature_review_pending. review_health routes normalized evidence to record_upstream_review_observation; that selector writes additive metadata only for queued actions owned by the observed Feature. retry_pending_task_merges retains existing Task action and evaluated-generation ownership. Passive evidence projection reads the registry or repair request/postcheck fallback without granting forge authority.",
+    "failure_resume": "Closed-unverified dependency evidence remains the assigned execution-gate gap. Task metadata survives in the existing action ledger, but the selector does not yet discover cross-Feature dependents. The writer caps rows and selected text but retains unbounded check-name keys and string generations; projection also passes generations through. Missing evidence/persistence failure and independent intended-target postchecks remain distinct from successful delivery. Features 5/6 own proving the corrected normal/refusal/restart paths."
+  },
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": {
+      "owner": "cascade/DESIGN.md",
+      "result": "Unchanged actors and external boundaries: the diff contains plan/evidence plus one ownership paragraph. Features 5/6 must verify final actor boundaries and actual context navigation."
+    },
+    "cascade-containers": {
+      "owner": "cascade/DESIGN.md",
+      "result": "No source/runtime/store changes. Existing review registry, queued action ledger and graph checkpoints remain authoritative. Both follow-ups must trace normal and restart state without inventing a store or OS isolation."
+    },
+    "cascade-supervisor-components / cascade-team-components / cascade-war-room-components": {
+      "owner": "cascade/DESIGN.md plus Watchdog/Task/War Room designs",
+      "result": "No current component or edge changes. Feature 5 owns integration-required dispatch and source-attributed cross-Feature observation; Feature 6 owns normalized evidence writer, registry and passive-reader/refusal interfaces. Reconcile both ends against final source."
+    },
+    "cascade-watchdog-code / cascade-task-code / cascade-boss-code": {
+      "owner": "cascade/watchdog/DESIGN.md, cascade/task/DESIGN.md, cascade/boss/DESIGN.md",
+      "symbols": [
+        "dispatch._deps_met",
+        "dispatch._dependency_review_pending",
+        "record_upstream_review_observation",
+        "retry_pending_task_merges",
+        "boss.view._deps_met",
+        "record_feature_review_evidence",
+        "reconcile_open_review_health"
+      ],
+      "result": "Feature 5 owns gate/fence collaborators and affected stacked/recovery consumers. Feature 6 owns bounded writer/health identity implications. Existing model pins and real source declarations are unchanged this turn; final changed symbols/kinds/owners and both-end relationships require Task evidence."
+    },
+    "cascade-dashboard-code / cascade-war-room-http-code": {
+      "owner": "cascade/war_room/DESIGN.md",
+      "symbols": [
+        "feature_review_views",
+        "_review_evidence_projection",
+        "handle_get_open_reviews",
+        "handle_post_review_repair"
+      ],
+      "result": "Feature 6 owns scalar/serialized response bounds and legacy/action/postcheck fallback evidence, preserving passive GET and explicit unavailable states. No model/source change this turn."
+    },
+    "cascade-feature-code / cascade-epic-code / cascade-workspace-code / cascade-teams-code": {
+      "owner": "respective child designs and cascade/DESIGN.md",
+      "result": "No adapter, queue, activation, authority or checkpoint code changed. Both follow-ups must inspect final changed consumers and give symbol-specific update/no-change reasons; source links and current ownership remain intact."
+    },
+    "supplementary_behavior": {
+      "owner": "Watchdog, Task and War Room designs",
+      "result": "Current diagrams accurately expose owned-Feature selection, durable retry metadata and passive reads. Feature 5 owns actual cross-Feature unchanged-red restart and material-change reevaluation; Feature 6 owns bounded persistence/read and oversized/legacy refusal, preserving opaque identity equality and zero generations."
+    }
+  },
+  "verification": {
+    "source_contract": {
+      "elements": 272,
+      "relationships": 338,
+      "views": 24,
+      "result": "validate_c4_workspace passed"
+    },
+    "local_design_file_links": 310,
+    "broken_file_links": 0,
+    "publication_pins": "All six historical committed digests verified. All six new-request digests verified against committed bytes and checkout; model pins preserved at 1e23d79d64b6f939aa828a529f50b0c316d27ef6.",
+    "diff": "git diff 1e23d79d64b6f939aa828a529f50b0c316d27ef6 -- cascade architecture tests is empty. Scoped root diff changes one ownership paragraph.",
+    "accepted_lineage": "Read-only ArchitectureReviewStore at product root returned no accepted epic:epic_051 lineage and no pending promotion; expected_generation remains null.",
+    "tests": "No runtime test rerun: no production change. Direct source-contract, file-link, pin and whitespace validation cover this documentation/planning change.",
+    "render_browser": "No new local render or browser run. Exact unchanged model/source pins retain the prior reviewed pinned render and 13 browser paths in epic_051_integrated_ui_architecture_browser.json and epic_051_architect_feature_4_review.json. That evidence includes Code/Level up/deep-link/pinned source, 8 -> 8 render-operation reuse and a separate cold-readiness timeout; no new latency or acceptance claim.",
+    "whitespace": "git diff --check passed before publication and repeated at closeout."
+  },
+  "publication": {
+    "historical_request": "docs/epic_artifacts/epic_051_architecture_review_feature_4.json",
+    "historical_replay": {
+      "content": [
+        {
+          "type": "text",
+          "text": "stale_revision: plan revision changed before architecture publication"
+        }
+      ],
+      "isError": true
+    },
+    "current_request": "docs/epic_artifacts/epic_051_architecture_review_366005a4.json",
+    "receipt": {
+      "operation_id": "architecture-publication-6697af0067972f6fb669ee5506126512a635823731565198a8ba0ace178960ae",
+      "status": "pending",
+      "render_operation_id": "c4-render-e0e31ce98ee3413fbed9540ba54e38a7069a64cf2b48a6422f98770e257f310d",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "d4d6cfea0d5b6aedf4901e4525bf3d587ee88618a2898cd2e09c80c6177f78f3",
+      "amendment_id": null,
+      "reason_code": null,
+      "message": "bounded architecture render is pending"
+    },
+    "result": "Separately reviewed current-plan request is durably pending. Original request and receipt remain intact; no ledger or accepted snapshot rewritten."
+  },
+  "handoffs": {
+    "feature_5": "Feature Lead/Architect must verify all four individual Task contracts carry the canonical plan inventory and source-bound cross-Feature/restart acceptance; this Epic role received content_access_denied. Keep actual supervisor/queue/recovery paths, ordinary approval/activation, supported stacking, integration-required waits and unrelated Task authority in acceptance.",
+    "feature_6": "Own the assigned existing bound gap after Feature 5. Choose concrete size policy after tracing authoritative consumers; preserve zero and string/integer identity, same-prefix collision safety, unavailable/refusal state and passive legacy/fallback reads.",
+    "next_epic_architect": "Replay docs/epic_artifacts/epic_051_architecture_review_366005a4.json unchanged on a later turn. If the current-plan guard becomes stale, preserve it and separately review the new plan before a new request. Do not poll within this planning turn. Final integrated evidence/publication remains required after both follow-ups."
+  },
+  "limitations": [
+    "Features 5/6 implementation and final acceptance outstanding.",
+    "Individual Task content authorization denied independently of satisfied dependencies.",
+    "Known lifecycle fixture failures, historical architecture failures, full Recovery-gate timeout versus isolated retry, cold browser timeout and historical terminal publication recovery remain explicit; this turn does not clear them.",
+    "No dependency installation, child/trunk write, direct lifecycle repair, deployment or architecture acceptance."
+  ]
+}

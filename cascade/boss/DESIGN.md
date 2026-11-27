@@ -11,9 +11,36 @@ comments and review gates under the canonical lifecycle lock. A completed-path
 Feature can still have an open review; document position alone is not forge
 acceptance. [current_feature_obligation](rollup.py) also requires the current
 repair generation's reserved or original child to be terminal without a live lease, the
-current approval and dependencies, and either exact accepted review evidence or
-explicit local integration evidence. This predicate runs before the completed
-fast path and its result gates checkout retirement.
+current approval and dependencies. For review-enabled delivery it consumes the
+shared [Feature delivery projection](../review.py) and requires exact acceptance
+of the current generation plus independent ancestry of that merge on the
+intended Epic branch. A merge callback, green checks, a closed forge row, stale
+heads, or an accepted merge that is absent from the target cannot authorize the
+completion event. Open-review repair first asks Watchdog for a fresh independent
+postcheck outside the lifecycle critical section; only the resulting exact action,
+generation, corrected-head, required-check and Epic-integration receipt can make
+that repair historical. Boss consumes the fresh return value instead of trusting
+the action's prior verified phase, so a later failed run, target drift or
+unavailable policy blocks completion. Review-disabled delivery retains its
+supervised local merge proof. This predicate runs before the completed fast path
+and its result gates both `FeatureCompleted` and checkout retirement.
+Repair publication deliberately retains an active Feature document in its source
+checkout. After the independent receipt verifies the accepted merge on the
+intended Epic target, Boss moves that exact source document to completed before
+retirement proof. Admission, green checks, publication, or forge acceptance alone
+cannot perform this terminal source mutation.
+In split-root operation, a completed tracking projection with an exact
+delivery-pending repair can still enter guarded review publication; it is not
+mistaken for terminal delivery merely because the tracking copy is completed.
+For the legacy repair route, the active delivery generation may exist before its
+review is published.
+Once the exact repair child is delivered and all current gates pass, a missing
+or older published generation is `review_not_published`, selecting idempotent
+review publication/recovery even for a completed-path Feature (including split
+tracking/product roots). An open current review or newer mismatched publication
+cannot authorize closeout or trigger a replacement review; scoped open-review
+repairs still use the independent postcheck and original-review publication path.
+
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and
@@ -28,7 +55,10 @@ Under `REQ-BOSS-001`, Boss invokes Workspace's descendant-aware retirement proof
 the existing lifecycle authority after accepted Feature/Epic closeout. Boss logs
 the proof's missing evidence and owner action and leaves the branch, checkout and
 registry intact on refusal; it does not rank board copies or maintain a second
-retirement ledger.
+retirement ledger. Workspace independently rereads the same shared Feature
+delivery projection before it persists descendants, so a stale callback or an
+unsynchronized intended Epic target cannot exploit time between Boss closeout
+and checkout retirement.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -44,12 +74,18 @@ own forge state. These functions collaborate within the local supervisor.
 | [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
+| [_complete_verified_repair_source](rollup.py) | After the fresh closeout gate, persist the retained active source document as completed before retirement; absent or already terminal source is an idempotent no-op. |
+| [reconcile_open_review_repair](../watchdog/incident_postcheck.py) | Collect fresh forge/check evidence before the lifecycle lock and persist an unchanged exact-generation verification receipt. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
+| [_current_open_review_postcheck_matches](rollup.py) | Bind the fresh postcheck result to the greatest scoped repair action before any closeout side effect. |
+| [feature_delivery_view](../review.py) | Derive retained Feature ownership and delivery phase from current local review, repair, completion, and target evidence without polling the forge. |
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
+| [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
+| [_require_open_review_repair_identity](../review.py) | Join scoped repair publication to the admitted original review identity, observation or checkpointed action. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
-| [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
+| [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
 
 ```mermaid
 flowchart TD
@@ -59,20 +95,24 @@ flowchart TD
     Merge --> Rollup[Current repair, child, comment and approval gates]
     Rollup --> Review[Publish Feature review; stage completed document]
     Review --> Accept[Observe forge acceptance]
-    Accept --> Proof[Workspace descendant persistence + canonical readback]
+    Accept --> Target{Accepted merge on intended Epic target?}
+    Target -->|no| Preserve
+    Target -->|yes| Source[Persist verified repair source as terminal]
+    Source --> Event[Emit FeatureCompleted once]
+    Event --> Proof[Workspace delivery recheck + descendant persistence + canonical readback]
     Proof -->|complete| Close[Attempt retirement]
     Proof -->|refused| Preserve
 ```
 
-An open historical review is reused for a repair generation only when a fresh
-forge snapshot confirms the same URL and intended target. Its current generation
-then records the newly published source and target heads. A merged historical
-generation retains its accepted URL and heads; publication creates or recovers a
-distinct follow-up review from the retained Feature branch to the owning Epic
-branch and links it to the prior generation. Closed, missing, unknown, or
-conflicting forge facts stop publication. Registry writes are atomic, so a
-restart after remote creation discovers the same open review instead of creating
-a duplicate.
+An admitted scoped open-review repair reuses the original review only when its
+durable URL, forge, source/target route, observed generation and heads still
+agree with the registry and a fresh forge snapshot. Its current generation then
+records the newly published source and target heads under the same URL and
+publication action. Merged, closed, missing, unknown or conflicting forge facts
+stop this route before push or review creation. Other already-admitted legacy
+delivery routes may retain their linked follow-up behavior; they cannot be
+selected by an open-review repair action. Registry writes are atomic, so restart
+joins the checkpointed repair generation without creating a duplicate review.
 
 Actions in `executions.json` retain authoritative delivery and repair evidence;
 the pending merge list is a scheduling index. Feature records in `reviews.json`
@@ -81,12 +121,20 @@ top-level fields project the current generation for compatibility. A generation
 binds its repair action, route, observed heads, accepted merge, publication
 action and reconciliation status. Restart retries queued actions and polls the
 same current row. A stale callback fails its generation/URL/ref fence and cannot
-close or retire a newer obligation. `not_active` remains a transient merge wait.
+close or retire a newer obligation. A queued Task merge refused with `not_active`
+because its Feature is completed is a `parent_lifecycle_mismatch`. The durable
+action retains its validation evidence and authoritative generation; unchanged
+observations do not claim another merge attempt. The immediate parent routes
+that generation through Feature repair admission before delivery resumes.
 
 Verification: [merge tests](../../tests/boss/test_merge.py),
 [rollup tests](../../tests/boss/test_rollup.py),
 [queue tests](../../tests/task/test_rollup_queue.py), and
 [completion integration](../../tests/test_completion_rollup_integration.py).
+The [late-repair convergence journey](../../tests/test_late_repair_convergence.py)
+exercises parent admission, one reserved repair Task, current-head publication,
+fresh checks, human merge, independent postcheck, terminal source persistence,
+and retirement against real temporary Git repositories.
 
 ## Feature approval and dispatch
 
@@ -109,8 +157,12 @@ work. This migration is action-boundary work, not a board poll. Existing
 architecture tuple, affected-work, comment, provider and dependency gates
 remain authoritative.
 
-[BossView](view.py) identifies candidates without requiring a Git ancestry
-proof on a read. [Canonical dispatch](../watchdog/dispatch.py) rechecks all
+[BossView](view.py) identifies candidates without a forge poll. Its Task
+dependency filter consumes the same
+persisted [Feature delivery projection](../review.py) as canonical dispatch, so
+a closed row, missing or stale generation, or accepted commit absent from the
+intended target is not advertised as dispatchable. The projection's local Git
+ancestry check is bounded and read-only. [Canonical dispatch](../watchdog/dispatch.py) rechecks all
 gates and [plans the base](../stacked_dispatch.py), including multiple
 predecessors; it never starts a branch lacking required ancestry. A previously
 selected base can be replanned only before an integration checkout exists.

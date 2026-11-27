@@ -33,6 +33,45 @@ def _completed_epic_with_recovery(tmp_path: Path) -> tuple[Path, str]:
     return root, epic_id
 
 
+def _completed_feature_with_open_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str]:
+    import cascade.review as review
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    feature_id = "feat_001"
+    add_doc(
+        root,
+        id=feature_id,
+        title="Delivered",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    review._store_review_generation(
+        root,
+        feature_id,
+        {
+            "url": "https://example.test/pulls/1",
+            "number": "1",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": "source-head",
+            "target_head": "target-head",
+            "draft": False,
+            "closed": False,
+            "seen_comments": [],
+            "toast_notified": True,
+        },
+        generation=0,
+        action_id=None,
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+    return root, feature_id
+
+
 def test_regular_delivery_includes_completed_team_with_pending_recovery(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -132,3 +171,80 @@ def test_recreated_queue_is_ahead_when_old_cursor_exceeds_new_file(
     assert _queue_is_ahead(
         "epic_001", "epic", root=root, feature_id=None
     )
+
+
+def test_completed_feature_open_review_consumes_idle_queue_without_turn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, feature_id = _completed_feature_with_open_review(tmp_path, monkeypatch)
+    append_event(
+        feature_id,
+        Event(
+            type="TeamMessage",
+            ts=datetime.now(timezone.utc),
+            payload={"body": "generic poll"},
+            dest=feature_id,
+        ),
+        root=root,
+    )
+    started: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._invoke_role_turn",
+        lambda work_id, *_args, **_kwargs: started.append(work_id),
+    )
+
+    deliver_queue_kickoffs(root)
+    deliver_queue_kickoffs(root)
+
+    assert started == []
+    assert not _queue_is_ahead(feature_id, "feature", root=root, feature_id=None)
+
+
+def test_completed_feature_current_admitted_repair_wakes_once_after_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, feature_id = _completed_feature_with_open_review(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "cascade.feature.repair.current_feature_repair_record",
+        lambda *_args, **_kwargs: {
+            "generation": 1,
+            "phase": "authority_recorded",
+            "next_action": "resume_original_delivery",
+        },
+    )
+    append_event(
+        feature_id,
+        Event(
+            type="FeatureRepairAuthorized",
+            ts=datetime.now(timezone.utc),
+            payload={"feature_id": feature_id, "generation": 1},
+            dest=feature_id,
+        ),
+        root=root,
+    )
+    scheduled: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._schedule_queue_delivery",
+        lambda work_id, *_args, **kwargs: scheduled.append(
+            (work_id, bool(kwargs.get("retry_staged")))
+        ),
+    )
+
+    resume_inflight_graphs(root)
+
+    assert scheduled == [(feature_id, True)]
+
+    started: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._checkpoint_has_models",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._invoke_role_turn",
+        lambda work_id, *_args, **_kwargs: started.append(work_id),
+    )
+    _run_queue_delivery_locked(feature_id, "feature", root, None)
+    _run_queue_delivery_locked(feature_id, "feature", root, None)
+
+    assert started == [feature_id]
+    assert not _queue_is_ahead(feature_id, "feature", root=root, feature_id=None)

@@ -60,6 +60,46 @@ parent integration. The existing supervisor component and Watchdog code views
 remain accurate: the change does not add a runtime boundary, persistent store,
 public interface or new implementation symbol.
 
+## Feature delivery dependency gate
+
+`REQ-WATCHDOG-DISPATCH-001`: Integration-required execution starts only when
+each completed Feature dependency has current evidence of integration on its
+intended Epic target, or an explicit supported terminal disposition.
+`DEC-WATCHDOG-DISPATCH-001`: Keep lifecycle planning readiness in
+[`evaluate_dependencies`](../dependency_evaluation.py) and apply the shared
+read-only [Feature delivery projection](../review.py) as a separate action gate.
+
+[`_dependency_review_pending`](dispatch.py) reads one bulk delivery projection
+for the Task's Feature dependencies. Missing review evidence, a closed review
+without accepted current-generation heads, a later generation than the accepted
+one, or an accepted commit absent from the intended target returns
+`feature_awaiting_merge`. [`dispatch_task`](dispatch.py) performs this check for
+ordinary and recovery dispatch because [`retry_task`](../feature/recovery.py)
+re-enters the same canonical boundary. Planning status is unchanged and does not
+claim that delivery is verified.
+
+Serial Feature admission uses
+[`feature_dispatch_blockers`](../stacked_dispatch.py) with the same delivery
+predicate. When stacked dispatch is explicitly enabled, a dependent Feature may
+instead use the supported predecessor branch as its base; this is an execution
+contract exception, not fabricated Epic-target integration. Current verified
+intended-target evidence releases an eligible consumer through the normal
+approval, capacity, provider and lifecycle gates, which admit only one active
+execution.
+
+```mermaid
+flowchart TD
+    Ready[Lifecycle dependencies complete] --> Delivery[Read current Feature delivery]
+    Delivery -->|missing, closed-unverified, stale, wrong target| Wait[feature_awaiting_merge]
+    Delivery -->|verified intended target| Gates[Ordinary execution gates]
+    Ready -->|stacking explicitly enabled| Stack[Select supported predecessor base]
+    Gates --> Start[One execution admission]
+```
+
+Verification is in
+[`tests/test_feature_delivery_consumer_gates.py`](../../tests/test_feature_delivery_consumer_gates.py),
+using temporary Git repositories and normal activation and approval.
+
 
 
 ## Publication-owner liveness
@@ -311,6 +351,97 @@ audit evidence. [config.py](config.py) validates these independent settings;
 automatic investigations. This is a repository operational choice, not a
 requirement for responsive architecture rendering.
 
+## Open-review observation
+
+`REQ-WATCHDOG-REVIEW-001`: A registered open review is healthy only when its
+normalized current-head evidence is green. Failed required checks, actionable
+feedback and a confirmed merge conflict are actionable even when the forge
+reports clean mergeability. Pending or missing checks, stale evidence, unknown
+policy, approval-only waits and transient forge failures remain typed waits and
+cannot enqueue a provider turn.
+
+`DEC-WATCHDOG-REVIEW-001`: Route all actionable evidence for one Feature review
+through its existing generation-bound Feature repair owner. The durable request
+evidence binds the original review and route, source/target head pair, failing
+check generation or feedback identity, and repair generation. An identical poll
+or restart rejoins that action and retains its attempts and budgets. Changed
+material evidence receives one new content-addressed request identity, still
+subject to the single-writer and ordinary repair gates.
+
+[reconcile_open_review_health](../review_health.py) reads registered reviews and
+uses [merge_request_snapshot](../tracking.py) for the normalized original-review
+identity, exact heads, mergeability, policy, current check generations and human
+feedback. Before classification can route work,
+[record_feature_review_evidence](../review.py) bounds check names, generations,
+heads, feedback counts and diagnostic text and stores the current observation in
+the canonical review registry. Exact check names and string generations are
+limited to 256 UTF-8 bytes, integer generations to 64 decimal digits, check
+presentation to twenty rows plus an omitted count, and the serialized normalized
+observation to 32 KiB. Oversized or malformed authoritative identity writes a
+bounded unavailable marker when the registry remains writable and refuses the
+observation. The registry write is serialized and atomically replaced. If the
+review record is missing or persistence fails, reconciliation returns the typed
+`review_evidence_persistence_failed` prerequisite and does not route repair from
+evidence that read-only consumers cannot later inspect.
+Classification also requires every target-required check to carry the observed
+source head and a nonempty, non-boolean generation; a status-only green map is
+stale evidence. The independent repair postcheck repeats that rule for the fresh
+source/target pair before the Feature ledger can record verification. Integer
+zero remains a valid generation.
+[_route_actionable_review_health](../review_health.py) constructs the material
+identity and calls
+[request_feature_review_repair](../team_supervision.py), whose existing action
+ledger and single-writer gate retain repair ownership across restart. The Feature
+owner creates any repair Task and uses the guarded resolution publication path;
+the observer never reruns CI, executes forge text, opens another review or merges
+the original review.
+
+The same actionable observation calls the Task-owned
+[record_upstream_review_observation](../task_rollup.py) boundary for queued
+deliveries owned by dependent Features. Watchdog supplies the normalized blocker,
+material generation and observed source/target route but does not claim or retry
+a downstream Task. Task admits the observation only when the route names the
+observed Feature and its Epic and the queued Task's direct owner declares that
+same-Epic Feature dependency. The
+[Task delivery contract](../task/DESIGN.md#durable-delivery-collaborators) owns
+generation comparison, attempt charging and release after the independent
+verified repair postcheck. The Watchdog-to-Task observation edge is visible in
+`cascade-supervisor-components` and `cascade-team-components`; each endpoint
+opens its owning Code view. Task persistence nodes retain their Task component
+ownership.
+
+```mermaid
+flowchart TD
+    Review[Tracked review] --> Snapshot[Fresh forge snapshot]
+    Snapshot --> Persist[Validate lossless bounds; persist observation]
+    Persist -->|write succeeds| Classify[Normalized evidence classification]
+    Persist -->|invalid identity, missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
+    Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
+    Identity --> Fence[Prove route and dependency; record affected queued Tasks]
+    Fence --> Task[Task-owned generation comparison and verified release]
+    Identity --> Repair[Join one Feature repair generation]
+    Repair --> Publish[Guarded exact-head publication]
+    Publish --> Pending[New head checks pending]
+    Classify -->|pending, missing, stale, unknown, approval or transient| Wait[Typed wait; no provider]
+    Pending --> Snapshot
+    Classify -->|current green| Human[Human-controlled original review merge]
+    Classify -->|unchanged after restart| Repair
+```
+
+Green observation does not merge a review or prove intended-target integration.
+The [shared review contract](../DESIGN.md#delivery-and-review-boundaries) and
+[Boss closeout](../boss/DESIGN.md#delivery-and-closeout) retain acceptance and
+integration ownership. Snapshot, classification and actionable routing are
+native nodes in `cascade-watchdog-code`, below `cascade-supervisor-components`;
+the existing direct-parent adapter and Feature action remain visible in their
+owning team Code views in the
+[authoritative views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+Verification: [review-health tests](../../tests/test_review_health.py).
+The postcheck cases in
+[parent lifecycle postcheck tests](../../tests/watchdog/test_parent_lifecycle_postcheck.py)
+cover changed heads, red results and malformed generations without weakening the
+exact repair-generation fence.
+
 ## Recovery admission and active-path authority
 
 `REQ-WATCHDOG-REPAIR-001`: Audit repair requires a fresh canonical incident,
@@ -347,6 +478,8 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [_bind_original_incident](audit_recovery.py) | Bind the queued delivery action and its canonical generation to the sole Task-owned incident allowance before owner work. |
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
 | [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts, then require a fresh host inspection of the reviewed worker receipt and capability generation. |
+| [reconcile_open_review_repair](incident_postcheck.py) | Observe the original forge review and normalized required-check policy/results outside lifecycle critical sections, then re-read the exact action, review generation and evidence digest under the owner fence before recording verification. |
+| [_required_checks](incident_postcheck.py) | Require current-target policy and a green, source-bound, generation-bearing result for every required name. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
@@ -375,7 +508,51 @@ capability. The active-path scanner accepts
 for Epics, checking introduction timestamps. For a generation-bound repair,
 [repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
 to the live action, exact owner/path/ref bindings, and the committed introduction
-blob. An arbitrary active-path move therefore lacks recovery authority.
+blob. Open-review repair authority additionally binds the canonical request
+digest, original review URL and generation, observed head pair, and retained
+claim/budget identities. An arbitrary active-path move or replay for changed
+review evidence therefore lacks recovery authority. Only the greatest live
+generation is eligible; mutation-owner changes and an introduction commit/blob
+that is no longer on the current owner head also refuse the event.
+
+`REQ-WATCHDOG-REPAIR-POSTCHECK-001`: An open-review repair remains verification
+pending until fresh forge evidence names the original URL and route, the current
+published generation and corrected source head, and an accepted merge reachable
+from the intended Epic target. The postcheck consumes authoritative normalized
+`required_check_policy` and `required_check_results` evidence for that same head;
+missing, unavailable, stale or non-green evidence returns a typed prerequisite.
+Each required result names its current forge run or pipeline generation and
+corrected source head. A persisted green result is not reused: every Boss
+closeout rereads the original review, current target head, authoritative policy
+and newest normalized results. The local intended Epic ref equals that fresh
+target head and contains the forge-accepted merge object.
+It does not infer success from mergeability, Feature/Task status, queue
+acknowledgement, publication, or validation of an older head.
+
+Verification for `REQ-WATCHDOG-REPAIR-POSTCHECK-001` is in
+[the parent-lifecycle postcheck tests](../../tests/watchdog/test_parent_lifecycle_postcheck.py):
+`test_open_review_postcheck_marks_only_exact_current_green_generation` checks
+the original review, corrected head and intended-target proof;
+`test_open_review_postcheck_retains_generation_when_check_policy_is_missing`
+checks the retained pending generation when authoritative policy is unavailable.
+
+```mermaid
+sequenceDiagram
+    participant Boss
+    participant Watchdog as reconcile_open_review_repair
+    participant Forge
+    participant Ledger as action/review stores
+    Boss->>Watchdog: pre-closeout verification request
+    Watchdog->>Ledger: read current action, review generation and corrected source
+    Watchdog->>Forge: fresh original review, target policy and check generations
+    alt identity, head, policy, checks and Epic integration agree
+        Watchdog->>Ledger: re-read digest under owner/lifecycle fence
+        Watchdog->>Ledger: persist exact verified receipt
+    else missing, stale or changed evidence
+        Watchdog-->>Boss: verification pending + typed prerequisite
+    end
+    Note over Watchdog,Ledger: Restart retains the receipt; closeout still refreshes forge and target evidence
+```
 
 The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,
 mixed-root, unintegrated or capability-mismatched runtime evidence as pending.
