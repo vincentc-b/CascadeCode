@@ -22,5 +22,7 @@
     "reason_code": null,
     "message": "bounded architecture render is pending"
   },
-  "handoff": "Publication remains durably pending on the same operation. On a later architect turn replay the saved request unchanged. Do not poll inside this planning turn or replace reviewed references. Human plan approval remains pending; Feature implementation is not yet delivered."
+  "latest_recovery_record": "docs/epic_artifacts/epic_051_publication_recovery.json",
+  "historical_handoff": "Publication remains durably pending on the same operation. On a later architect turn replay the saved request unchanged. Do not poll inside this planning turn or replace reviewed references. Human plan approval remains pending; Feature implementation is not yet delivered.",
+  "handoff": "The historical pending receipt below is superseded as a handoff by epic_051_publication_recovery.json: original replay rejected stale_revision; a separate reviewed current-plan request failed internal_error after interrupted render recovery. Human approval has occurred. Renderer recovery is required; do not poll the terminal failure."
 }

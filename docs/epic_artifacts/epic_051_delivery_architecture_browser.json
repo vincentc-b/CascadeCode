@@ -1,0 +1,31 @@
+{
+  "paths": [
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.feature-delivery-view",
+      "symbol": "feature_delivery_view",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 26.69707971997559
+    },
+    {
+      "component": "workspace",
+      "view": "cascade-workspace-code",
+      "node": "element.code.workspace.retained-feature-delivery",
+      "symbol": "_retained_feature_delivery",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 13.594565249048173
+    }
+  ],
+  "http_errors": [],
+  "source_revision": "ca23bc11f62417264a0235c8840dd88023a6f967",
+  "initial_ready_seconds": 106.6186620160006,
+  "render_operations_before": 4,
+  "render_operations_after": 4,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_051\nCode revision\nca23bc11f62417264a0235c8840dd88023a6f967\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\nca23bc11f62417264a0235c8840dd88023a6f967\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 147.3935941751115
+}

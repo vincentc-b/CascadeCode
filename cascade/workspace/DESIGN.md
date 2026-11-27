@@ -163,14 +163,13 @@ are process-local. Restart reconstructs eligible jobs from durable inputs.
 
 ```mermaid
 flowchart LR
-    Scan[Queue scan or startup resume] --> Eligible{Active or pending recovery?}
-    Eligible -->|completed Feature| Delivery[Read shared delivery projection]
-    Delivery -->|nonterminal, idle| Retain[Advance cursor without a role turn]
-    Delivery -->|admitted repair or interrupted turn| Schedule
-    Eligible -->|no terminal owner| Retain
+    Scan[Queue scan or startup resume] --> Eligible{Active, pending recovery or retained Feature?}
+    Eligible -->|no| Retain[Leave queue without a role turn]
     Eligible -->|yes and actionable input| Schedule[Coalesced graph worker]
+    Eligible -->|retained Feature with unread input| Schedule
     Schedule --> Recheck[Recheck eligibility under graph lock]
-    Recheck --> Resume[Resume checkpoint or persist classified queue input]
+    Recheck -->|idle retained Feature| Cursor[Advance cursor without a role turn]
+    Recheck -->|active input, admitted repair or interrupted turn| Resume[Resume checkpoint or persist classified queue input]
     Resume --> Invoke[Invoke owning graph and advance durable cursor]
 ```
 

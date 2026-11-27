@@ -2145,7 +2145,7 @@ code_boss_lock = element "task_lifecycle_lock" "Function" "Tracking-root cross-p
     }
 }
 
-code_boss_obligation = element "current_feature_obligation" "Function" "Fence completion events and retirement on the shared current-generation delivery and intended-target evidence." {
+code_boss_obligation = element "current_feature_obligation" "Function" "Separate unpublished repair obligations from accepted delivery; admit idempotent publication after child gates and fence completion and retirement on exact accepted target evidence." {
     properties {
         "cascade.semanticId" "element.code.boss.current-obligation"
         "cascade.parent" "element.component.boss"
@@ -2163,7 +2163,7 @@ code_boss_review_generation = element "feature_review_generation" "Function" "Re
     }
 }
 
-code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase, retained owner, review identity and next prerequisite from canonical local evidence." {
+code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase, retained owner, active and published generations, review identity and next prerequisite from canonical local evidence." {
     properties {
         "cascade.semanticId" "element.code.boss.feature-delivery-view"
         "cascade.parent" "element.component.boss"

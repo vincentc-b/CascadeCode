@@ -539,6 +539,7 @@ def test_delivery_view_retains_completed_owner_for_original_open_review(
         "phase": "review_pending",
         "review_url": "https://example.test/pulls/1",
         "generation": 0,
+        "published_generation": 0,
         "evidence_status": "open",
         "blocker": "review_acceptance_pending",
         "next_prerequisite": "await_current_review_acceptance",
@@ -622,6 +623,7 @@ def test_delivery_view_projects_current_admitted_repair(
 
     assert view["phase"] == expected_phase
     assert view["generation"] == 1
+    assert view["published_generation"] == 0
     assert view["actionable"] is True
     assert view["review_url"] == "https://example.test/pulls/1"
 
