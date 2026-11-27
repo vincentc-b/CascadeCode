@@ -63,6 +63,8 @@ The minimum delivery unit is one review generation with exact source, freshly ob
 | Trunk synchronization | `tracking.fast_forward_trunk`; `workspace.branch_synchronization.inspect_branch_synchronization/update_integration_branch` | Feature 3 reconciles freshly fetched remote with clean eligible local trunk; divergent/dirty/wrong-branch cases preserve work and expose bounded preview/owner prerequisites. |
 | Recovery and presentation | `watchdog.incident_postcheck.reconcile_open_review_repair`; `feature.repair.admit_open_review_repair`; `war_room.review_routes` and shared persisted review projection | Feature 3 extends existing owner admission/postcheck and read-only projection. No mutation or forge probing from UI polling. |
 
+Source links for the shared boundary: [validation](../../../cascade/review_validation.py), [publication](../../../cascade/review_rebase.py), [team recovery](../../../cascade/team_review_recovery.py), [review registry](../../../cascade/review.py), [forge/sync adapter](../../../cascade/tracking.py), [guarded synchronization](../../../cascade/workspace/branch_synchronization.py), [checkout lifecycle](../../../cascade/workspace/integration_worktree.py), [verified trunk workspace](../../../cascade/workspace/closeout.py), [physical board store](../../../cascade/board/store.py), [Epic closeout](../../../cascade/boss/epic_complete.py), [independent postcheck](../../../cascade/watchdog/incident_postcheck.py), [repair admission](../../../cascade/feature/repair.py) and [review HTTP routes](../../../cascade/war_room/review_routes.py).
+
 ### Evidence, lifecycle and failure behavior
 
 Add versioned fields to existing review/action evidence, with explicit unavailable behavior for legacy receipts. Persist repository identity (including product/tracking distinction), review URL/route/generation, source/target/result identities, policy/command/coverage/runtime/dependency fingerprints, operation/claim/budget IDs, result class and bounded diagnostic references. Keep accepted-merge identity, exact check run/pipeline generations, current remote/local heads, board proof, sync outcome and recovery owner as separate facts. Observation timestamps do not establish identity or grant retry budget.
@@ -159,17 +161,17 @@ No DESIGN.md/model edits are included in this planning turn: existing documents 
 
 - 2026-11-25 · Human · Brief approved through merge request review.
 
-- `dec_001` · 2026-11-27 · Epic Architect · **Scope and sequencing**
+- `dec_001` · 2026-11-27 · Epic Manager · **Scope and sequencing**
   Chose Deliver feat_054_001 → feat_054_002 → feat_054_003: exact candidate/fresh-source validation, canonical physical board/history admission, then exact merged CI/trunk convergence and accountable recovery..
   Rationale: These slices cover all six success criteria while ordering shared receipt and gate changes. Tests/design updates belong to each feature; the last slice proves the integrated incidents. Reuse existing stores, scheduler, owner lifecycle and incident-wide budget.
   Honors: All original success criteria; human review/approval gates; no implementation before approval; frugal engineering..
 
-- `dec_002` · 2026-11-27 · Epic Architect · **Evidence and authority**
+- `dec_002` · 2026-11-27 · Epic Manager · **Evidence and authority**
   Chose Keep prospective validation, actual accepted merge, exact merged-revision required CI, fresh remote/local sync, board proof and independently verified closure separate. Validate existing local prerequisites only; declaration does not authorize installation or establish remote CI/deployment..
   Rationale: Green source checks or a merged review cannot attest integrated target health. Unknown/stale evidence stays unavailable. Dirty/diverged work is preserved with supported owner prerequisites; no reset, force push, replacement ledger or implicit authority.
   Honors: Success criteria 1–6; declared software prerequisites and target identity; current review/incident/owner contracts..
 
-- `dec_003` · 2026-11-27 · Epic Architect · **Architecture ownership and planning review**
+- `dec_003` · 2026-11-27 · Epic Manager · **Architecture ownership and planning review**
   Chose Preserve validator/publication code under element.component.teams and cascade-teams-code. Assign every affected C4 level and owning design to the feature inventory; carry updates and source/render/navigation/recovery checks into Task acceptance. Keep unimplemented behavior in work records..
   Rationale: Existing source contract passes and 18 publication safeguard tests pass, but those results do not verify proposed behavior. Current designs describe the present limitations. Epic Architect review and changed-view runtime/UI verification remain explicit gates; accepted architecture snapshots are not rewritten.
   Honors: Design skill one-owner, implementation-depth, revision-pinned publication and review/closeout contract..
