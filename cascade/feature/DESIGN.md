@@ -30,7 +30,7 @@ flowchart LR
 | [state.py](state.py) | Defines checkpointed role, message, and queue state. |
 | [checkpoint.py](checkpoint.py) | SQLite state under `.cascade/checkpoints/<work-id>.sqlite`; thread ID is the work ID. |
 | [registry.py](registry.py) and [wiring.py](wiring.py) | Scoped tool registration and execution wiring. |
-| [repair.py](repair.py) | Persists generation-bound admission, idempotent authority, child identity, and delivery progress. |
+| [repair.py](repair.py) | Persists generation-bound admission, idempotent authority, child identity, and delivery progress; its read model projects the latest open-review repair generation for operator views. |
 | [role skills](../watchdog/role_skills.py) | Resolves the default playbooks, including design authoring/review. |
 
 ## Turn lifecycle
@@ -131,6 +131,15 @@ review identity and generation, observed heads, claim and budget identity.
 live action, current registered mutation owner and exact committed introduction;
 the event is not independently executable authority. A stale event cannot
 authorize an older generation even when its marker and commit remain in history.
+
+[latest_feature_repair_records](repair.py) reads the canonical action ledger once
+for a set of Features and retains each Feature's greatest open-review repair
+generation, including waiting, refused and verified phases that no longer grant
+execution authority. This read model lets board, room and open-review consumers
+explain the latest durable outcome without creating lifecycle state or treating
+an older active generation as current. An unavailable ledger yields no repair
+projection; the review and delivery projections remain explicit rather than
+manufacturing an action from browser state.
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
