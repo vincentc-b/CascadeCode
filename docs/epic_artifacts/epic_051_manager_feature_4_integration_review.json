@@ -1,0 +1,87 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_manager",
+  "trigger": "FeatureCompleted feat_051_004",
+  "reviewed_implementation_revision": "95bc9af4",
+  "comparison_revision": "6b61d27e",
+  "integrated_feature_merge": "c2a29829",
+  "reviewed_initial_plan_revision": "7b5e38818f284add8b9c6aa4523f1478f7d77d48",
+  "updated_plan_revision": "c4a7d4a9e72dde65103e04905a45f9cf99eda9c8",
+  "disposition": "Integration reviewed; Epic completion is not recommended. Canonical dec_010 and backlog feat_051_005 preserve existing success criteria and assign unresolved acceptance to executable follow-up work after feat_051_004. No accepted child record was reopened or edited.",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/feature/DESIGN.md",
+    "cascade/epic/DESIGN.md",
+    "cascade/boss/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/workspace/DESIGN.md",
+    "cascade/war_room/DESIGN.md",
+    "cascade/recovery_progress/DESIGN.md"
+  ],
+  "design_result": "Changed designs and affected parent/consumer boundaries describe current passive projection, authenticated mutation, observation persistence, source completion and retained-owner behavior with source links and normal/failure flows. No design edit was needed in this Manager review. The five new War Room requirement/decision IDs each have one declaration. No new delivery-history attribution was identified. Existing architecture evidence is supporting evidence, not proof of the merged revision.",
+  "source_traces": {
+    "normal": "feature_review_views joins persisted review, delivery and latest_feature_repair_records without forge transport. Explicit handle_post_review_repair verifies the request-scoped human, validates the complete bounded identity envelope and delegates once to request_feature_review_repair. The parent-requested acceptance test runs real Git, queue/checkpoint, reserved Task, guarded SWE tools, validation, same-review publication, fresh exact-head postcheck and retirement. Boss completes the retained source document only after independent verification.",
+    "failure_resume": "Unknown/stale evidence remains visible; unauthenticated/malformed POST cannot call admission. Watchdog persists normalized observations before routing and returns review_evidence_persistence_failed on an unavailable write. Identical repair requests join existing actions; current repair and publication generations remain separate. A stale green policy is refused and accepted merge is independently checked against the intended target. Existing action/checkpoint/queue stores own resume; no new state store or provider launcher exists.",
+    "test_boundary": "Scripted planning/SWE output and forge/check transport, provider discovery/compatibility and test hook isolation replace external execution. Production lifecycle/admission/Task tools/publication/postcheck run in real temporary repositories. This does not prove a live forge/provider deployment. Split-root Watchdog repair is a separate case; the new parent-requested open-review journey is colocated."
+  },
+  "confirmed_consumer_reproduction": {
+    "delivery": {
+      "feature_id": "feat_001",
+      "accountable_owner": "feature_team:feat_001",
+      "phase": "merge_verification_pending",
+      "review_url": "https://example.test/pulls/7",
+      "generation": 0,
+      "published_generation": 0,
+      "evidence_status": "legacy_unverified",
+      "blocker": "accepted_current_generation_missing",
+      "next_prerequisite": "restore_review_evidence_or_record_terminal_disposition",
+      "actionable": false
+    },
+    "feature_review_pending": false,
+    "dispatch_deps_met": true,
+    "dispatch_dependency_review_pending": false
+  },
+  "reproduction_method": "Temporary make_repo plus completed-delivery board and one backlog dependent Feature; store the existing closed-unverified review fixture; fix review_enabled=True; call production feature_delivery_view, feature_review_pending, dispatch._deps_met and dispatch._dependency_review_pending. This establishes a contradictory gate result, not actual dispatch. Repository removed by TemporaryDirectory; live runtime records untouched.",
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": "No new actor or external dependency. Existing operator, forge, provider and repository responsibility boundaries cover passive reads and explicit repair action.",
+    "cascade-containers": "No runtime/store/isolation boundary added. Existing review registry now carries bounded health observations; actions/checkpoints/queues remain authoritative.",
+    "cascade-war-room-components": "Existing Dashboard and HTTP component owners cover presentation and authenticated mutation. Component identities unchanged.",
+    "cascade-supervisor-components / cascade-team-components": "Merged model retains four relationships absent from the child browser pin: Watchdog-to-Task observation, Epic-to-Workspace queue, Boss-to-Watchdog postcheck and Watchdog-to-Feature verification. Architect must verify the final merged views, not rely solely on the earlier receipt.",
+    "cascade-dashboard-code": "Adds handle_get_open_reviews, feature_review_views and createOpenReviewsPane; router, passive projection and explicit POST relationships. Native source symbols and owner metadata present; source-contract checks pass.",
+    "cascade-war-room-http-code": "Adds handle_post_review_repair and verifier/adapter collaborations. Authenticated route delegates through existing authority; API/browser checks pass.",
+    "cascade-feature-code": "Adds latest_feature_repair_records, retaining greatest waiting/refused/verified generation for explanation without execution authority. Feature design owns the interface and link.",
+    "cascade-watchdog-code": "Adds record_feature_review_evidence at cascade/review.py, correctly owned by Watchdog; flow documents persistence failure before routing.",
+    "cascade-boss-code": "Source completion after verification is an internal helper under existing closeout entrypoints. The child browser pin differs from current Boss unpublished-generation handling and review published_generation projection; final source/navigation reconciliation remains Architect work.",
+    "cascade-task-code / cascade-workspace-code / cascade-epic-code / cascade-teams-code": "No production changes in these modules in the Feature 4 integrated diff. Existing admission/queue/retry views remain applicable. Follow-up acceptance specifically owns the still-unproved integration-required consumer and cross-Feature retry behavior and must update affected source/diagrams.",
+    "supplementary_behavior": "War Room passive-read and authenticated-action sequences, Watchdog persistence failure, and Boss verified source completion agree with inspected source. Parent diagrams retain the same runtime/store boundaries. Feature/Epic/Workspace resume paths reuse existing generation/lock ownership."
+  },
+  "verification": [
+    "UI/API/C4: tests/war_room/test_open_reviews_api.py, tests/war_room/test_ui_render.py, tests/workspace/test_c4_source.py, tests/workspace/test_c4_review.py, tests/workspace/test_c4_documentation.py: 86 passed in 51.84s.",
+    "Exact bounded Recovery contract file selection from .github/workflows/recovery-contract.yml, timeout 8m/kill-after 10s: 176 passed, 1 failed, 2 fork deprecation warnings in 302.68s. Failure: test_watchdog_owner_repair_delivers_and_independently_verifies_once[colocated], wait_for_background_kickoffs(10) returned false. Single-case retry tracked separately; the full gate is not claimed green.",
+    "Single-case retry of test_watchdog_owner_repair_delivers_and_independently_verifies_once[colocated]: 1 passed in 42.37s. The full-gate timeout was not reproduced in isolation; cause remains unclassified. No timeout or production guard was changed and no all-green full gate is claimed.",
+    "Relevant baseline lifecycle files tests/workspace/test_kickoff.py and tests/test_feature_closeout_flow.py: 24 passed, same 17 previously classified failures in 8.90s. Sixteen fail at existing_child_work activation; one at missing-agent-configuration approval. Prior pre-integration reproduction remains in dec_008; not newly attributed to Feature 4.",
+    "Direct validate_c4_workspace passed: 272 elements, 338 relationships, 24 views. All 481 local file links in ten reviewed designs resolve.",
+    "All six historical Feature 3 publication references match committed SHA-256 digests. Before this plan update only plan and workspace.dsl matched checkout; root design, contract, model and views differed. Current plan update also changes the publication guard.",
+    "Child architecture browser receipt reviewed: 84c7cdd7, ten paths across eight Code views with source/deep-link/Level-up, 7.144s warm readiness and 137.622s total; operations stayed 2 to 2. These are historical local measurements, not new runs or latency promises. Current diff includes four more component relationships and review/Boss source changes.",
+    "Canonical read_doc/read_architecture_amendments/list_children inspected; amendments empty. record_decision returned dec_010; mint_feature returned feat_051_005; write_doc saved c4a7d4a9. Canonical read of follow-up confirmed backlog, dependency feat_051_004 and detailed acceptance."
+  ],
+  "handoffs": {
+    "feat_051_005": "Own coherent integration-required delivery gates while preserving lifecycle planning readiness and explicit stacked policy; prove cross-Feature unchanged-CI/restart retry suppression and fix relevant activation/approval setup without bypassing guards. Existing success criteria only; normal backlog planning/approval/dispatch. Retain the full-gate colocated 10-second background-wait failure and passing isolated retry as separate evidence; verify the bounded gate after changes without blindly widening waits.",
+    "epic_architect": "Reconcile final merged designs/model with current plan. Preserve historical pending request unchanged for receipt reconciliation, and prepare a separately reviewed current publication through supported workflow. Current model has 338 relationships versus 334 in child evidence. Verify merged source/navigation, render reuse and actual links. Prior five historical architecture fixture failures and terminal publication recovery remain explicit; no accepted snapshots may be rewritten.",
+    "supervisor": "Continue normal follow-up Feature planning/approval/dispatch between parent turns. No polling, child worktree edits or manual lifecycle mutation is needed from this Manager turn."
+  },
+  "limitations": [
+    "No fresh architecture render/browser/publication/acceptance or full repository suite claimed.",
+    "Historical five architecture fixture failures were not rerun or cleared.",
+    "No dependency installation, source/model edit, trunk/other-worktree edit or accepted-snapshot rewrite performed.",
+    "No sign-off attempted: plan already approved, unresolved acceptance is explicit and repeated post-approval sign-off is not recovery."
+  ],
+  "recovery_gate_retry": {
+    "result": "passed",
+    "tests": 1,
+    "duration_seconds": 42.37,
+    "interpretation": "Full-gate background-wait timeout not reproduced in isolation; does not replace the failing full-gate receipt."
+  }
+}
