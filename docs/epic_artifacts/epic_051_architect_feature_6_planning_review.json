@@ -206,6 +206,7 @@
   },
   "publication": {
     "request": "docs/epic_artifacts/epic_051_architecture_review_46af22a9.json",
-    "status": "prepared"
+    "status": "pending",
+    "receipt": "docs/epic_artifacts/epic_051_architecture_publication_46af22a9.json"
   }
 }
