@@ -479,3 +479,22 @@ def test_concurrent_open_review_replays_one_writer_and_one_event(tmp_path: Path)
     assert {row["generation"] for row in results} == {1}
     events, _ = read_events("feat_001", 0, root=root)
     assert [event.type for event in events] == ["FeatureRepairAuthorized"]
+
+
+def test_current_feature_repair_records_batch_preserves_highest_live_generation(tmp_path, monkeypatch):
+    root = make_repo(tmp_path, git=False)
+    actions = {
+        'a': {'kind': 'feature_repair', 'feature_id': 'feat_001', 'generation': 1, 'phase': 'delivery_pending'},
+        'b': {'kind': 'feature_repair', 'feature_id': 'feat_001', 'generation': 2, 'phase': 'authority_recorded'},
+        'c': {'kind': 'feature_repair', 'feature_id': 'feat_001', 'generation': 3, 'phase': 'verified'},
+        'd': {'kind': 'feature_repair', 'feature_id': 'feat_002', 'generation': 1, 'phase': 'parent_enabled'},
+        'e': {'kind': 'feature_repair', 'feature_id': 'feat_003', 'generation': 9, 'phase': 'delivery_pending'},
+    }
+    calls = []
+    def read(_root):
+        calls.append(_root)
+        return {'actions': actions}
+    monkeypatch.setattr(repair, '_read_payload', read)
+    result = repair.current_feature_repair_records({'feat_001', 'feat_002'}, root=root)
+    assert len(calls) == 1
+    assert result == {'feat_001': actions['b'], 'feat_002': actions['d']}

@@ -474,5 +474,7 @@ or authorizing an unreviewed architecture tuple. Board polling remains read-only
 
 Startup and ordinary queue discovery batch completed-Feature delivery projections
 through one read-only board/registry scan per pass rather than rescanning every
-registered checkout for each completed Feature. This is advisory selection only;
+registered checkout for each completed Feature. Multi-row delivery also selects
+the current live repair generations from one atomic recovery-ledger read; board
+serialization reuses its already-selected board snapshot. This is advisory selection only;
 the locked delivery path independently rechecks the exact owner before any turn.

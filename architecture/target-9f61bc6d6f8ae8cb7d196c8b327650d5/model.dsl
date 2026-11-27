@@ -2267,7 +2267,7 @@ code_boss_review_generation = element "feature_review_generation" "Function" "Re
     }
 }
 
-code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase, retained owner, active and published generations, review identity and next prerequisite from canonical local evidence." {
+code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase and active/published generations from one batched board and recovery-ledger snapshot." {
     properties {
         "cascade.semanticId" "element.code.boss.feature-delivery-view"
         "cascade.parent" "element.component.boss"

@@ -936,7 +936,7 @@ def board_view_from_index(board, *, root: Path) -> dict:
         board_snapshot=board,
     )
     deliveries = feature_delivery_views(
-        {meta.id for meta in metas if meta.tier == "feature"}, root=root
+        {meta.id for meta in metas if meta.tier == "feature"}, root=root, board_snapshot=board
     )
     pending_review_ids = frozenset(
         meta.id

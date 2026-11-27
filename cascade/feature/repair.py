@@ -497,6 +497,30 @@ def current_feature_repair_record(
     return _copy(max(candidates, key=lambda row: int(row.get("generation") or 0)))
 
 
+def current_feature_repair_records(
+    feature_ids: list[str] | tuple[str, ...] | set[str], *, root: Path
+) -> dict[str, dict[str, Any]]:
+    """Select the greatest live repair per Feature from one ledger read."""
+    wanted = set(feature_ids)
+    if not wanted:
+        return {}
+    try:
+        actions = _actions(_read_payload(lifecycle_root(root)))
+    except ActionRecoveryUnavailable:
+        return {}
+    current: dict[str, dict[str, Any]] = {}
+    for action in actions.values():
+        feature_id = action.get("feature_id")
+        if (action.get("kind") != "feature_repair" or feature_id not in wanted
+            or action.get("phase") not in _ACTIVE_PHASES):
+            continue
+        key = str(feature_id)
+        previous = current.get(key)
+        if previous is None or int(action.get("generation") or 0) > int(previous.get("generation") or 0):
+            current[key] = _copy(action)
+    return current
+
+
 def latest_feature_repair_records(
     feature_ids: list[str] | tuple[str, ...] | set[str], *, root: Path
 ) -> dict[str, dict[str, Any]]:

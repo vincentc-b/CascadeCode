@@ -1759,15 +1759,24 @@ def feature_delivery_views(
     feature_ids: list[str] | tuple[str, ...] | set[str],
     *,
     root: Path,
+    board_snapshot: BoardIndex | None = None,
 ) -> dict[str, dict[str, object]]:
     """Project delivery rows while sharing one review and board snapshot."""
 
     trunk = locate_trunk(root)
     state = _load(trunk)
-    from cascade.feature.repair import current_feature_repair_record
+    from cascade.feature.repair import current_feature_repair_record, current_feature_repair_records
     from cascade.workspace.integration_worktree import merged_board_readonly
 
-    board = merged_board_readonly(trunk)
+    ids = set(feature_ids)
+    board = board_snapshot or merged_board_readonly(trunk)
+    # Single-owner admission remains a fresh check. Multi-row projections read
+    # the atomic action sidecar once, not once per Feature.
+    if len(ids) == 1:
+        work_id = next(iter(ids))
+        repairs = {work_id: current_feature_repair_record(work_id, root=trunk)}
+    else:
+        repairs = current_feature_repair_records(ids, root=trunk)
     reviews_enabled = review_enabled(trunk)
     return {
         feature_id: _delivery_projection(
@@ -1775,7 +1784,7 @@ def feature_delivery_views(
             trunk=trunk,
             board=board,
             record=state.get(feature_id),
-            repair=current_feature_repair_record(feature_id, root=trunk),
+            repair=repairs.get(feature_id),
             reviews_enabled=reviews_enabled,
         )
         for feature_id in feature_ids
