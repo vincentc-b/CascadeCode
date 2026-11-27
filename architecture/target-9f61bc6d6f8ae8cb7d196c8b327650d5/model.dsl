@@ -45,6 +45,12 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             "cascade.semanticId" "element.container.supervisor"
         }
 
+        approval_component = component "Approval authority" "Checks explicit plan authorization, commits approval timestamps and delegates receipt persistence and dispatch reconciliation." "cascade.approvals" {
+            properties {
+                "cascade.semanticId" "element.component.approval"
+                "cascade.designPath" "cascade/DESIGN.md"
+            }
+        }
         board_component = component "Board" "Parses and validates Markdown work state." "cascade.board" {
             properties {
                 "cascade.semanticId" "element.component.board"
@@ -70,6 +76,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         feature_team = component "Feature team" "Persistent lead and architect turns for Task planning and integration." "cascade.feature.graph" {
             properties {
                 "cascade.semanticId" "element.component.feature-team"
+                "cascade.designPath" "cascade/feature/DESIGN.md"
             }
         }
         task_team = component "Task team" "Bounded SWE turns with scoped tools, retained action-transition receipts, and exact executor live identity." "cascade.task.graph" {
@@ -4516,5 +4523,218 @@ code_watchdog_snapshot_to_evidence_health = code_watchdog_review_snapshot -> cod
 code_boss_feature_to_pending = code_boss_feature -> code_boss_review_pending "Retains pending publication and review obligations" {
     properties {
         "cascade.semanticId" "relationship.code-boss-feature-to-pending"
+    }
+}
+
+code_approval_feature = element "approve_feature" "Function" "Checks current authorization and saves individual Feature approval under the process lock." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "approve_feature"
+    }
+}
+
+code_approval_epic = element "approve_epic_plan" "Function" "Checks Epic plan readiness and authorizes the current reviewed child set before the Epic timestamp." {
+    properties {
+        "cascade.semanticId" "element.code.approval.epic"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "approve_epic_plan"
+    }
+}
+
+code_approval_dependencies = element "evaluate_action_dependencies" "Function" "Refreshes the owning declaration and canonical dependency lifecycle evidence without trusting cached snapshots." {
+    properties {
+        "cascade.semanticId" "element.code.approval.dependencies"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "evaluate_action_dependencies"
+    }
+}
+
+code_approval_strict = element "require_action_dependencies" "Function" "Refuses every unsatisfied or unknown dependency at strict planning boundaries." {
+    properties {
+        "cascade.semanticId" "element.code.approval.strict-dependencies"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "require_action_dependencies"
+    }
+}
+
+code_approval_review = element "require_lifecycle_review_gate" "Function" "Checks exact architecture context and blocking comments at the lifecycle boundary." {
+    properties {
+        "cascade.semanticId" "element.code.approval.review"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/lifecycle_review_gate.py"
+        "cascade.sourceSymbol" "require_lifecycle_review_gate"
+    }
+}
+
+code_approval_save = element "_set_feature_approved" "Function" "Writes approved_at to the owning document before requesting its matching receipt." {
+    properties {
+        "cascade.semanticId" "element.code.approval.save"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "_set_feature_approved"
+    }
+}
+
+code_approval_reconcile = element "reconcile_approval_dispatch" "Function" "Uses existing Boss ordering and canonical Watchdog dispatch; does not own a second scheduler." {
+    properties {
+        "cascade.semanticId" "element.code.approval.reconcile"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/automation.py"
+        "cascade.sourceSymbol" "reconcile_approval_dispatch"
+    }
+}
+
+code_feature_receipt_write = element "write_approval_evidence" "Function" "Atomically persists scope or exact receipt in tracking-root feature_approvals.json under a file lock." {
+    properties {
+        "cascade.semanticId" "element.code.feature.receipt-write"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness_evidence.py"
+        "cascade.sourceSymbol" "write_approval_evidence"
+    }
+}
+
+code_feature_receipt_read = element "approval_evidence" "Function" "Returns current, stale or unknown approval evidence against the owning document." {
+    properties {
+        "cascade.semanticId" "element.code.feature.receipt-read"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness_evidence.py"
+        "cascade.sourceSymbol" "approval_evidence"
+    }
+}
+
+code_feature_revision = element "_revision" "Function" "Hashes exact or delegated scope body and selection metadata; dependency declarations are outside this digest." {
+    properties {
+        "cascade.semanticId" "element.code.feature.approval-revision"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness_evidence.py"
+        "cascade.sourceSymbol" "_revision"
+    }
+}
+
+code_feature_readiness = element "compute_feature_readiness" "Function" "Projects approval and typed dispatch blockers from canonical facts without dispatching." {
+    properties {
+        "cascade.semanticId" "element.code.feature.readiness"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness.py"
+        "cascade.sourceSymbol" "compute_feature_readiness"
+    }
+}
+
+code_http_approve_feature = element "WarRoomRequestHandler._handle_approve_feature" "Method" "Decodes the displayed review context and serializes individual approval or refusal." {
+    properties {
+        "cascade.semanticId" "element.code.http.approve-feature"
+        "cascade.parent" "element.component.war-room-http"
+        "cascade.sourcePath" "cascade/war_room/server.py"
+        "cascade.sourceSymbol" "WarRoomRequestHandler._handle_approve_feature"
+    }
+}
+
+code_dashboard_feature_approve = element "featureApproveActionButton" "Function" "Renders the Feature approval action from the board projection." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-approve"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "featureApproveActionButton"
+    }
+}
+
+rel_http_approval = war_room_http -> approval_component "Requests explicit approval" {
+    properties {
+        "cascade.semanticId" "relationship.http-approval"
+    }
+}
+
+rel_approval_board = approval_component -> board_component "Commits owning timestamps" {
+    properties {
+        "cascade.semanticId" "relationship.approval-board"
+    }
+}
+
+rel_approval_feature = approval_component -> feature_team "Writes and reads approval receipts" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature"
+    }
+}
+
+rel_approval_watchdog = approval_component -> watchdog_component "Requests existing gated reconciliation" {
+    properties {
+        "cascade.semanticId" "relationship.approval-watchdog"
+    }
+}
+
+rel_approval_agent = approval_component -> agent_component "Requires provider selection preflight" {
+    properties {
+        "cascade.semanticId" "relationship.approval-agent"
+    }
+}
+
+rel_approval_workspace = approval_component -> workspace_component "Requires revision-pinned review context" {
+    properties {
+        "cascade.semanticId" "relationship.approval-workspace"
+    }
+}
+
+rel_approval_feature_dependencies = code_approval_feature -> code_approval_strict "Requires strict dependency evidence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-dependencies"
+    }
+}
+
+rel_approval_strict_evaluation = code_approval_strict -> code_approval_dependencies "Refreshes canonical facts" {
+    properties {
+        "cascade.semanticId" "relationship.approval-strict-evaluation"
+    }
+}
+
+rel_approval_feature_review = code_approval_feature -> code_approval_review "Checks review before persistence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-review"
+    }
+}
+
+rel_approval_feature_save = code_approval_feature -> code_approval_save "Saves authorized scope" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-save"
+    }
+}
+
+rel_approval_epic_save = code_approval_epic -> code_approval_save "Saves reviewed children before Epic timestamp" {
+    properties {
+        "cascade.semanticId" "relationship.approval-epic-save"
+    }
+}
+
+rel_approval_feature_reconcile = code_approval_feature -> code_approval_reconcile "Requests dispatch after persistence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-reconcile"
+    }
+}
+
+rel_feature_write_revision = code_feature_receipt_write -> code_feature_revision "Binds approved document" {
+    properties {
+        "cascade.semanticId" "relationship.feature-write-revision"
+    }
+}
+
+rel_feature_read_revision = code_feature_receipt_read -> code_feature_revision "Compares current document" {
+    properties {
+        "cascade.semanticId" "relationship.feature-read-revision"
+    }
+}
+
+rel_http_approve_handler = code_http_handler -> code_http_approve_feature "Routes approval POST" {
+    properties {
+        "cascade.semanticId" "relationship.http-approve-handler"
+    }
+}
+
+rel_dashboard_approve_lifecycle = code_dashboard_feature_approve -> code_dashboard_lifecycle_ui "Uses existing action presentation" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-approve-lifecycle"
     }
 }

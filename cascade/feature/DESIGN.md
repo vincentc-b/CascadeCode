@@ -226,3 +226,54 @@ heads must still match the action; after the refresh checkpoint, replay joins
 the same publication action and current repair generation. A merged, closed,
 missing or replaced original review is outside this scoped route and fails
 before push or review creation.
+
+
+## Approval evidence and readiness
+
+`REQ-FEATURE-APPROVAL-001`: Dispatch requires a matching owning-document approval
+timestamp and current receipt. Missing, unreadable or mismatched evidence is
+unknown; changed approved scope is stale. Neither state authorizes execution.
+This implements the [shared approval boundary](../DESIGN.md#feature-approval-authority).
+
+`DEC-FEATURE-APPROVAL-001`: [`write_approval_evidence`](readiness_evidence.py) and
+[`approval_evidence`](readiness_evidence.py) share the tracking repository’s
+`.cascade/feature_approvals.json`. Writes use a file lock and atomic JSON
+replacement. Ordinary receipts use scope mode: `_scope_body` excludes named
+delegated planning sections, so tactical decomposition can proceed without a new
+scope approval. Corrective Features use exact mode. `_revision` hashes body,
+parent and provider/model configuration; scope mode also hashes the title.
+Frontmatter `depends_on` is not part of that digest.
+
+[`_set_feature_approved`](../approvals.py) writes the document before the receipt.
+A crash between these writes leaves unknown evidence. For an open backlog
+Feature, a subsequent explicit approval rechecks gates and rewrites matching
+evidence. [`migrate_legacy_approvals`](readiness_evidence.py) runs only at a
+supervisor action boundary and requires proof from the approved document or
+bounded owning-path Git history; read-only projections cannot mint receipts.
+
+[`compute_feature_readiness`](readiness.py) combines supplied approval evidence
+with dependency, parent, sibling, integration-base and review facts. It returns
+`approved`, stable blocker codes and typed explanation reasons with affected
+work IDs. The Watchdog passes actual receipt state before admission; callers
+must not treat the timestamp-only `feature_approved` helper as that proof.
+The existing dispatch path rechecks provider and lifecycle review gates.
+
+```mermaid
+stateDiagram-v2
+    [*] --> NeedsApproval
+    NeedsApproval --> Unknown: timestamp saved, receipt absent
+    Unknown --> Current: explicit approval passes gates and saves receipt
+    Current --> Stale: hashed scope or selection changes
+    Stale --> Current: explicit approval of current scope
+    Current --> Waiting: execution gates block
+    Waiting --> Current: facts reevaluated
+    Current --> Dispatched: canonical dispatch gates and reservation pass
+```
+
+The [C4 source](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and `cascade-feature-code` include receipt write/read, revision calculation and
+readiness functions. The supervisor component view connects this owner to the
+approval service and Watchdog. Verification locations:
+[approval integration](../../tests/test_approval_dispatch_integration.py) and
+[Feature tests](../../tests/feature/). Dependency-declaration fencing is not
+established by the current revision digest.

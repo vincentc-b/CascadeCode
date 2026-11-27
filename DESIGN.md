@@ -68,7 +68,7 @@ flowchart LR
   DRAFT -->|current acceptance and intended Epic integration proved| CLOSE[Feature closes; Epic continues]
 ```
 
-After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. That approval is durable in `.cascade/approvals.json` and releases automatic, dependency-ordered Feature execution.
+After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. The Epic document records `plan_approved_at`; each included Feature records `approved_at` and a matching receipt in the tracking repository’s `.cascade/feature_approvals.json`. Approval triggers the existing dependency-ordered reconciliation path. Execution still requires current approval evidence and all dispatch gates. See [approval authority](cascade/DESIGN.md#feature-approval-authority) and [approval evidence](cascade/feature/DESIGN.md#approval-evidence-and-readiness).
 
 Feature completion first pushes the target `epic/{epic_id}` branch and source
 `feat/{feature_id}` branch, then opens a draft MR from `feat/{feature_id}` to
