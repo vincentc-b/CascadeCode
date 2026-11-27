@@ -2,11 +2,13 @@
 
 import json
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from cascade.resolution_actions import admit_resolution_action, normalize_operator_request
+from cascade.resolution_actions import resolution_action
 import sys
 
 import cascade.review_rebase as review_rebase
@@ -16,6 +18,7 @@ from cascade.review_rebase import (
     prepare_review_rebase_turn,
     recover_and_execute_review_rebase,
 )
+from cascade.review_validation import ExactValidationMaterial, exact_material_fingerprint
 from cascade.task.action_recovery import create_or_load_action, load_action, start_attempt
 from cascade.workspace.integration_worktree import IntegrationWorktree, save_registry
 from tests.test_resolution_actions import _admission_ready_root
@@ -245,6 +248,56 @@ def test_changed_remote_source_after_checks_stops_before_lease_push(tmp_path: Pa
     assert publication.blocker.code == "source_remote_changed"
     assert publication.observed_remote_source_sha == advanced
     assert _git(root, "rev-parse", "HEAD") == rebased.source_head
+
+
+def test_exact_receipt_runtime_drift_refuses_publication(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    rebased = execute_review_rebase(turn, authorized_paths=("source.txt",))
+    command = (sys.executable, "-c", "")
+    monkeypatch.setattr(review_rebase, "validation_command", lambda root: command)
+    profile = review_rebase.approved_review_validation_profile(root, command=command)
+    current = resolution_action(turn.action_id, root=root)
+    review_identity = review_rebase.exact_review_identity(
+        turn.action_id,
+        turn.review_id,
+        turn.source_ref,
+        turn.target_ref,
+        turn.observed_source_sha,
+        turn.observed_target_sha,
+        current["request"],
+    )
+    assert review_identity is not None
+    inspected = review_rebase.inspect_exact_validation_material(
+        root,
+        rebased.source_head,
+        turn.observed_target_sha,
+        profile=profile,
+        review_identity=review_identity,
+    )
+    assert inspected.material is not None
+    original_inspect = review_rebase.inspect_exact_validation_material
+
+    def drifted(*args, **kwargs):
+        result = original_inspect(*args, **kwargs)
+        assert result.material is not None
+        identity = dict(result.material.identity)
+        runtime = dict(identity["runtime"])
+        runtime["dependency_revision"] = "drifted"
+        identity["runtime"] = runtime
+        material = ExactValidationMaterial(identity, exact_material_fingerprint(identity))
+        return replace(result, material=material)
+
+    monkeypatch.setattr(review_rebase, "inspect_exact_validation_material", drifted)
+    publication = check_and_publish_review_rebase(
+        turn, rebased, validation_material=inspected.material
+    )
+
+    assert publication.published is False
+    assert publication.blocker is not None
+    assert publication.blocker.code == "validation_material_changed"
+    assert _git(root, "rev-parse", f"origin/{turn.source_ref}") == turn.observed_source_sha
 
 
 def test_end_to_end_clean_owned_rebase_records_evidence_and_updates_only_review_source(

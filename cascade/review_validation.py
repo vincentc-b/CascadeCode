@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import platform
@@ -81,6 +82,30 @@ class ReviewValidationOperation:
     permit: IncidentOperationPermit
     environment_revision: dict[str, str]
     profile: ReviewValidationProfile
+    material: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class ExactValidationMaterial:
+    """JSON-safe identity consumed by admission, execution and publication."""
+
+    identity: dict[str, object]
+    fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExactMaterialInspection:
+    """Pre-spawn feasibility and physical-board result for one candidate."""
+
+    material: ExactValidationMaterial | None = None
+    refusal: MergeCandidateRefusal | None = None
+    reason: str | None = None
+    owner_action: str = ""
+
+
+ReceiptMatch = Literal[
+    "matching_green", "same_material_fenced", "admission_required", "unavailable"
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,11 +155,97 @@ class ExactCandidateValidation:
 def review_validation_environment() -> dict[str, str]:
     """Return material local runtime identity; excludes clocks and reports."""
 
+    executable = Path(sys.executable).resolve()
+    try:
+        executable_digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+    except OSError:
+        executable_digest = "unavailable"
     return {
         "implementation": platform.python_implementation(),
         "python": platform.python_version(),
-        "executable": os.path.realpath(sys.executable),
+        "executable": str(executable),
+        "executable_sha256": executable_digest,
     }
+
+
+def exact_material_fingerprint(identity: Mapping[str, object]) -> str:
+    """Hash only canonical material fields; clocks and diagnostics are excluded."""
+
+    return hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def exact_review_identity(
+    action_id: str,
+    review_id: str,
+    source_ref: str,
+    target_ref: str,
+    source_sha: str,
+    target_sha: str,
+    request: Mapping[str, object],
+) -> dict[str, object] | None:
+    """Canonicalize the durable review route and observed generation."""
+
+    review_url = request.get("review_url")
+    values = (action_id, review_id, review_url, source_ref, target_ref, source_sha, target_sha)
+    if not all(isinstance(value, str) and value for value in values):
+        return None
+    generation = exact_material_fingerprint(
+        {
+            "review_id": review_id,
+            "review_url": review_url,
+            "source_ref": source_ref,
+            "target_ref": target_ref,
+            "observed_source_sha": source_sha,
+            "observed_target_sha": target_sha,
+        }
+    )
+    return {
+        "action_id": action_id,
+        "review_id": review_id,
+        "review_url": review_url,
+        "source_ref": source_ref,
+        "target_ref": target_ref,
+        "generation": generation,
+    }
+
+
+def match_review_validation_receipt(
+    incident_id: str, material: ExactValidationMaterial, *, root: Path
+) -> tuple[ReceiptMatch, dict[str, object] | None]:
+    """Read the existing incident operations and compare complete material."""
+
+    budget = read_incident_budget(incident_id, root=root)
+    if budget is None:
+        return "unavailable", None
+    operations = budget.get("operations")
+    if not isinstance(operations, Mapping):
+        return "unavailable", None
+    saw_legacy = False
+    for value in operations.values():
+        if not isinstance(value, Mapping) or value.get("kind") != "review_validator":
+            continue
+        exact = value.get("exact_validation_material")
+        fingerprint = value.get("material_fingerprint")
+        if not isinstance(exact, Mapping) or not isinstance(fingerprint, str):
+            saw_legacy = True
+            continue
+        if fingerprint != material.fingerprint or exact != material.identity:
+            continue
+        if value.get("state") != "settled":
+            return "unavailable", dict(value)
+        observation = value.get("observation")
+        if not isinstance(observation, Mapping):
+            return "unavailable", dict(value)
+        if (
+            observation.get("outcome") == "success"
+            and observation.get("validation_status") == "passed"
+        ):
+            return "matching_green", dict(value)
+        if observation.get("failure_class") == "deterministic":
+            return "same_material_fenced", dict(value)
+    return ("unavailable", None) if saw_legacy else ("admission_required", None)
 
 
 def reserve_review_validation(
@@ -147,6 +258,7 @@ def reserve_review_validation(
     environment_revision: dict[str, str],
     parent_operation_id: str | None = None,
     profile: ReviewValidationProfile | None = None,
+    material: ExactValidationMaterial | None = None,
 ) -> tuple[IncidentOperationDecision, ReviewValidationOperation | None]:
     """Reserve the validator's worst-case runtime before any process spawn."""
 
@@ -157,6 +269,7 @@ def reserve_review_validation(
         raise ReviewValidationAdmissionError(
             "validator timeout does not match its approved profile"
         )
+    material_identity = dict(material.identity) if material is not None else {}
     decision = reserve_incident_operation(
         incident_id,
         operation_id,
@@ -179,6 +292,14 @@ def reserve_review_validation(
                 "timeout_seconds": selected.timeout_seconds,
                 "attempt_budget": selected.attempt_budget,
             },
+            **(
+                {
+                    "exact_validation_material": material_identity,
+                    "material_fingerprint": material.fingerprint,
+                }
+                if material is not None
+                else {}
+            ),
         },
     )
     operation = (
@@ -190,6 +311,7 @@ def reserve_review_validation(
             decision.permit,
             dict(environment_revision),
             selected,
+            material_identity,
         )
         if decision.admitted and decision.permit is not None
         else None
@@ -203,7 +325,28 @@ def settle_unused_review_validation(operation: ReviewValidationOperation) -> Non
     settle_incident_operation(
         operation.incident_id,
         operation.operation_id,
-        {"outcome": "success", "quality": "known", "usage": {}},
+        {
+            "outcome": "success",
+            "validation_status": "unused",
+            "quality": "known",
+            "usage": {},
+        },
+        root=operation.root,
+    )
+
+
+def settle_interrupted_review_validation(operation: ReviewValidationOperation) -> None:
+    """Retain the full reservation when execution began but settlement is unknown."""
+
+    settle_incident_operation(
+        operation.incident_id,
+        operation.operation_id,
+        {
+            "outcome": "interrupted",
+            "validation_status": "unknown",
+            "quality": "unavailable",
+            "usage": {},
+        },
         root=operation.root,
     )
 
@@ -300,6 +443,7 @@ def run_review_validation(
     timeout: float,
     operation: ReviewValidationOperation | None = None,
     env: Mapping[str, str] | None = None,
+    defer_settlement: bool = False,
 ) -> subprocess.CompletedProcess:
     # Files avoid unbounded in-memory capture; report only bounded diagnostic tails.
     def tail(handle):
@@ -324,6 +468,15 @@ def run_review_validation(
             or (budget or {}).get("policy", {}).get("version")
             != operation.permit.policy_version
             or review_validation_environment() != operation.environment_revision
+            or (
+                operation.material
+                and (
+                    receipt.get("attributes", {}).get("exact_validation_material")
+                    != operation.material
+                    or receipt.get("material_fingerprint")
+                    != exact_material_fingerprint(operation.material)
+                )
+            )
         ):
             raise ReviewValidationAdmissionError(
                 "validator operation has no live cumulative-budget permit"
@@ -394,7 +547,7 @@ def run_review_validation(
         result = subprocess.CompletedProcess(
             command, process.returncode, tail(stdout), tail(stderr)
         )
-        if operation is not None:
+        if operation is not None and not defer_settlement:
             elapsed = max(0, int(time.monotonic() - started + 0.999999))
             environment_changed = (
                 review_validation_environment() != operation.environment_revision
@@ -575,6 +728,94 @@ def materialize_exact_merge_candidate(
         )
 
 
+def _candidate_runtime_identity(candidate: ExactMergeCandidate) -> dict[str, object]:
+    dependency_revision = _candidate_dependency_revision(candidate.checkout)
+    return {
+        **review_validation_environment(),
+        "dependency_revision": dependency_revision,
+        "import_roots": ["."],
+        "source_tree": candidate.result_tree,
+    }
+
+
+def inspect_exact_validation_material(
+    repository: Path,
+    source_sha: str | None,
+    target_sha: str | None,
+    *,
+    profile: ReviewValidationProfile,
+    review_identity: Mapping[str, object],
+    policy_version: int = POLICY_VERSION,
+) -> ExactMaterialInspection:
+    """Resolve feasibility, candidate bytes and board before budget reservation."""
+
+    try:
+        preflight_review_validation(profile, cwd=repository)
+    except (OSError, ValueError, ReviewValidationAdmissionError) as exc:
+        return ExactMaterialInspection(
+            reason="validation_profile_infeasible",
+            owner_action=f"Restore the approved validation profile ({type(exc).__name__}).",
+        )
+    with materialize_exact_merge_candidate(repository, source_sha, target_sha) as result:
+        if isinstance(result, MergeCandidateRefusal):
+            return ExactMaterialInspection(
+                refusal=result,
+                reason=f"candidate_{result.kind}",
+                owner_action=result.owner_action,
+            )
+        from cascade.board.errors import BoardError
+
+        try:
+            validate_publication_board(result.checkout)
+        except (BoardError, OSError, ValueError) as exc:
+            return ExactMaterialInspection(
+                reason="board_validation_failed",
+                owner_action=(
+                    f"Repair the candidate lifecycle documents ({type(exc).__name__}) "
+                    "before requesting admission."
+                ),
+            )
+        unconfined = _unconfined_candidate_source(result.checkout)
+        if unconfined is not None:
+            return ExactMaterialInspection(
+                reason="candidate_source_unconfined",
+                owner_action=(
+                    f"Replace candidate source/dependency symlink {unconfined} "
+                    "with repository bytes before requesting admission."
+                ),
+            )
+        identity: dict[str, object] = {
+            "candidate": {
+                "source_sha": result.source_sha,
+                "target_sha": result.target_sha,
+                "result_commit": result.result_commit,
+                "result_tree": result.result_tree,
+            },
+            "review": dict(review_identity),
+            "profile": {
+                "id": profile.profile_id,
+                "argv": list(profile.command),
+                "coverage_class": profile.coverage_class,
+                "policy_owner": profile.policy_owner,
+                "approval_revision": profile.approval_version,
+                "timeout_seconds": profile.timeout_seconds,
+                "attempt_budget": profile.attempt_budget,
+            },
+            "incident_policy_version": policy_version,
+            "runtime": _candidate_runtime_identity(result),
+        }
+        try:
+            json.dumps(identity, sort_keys=True, separators=(",", ":"))
+        except (TypeError, ValueError):
+            return ExactMaterialInspection(
+                reason="candidate_identity_unavailable",
+                owner_action="Restore JSON-safe review and validation identity evidence.",
+            )
+        return ExactMaterialInspection(
+            material=ExactValidationMaterial(identity, exact_material_fingerprint(identity))
+        )
+
+
 def validate_exact_merge_candidate(
     repository: Path,
     source_sha: str | None,
@@ -602,6 +843,29 @@ def validate_exact_merge_candidate(
             "validation_profile_invalid",
         )
 
+    validation_started = time.monotonic()
+
+    def settle_completed(outcome: str, failure_class: str | None = None) -> None:
+        if operation is None:
+            return
+        settle_incident_operation(
+            operation.incident_id,
+            operation.operation_id,
+            {
+                "outcome": outcome,
+                "failure_class": failure_class,
+                "validation_status": "passed" if outcome == "success" else "failed",
+                "quality": "known",
+                "usage": {
+                    "tool_attempts": 1,
+                    "process_seconds": max(
+                        0, int(time.monotonic() - validation_started + 0.999999)
+                    ),
+                },
+            },
+            root=operation.root,
+        )
+
     with materialize_exact_merge_candidate(repository, source_sha, target_sha) as materialized:
         if isinstance(materialized, MergeCandidateRefusal):
             return ExactCandidateValidation(
@@ -611,11 +875,7 @@ def validate_exact_merge_candidate(
             )
         candidate = materialized
         dependency_revision = _candidate_dependency_revision(candidate.checkout)
-        runtime = {
-            **review_validation_environment(),
-            "dependency_revision": dependency_revision,
-            "source_tree": candidate.result_tree,
-        }
+        runtime = _candidate_runtime_identity(candidate)
         from cascade.board.errors import BoardError
 
         try:
@@ -637,6 +897,22 @@ def validate_exact_merge_candidate(
 
         _remove_candidate_bytecode(candidate.checkout)
         policy_revision = _optional_file_revision(candidate.checkout / "cascade.toml")
+        if operation is not None:
+            admitted_candidate = operation.material.get("candidate")
+            admitted_runtime = operation.material.get("runtime")
+            observed_candidate = {
+                "source_sha": candidate.source_sha,
+                "target_sha": candidate.target_sha,
+                "result_commit": candidate.result_commit,
+                "result_tree": candidate.result_tree,
+            }
+            if admitted_candidate != observed_candidate or admitted_runtime != runtime:
+                return ExactCandidateValidation(
+                    "unavailable", "checks", candidate, None, command, None, "", "",
+                    dependency_revision, runtime,
+                    "Refresh the changed exact candidate/runtime identity and seek bounded admission.",
+                    "validation_material_changed",
+                )
         with tempfile.TemporaryDirectory(prefix="cascade-candidate-pycache-") as pycache:
             env = {
                 **os.environ,
@@ -655,7 +931,7 @@ def validate_exact_merge_candidate(
             try:
                 result = run_review_validation(
                     command, cwd=candidate.checkout, timeout=timeout,
-                    operation=operation, env=env,
+                    operation=operation, env=env, defer_settlement=True,
                 )
             except subprocess.TimeoutExpired as exc:
                 return ExactCandidateValidation(
@@ -674,10 +950,22 @@ def validate_exact_merge_candidate(
 
         stdout = _sanitized_tail(result.stdout, repository, candidate.checkout)
         stderr = _sanitized_tail(result.stderr, repository, candidate.checkout)
+        if (
+            operation is not None
+            and review_validation_environment() != operation.environment_revision
+        ):
+            settle_completed("error", "deterministic")
+            return ExactCandidateValidation(
+                "unavailable", "checks", candidate, None, command, result.returncode,
+                stdout, stderr, dependency_revision, runtime,
+                "Refresh the changed runtime identity and seek bounded admission.",
+                "validation_material_changed",
+            )
         current_head = _candidate_git(
             candidate.checkout, "rev-parse", "--verify", "HEAD^{commit}"
         ).stdout.strip()
         if current_head != candidate.result_commit:
+            settle_completed("error", "deterministic")
             return ExactCandidateValidation(
                 "fixture_environment", "checks", candidate, None, command,
                 result.returncode, stdout, stderr, dependency_revision, runtime,
@@ -688,6 +976,7 @@ def validate_exact_merge_candidate(
             _optional_file_revision(candidate.checkout / "cascade.toml") != policy_revision
             or _candidate_dependency_revision(candidate.checkout) != dependency_revision
         ):
+            settle_completed("error", "deterministic")
             return ExactCandidateValidation(
                 "fixture_environment", "checks", candidate, None, command,
                 result.returncode, stdout, stderr, dependency_revision, runtime,
@@ -704,6 +993,10 @@ def validate_exact_merge_candidate(
         else:
             outcome = "fixture_environment"
             action = "Repair the fixture or environment, then rerun the unchanged approved assertion coverage."
+        settle_completed(
+            "success" if outcome == "passed" else "error",
+            "deterministic" if outcome != "passed" else None,
+        )
         return ExactCandidateValidation(
             outcome, "checks", candidate, None, command, result.returncode, stdout, stderr,
             dependency_revision, runtime, action,

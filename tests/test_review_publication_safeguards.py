@@ -15,6 +15,7 @@ from cascade.review_validation import (
     MergeCandidateRefusal,
     ReviewValidationAdmissionError,
     approved_review_validation_profile,
+    inspect_exact_validation_material,
     materialize_exact_merge_candidate,
     preflight_review_validation,
     run_review_validation,
@@ -92,6 +93,47 @@ review_coverage_class = "review_and_adjacent"
     assert profile.timeout_seconds == 17
     with pytest.raises(ReviewValidationAdmissionError, match="executable"):
         preflight_review_validation(profile, cwd=tmp_path)
+
+
+def test_exact_material_inspection_precedes_admission_and_binds_complete_identity(
+    tmp_path: Path,
+) -> None:
+    root, source, target = _candidate_repo(tmp_path)
+    command = (sys.executable, "-c", "")
+    profile = replace(
+        approved_review_validation_profile(root, command=command), timeout_seconds=17
+    )
+    review = {
+        "review_id": "42",
+        "review_url": "https://forge.invalid/reviews/42",
+        "generation": "generation-7",
+        "source_ref": "feature/source",
+        "target_ref": "main",
+    }
+
+    inspected = inspect_exact_validation_material(
+        root, source, target, profile=profile, review_identity=review
+    )
+
+    assert inspected.material is not None
+    identity = inspected.material.identity
+    assert identity["candidate"]["source_sha"] == source
+    assert identity["candidate"]["target_sha"] == target
+    assert identity["candidate"]["result_commit"]
+    assert identity["candidate"]["result_tree"]
+    assert identity["review"] == review
+    assert identity["profile"] == {
+        "id": profile.profile_id,
+        "argv": list(command),
+        "coverage_class": profile.coverage_class,
+        "policy_owner": profile.policy_owner,
+        "approval_revision": profile.approval_version,
+        "timeout_seconds": 17,
+        "attempt_budget": 1,
+    }
+    assert identity["runtime"]["dependency_revision"]
+    assert identity["runtime"]["executable_sha256"] != "unavailable"
+    assert identity["runtime"]["import_roots"] == ["."]
 
 
 def test_duplicate_lifecycle_document_blocks_before_checks_and_push(

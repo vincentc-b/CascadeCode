@@ -97,10 +97,13 @@ Focused temporary-repository verification is in
 [`tests/task/test_incident_budget.py`](../../tests/task/test_incident_budget.py).
 
 Review publication is a concrete consumer of this API. Its material generation
-contains exact source and target heads, the approved validation profile and
-command, coverage class, policy owner and approval revision, finite timeout and
-attempt budget, budget policy ID/version, and interpreter environment revision. Material
-admission cannot increase `attempt_bound`. Before a real validator process starts,
+contains exact source and target heads, prospective result commit/tree, review
+URL/identity/generation, the approved validation profile and command, coverage
+class, policy owner and approval revision, finite timeout and attempt budget,
+budget policy ID/version, and effective interpreter digest, dependency bytes and
+import roots. Material admission cannot increase `attempt_bound`. Candidate
+feasibility and its physical board are established before reservation. Before a
+real validator process starts,
 the Teams component reserves one tool attempt and the configured worst-case
 process runtime under the original incident and stable top-level publication
 claim. The validator carries a distinct operation receipt and settles on success,
@@ -109,8 +112,10 @@ JSON-safe launch `attributes`; a validator nested under a provider operation use
 `attributes.parent_operation_id` to bind that exact parent and claim. For a
 `review_validator` whose original action is `review_rebase`, the same receipt also
 stores `material_fingerprint` for the admitted source tree, command, timeout,
-policy and runtime identity. A deterministic failure fences that material across
-restart, cosmetic commits and A–B–A policy cycles. Genuinely changed material can
+policy and runtime identity together with the complete immutable JSON-safe
+`exact_validation_material`. A deterministic failure fences that exact material
+across restart and A–B–A cycles. A different source SHA, including an empty commit,
+is new material and can
 reserve only the original incident's remaining allowance; numerical exhaustion
 still requires an independent finite extension. A legacy deterministic
 `review_rebase` validator receipt without a verified fingerprint fails closed

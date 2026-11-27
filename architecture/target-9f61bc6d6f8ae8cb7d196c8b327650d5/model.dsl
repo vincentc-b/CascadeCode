@@ -2670,7 +2670,7 @@ code_task_budget_exhaust = element "record_incident_budget_exhaustion" "Function
     }
 }
 
-code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, policy, material generation, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
+code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, exact review material receipt identity, policy, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
     properties {
         "cascade.semanticId" "element.code.task.incident-budget-reserve"
         "cascade.parent" "element.component.task-team"
@@ -3378,6 +3378,42 @@ code_teams_validation_profile = element "ReviewValidationProfile" "Dataclass" "B
     }
 }
 
+code_teams_validation_material = element "ExactValidationMaterial" "Dataclass" "Carry immutable JSON-safe candidate, review generation, approved profile and effective runtime/dependency/import identity plus its canonical fingerprint." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-material"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ExactValidationMaterial"
+    }
+}
+
+code_teams_material_inspect = element "inspect_exact_validation_material" "Function" "Preflight the approved profile, materialize the exact result and scan its physical board before any validator reservation." {
+    properties {
+        "cascade.semanticId" "element.code.teams.material-inspect"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "inspect_exact_validation_material"
+    }
+}
+
+code_teams_receipt_match = element "match_review_validation_receipt" "Function" "Reuse only settled green complete-material evidence; fence exact deterministic red and fail closed on legacy receipts." {
+    properties {
+        "cascade.semanticId" "element.code.teams.receipt-match"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "match_review_validation_receipt"
+    }
+}
+
+code_teams_review_identity = element "exact_review_identity" "Function" "Canonicalize the durable review URL, route, observed heads and generation for admission and pre-push refresh." {
+    properties {
+        "cascade.semanticId" "element.code.teams.review-identity"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "exact_review_identity"
+    }
+}
+
 code_teams_validate_publish = element "check_and_publish_review_rebase" "Function" "Validate immutable source then recheck policy, remote heads and authority before leased push." {
     properties {
         "cascade.semanticId" "element.code.teams.validate_publish"
@@ -3609,6 +3645,42 @@ code_teams_publication_to_code_teams_validate_publish = code_teams_publication -
 code_teams_publication_to_code_teams_budget_reserve = code_teams_publication -> code_teams_budget_reserve "Reserves before action execution or validator spawn" {
     properties {
         "cascade.semanticId" "relationship.code-teams-publication-to-code-teams-budget-reserve"
+    }
+}
+
+code_teams_publication_to_material_inspect = code_teams_publication -> code_teams_material_inspect "Establishes exact result, board and runtime identity before reservation" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-material-inspect"
+    }
+}
+
+code_teams_publication_to_receipt_match = code_teams_publication -> code_teams_receipt_match "Reuses or fences only complete exact-material receipts" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-receipt-match"
+    }
+}
+
+code_teams_material_inspect_to_material = code_teams_material_inspect -> code_teams_validation_material "Returns canonical immutable identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-material-inspect-to-validation-material"
+    }
+}
+
+code_teams_receipt_match_to_material = code_teams_receipt_match -> code_teams_validation_material "Compares every receipt field and fingerprint" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-receipt-match-to-validation-material"
+    }
+}
+
+code_teams_budget_reserve_to_material = code_teams_budget_reserve -> code_teams_validation_material "Persists exact material on the existing incident operation receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-validation-material"
+    }
+}
+
+code_teams_material_inspect_to_review_identity = code_teams_material_inspect -> code_teams_review_identity "Includes the durable review generation in candidate material" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-material-inspect-to-review-identity"
     }
 }
 

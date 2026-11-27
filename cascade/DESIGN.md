@@ -213,23 +213,22 @@ shell, child processes and remote provider work are not isolated by this local
 ledger or by C4 component boundaries.
 
 Every production validator is admitted separately from its material publication
-generation. `publish_team_review_resolution` binds the canonical incident and
-policy-bearing generation, then resolves a named validation profile and reserves
-the approved worst-case validator runtime
+generation. `publish_team_review_resolution` refreshes the durable review and
+remote heads, resolves a named validation profile, materializes the prospective
+result, and scans its physical board before it binds the canonical incident and
+reserves the approved worst-case validator runtime
 under one top-level claim and one unique operation receipt. A changed source,
 target, validation profile, policy version, or interpreter environment can make a
 generation materially eligible, but only remaining incident-wide allowance grants
-a permit. The profile binds exact argv, coverage class, policy owner, approval
-revision and finite timeout/attempt budget; executable and working-directory
-feasibility is checked before spawn. Clocks and diagnostic reports are absent
-from the generation. Unknown classification fails closed. A deterministic
-`review_rebase` validator failure fences the settled receipt's validation
-material (source tree, command, timeout, policy and runtime identity), not the
-remaining incident allowance. Previously failed material stays fenced across
-restart and A–B–A changes. Legacy receipts without verified material remain
-conservative. Validators linked to a different original action retain the
-incident-wide deterministic failure gate. Transient failure retains persisted
-bounded backoff and at most three operations.
+a permit. The immutable material contains exact source and target SHAs,
+prospective commit/tree, review URL/identity/generation, exact argv and coverage,
+policy owner and approval revision, finite timeout/attempt budget, incident policy,
+and effective interpreter digest, dependency bytes and import roots. Clocks,
+temporary checkout paths and diagnostics are absent. Only a settled green receipt
+with every field and fingerprint equal is reusable. Deterministic red fences that
+exact material across restart and A–B–A changes; legacy or incomplete receipts
+fail closed. Transient failure retains persisted bounded backoff and at most three
+operations.
 The legacy action attempt bound is never enlarged by generation admission.
 
 `run_review_validation` verifies the live receipt before `Popen`, starts a local
@@ -264,6 +263,7 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
 | [check_and_publish_review_rebase](review_rebase.py) | Validate the exact source/target candidate, recheck policy/remote authority and push the admitted source SHA under its lease. |
 | [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
+| [inspect_exact_validation_material / match_review_validation_receipt](review_validation.py) | Establish the complete candidate/review/profile/runtime identity and physical board before reservation; reuse only an exact settled green or fence exact deterministic red. |
 | [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
 | [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
 | [validate_publication_board](review_validation.py) | Parse every physical lifecycle-column document in the publication checkout and reject symlinks, malformed records and duplicate IDs before validation. Board owns schema invariants; Teams owns this publication gate. |
@@ -276,18 +276,20 @@ it does not repair or select among conflicting records.
 
 ```mermaid
 flowchart TD
-    Owner[Owner publication request] --> Generation[Recheck exact generation and durable claim]
-    Generation -->|eligible| Budget[Reserve cumulative allowance under live claim]
-    Budget -->|permit| Candidate[Materialize exact source and target in private Git checkout]
+    Owner[Owner publication request] --> Generation[Refresh review, source, target and profile]
+    Generation --> Candidate[Materialize exact source and target in private Git checkout]
     Candidate -->|missing / unknown / conflict| Preserve[Preserve shared state and return finite owner action]
     Candidate -->|commit and tree| Board[Parse physical candidate lifecycle documents]
     Board -->|malformed / duplicate| Preserve
-    Board -->|valid| Checks[Run approved argv with fresh imports and dependency identity]
+    Board -->|valid| Receipt{Exact durable receipt?}
+    Receipt -->|matching green| Recheck[Refresh every material and authority field]
+    Receipt -->|deterministic red| Preserve
+    Receipt -->|absent or changed| Budget[Reserve cumulative allowance under live claim]
+    Budget -->|permit| Checks[Run approved argv with fresh imports and dependency identity]
     Budget -->|pending / exhausted / owner decision| Pending[Retain pending or refusal]
-    Generation -->|not material / live / gated| Pending[Retain pending or refusal]
     Checks --> Settle[Settle exact receipt]
     Settle -->|red / timeout / interrupted| Preserve
-    Settle -->|green| Recheck[Recheck source, policy, remote heads and authority]
+    Settle -->|green| Recheck
     Recheck -->|match| Push[Lease-publish tested SHA]
     Recheck -->|drift| Preserve
     Push --> Receipt[Record publication evidence]
