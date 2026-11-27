@@ -10,10 +10,14 @@ import pytest
 
 import cascade.review_health as review_health
 import cascade.review_rebase as review_rebase
+import cascade.tracking as tracking
 from cascade.review_health import reconcile_open_review_health
 from cascade.task.action_recovery import load_action
+from cascade.task_rollup import queue_task_merge
 from cascade.watchdog.events import read_events
 from tests.test_review_rebase import _execution_ready_turn
+from tests.test_tracking_find import _github_evidence_runner
+from tests.support import add_doc
 
 
 def _git(root: Path, *args: str) -> str:
@@ -412,3 +416,104 @@ def test_failed_check_reuses_material_repair_identity_and_changed_run_reevaluate
     assert len(durable_actions) == 1
     assert first["material_identity"] == replay["material_identity"]
     assert changed["material_identity"] != replay["material_identity"]
+
+
+def test_scripted_normalized_check_runs_update_downstream_fence_without_redispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Production normalization feeds one durable downstream evidence fence."""
+
+    import cascade.feature.repair as feature_repair
+    import cascade.team_supervision as team_supervision
+
+    root, turn = _execution_ready_turn(tmp_path)
+    add_doc(
+        root,
+        id="task_035_001_999",
+        title="Downstream delivery",
+        tier="task",
+        status="active",
+        parent="feat_035_001",
+    )
+    queue_task_merge("task_035_001_999", root=root)
+    run = {"id": 41}
+
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+
+    def normalized(root: Path, mr: tracking.MergeRequest) -> dict[str, object]:
+        transport_mr = tracking.MergeRequest(
+            "https://github.com/example/project/pull/35",
+            "35",
+            "github",
+            "feat-x",
+            "main",
+            False,
+        )
+        return tracking.merge_request_snapshot(
+            root,
+            transport_mr,
+            runner=_github_evidence_runner(
+                transport_mr,
+                policy={"contexts": ["build"]},
+                checks=[{
+                    "id": run["id"],
+                    "name": "build",
+                    "head_sha": "s" * 40,
+                    "conclusion": "failure",
+                    "completed_at": f"2026-01-{run['id'] - 39:02d}T00:00:00Z",
+                }],
+                target_sha=turn.observed_target_sha,
+            ),
+        )
+
+    durable_actions: list[dict[str, object]] = []
+
+    def request(_feature_id: str, request_id: str, **kwargs: object) -> dict[str, object]:
+        if durable_actions:
+            current = durable_actions[0]
+            return {
+                "action_id": current["action_id"],
+                "generation": current["generation"],
+                "admitted": False,
+                "replayed": True,
+                "blocker": "repair_writer_active",
+            }
+        current = {
+            "action_id": "repair:feat_035_001",
+            "request_id": request_id,
+            "generation": 1,
+            "request_evidence": kwargs["evidence"],
+        }
+        durable_actions.append(current)
+        return {
+            "action_id": current["action_id"],
+            "generation": 1,
+            "admitted": True,
+            "replayed": False,
+        }
+
+    monkeypatch.setattr(review_health, "merge_request_snapshot", normalized)
+    monkeypatch.setattr(team_supervision, "request_feature_review_repair", request)
+    monkeypatch.setattr(
+        feature_repair,
+        "feature_repair_actions",
+        lambda *_args, **_kwargs: list(durable_actions),
+    )
+
+    first = reconcile_open_review_health(root)[0]
+    replay = reconcile_open_review_health(root)[0]
+    first_action = load_action("task_035_001_999:queued_merge", root=root)
+    first_observation = first_action["metadata"]["upstream_review_observation"]
+    run["id"] = 42
+    changed = reconcile_open_review_health(root)[0]
+    changed_action = load_action("task_035_001_999:queued_merge", root=root)
+    changed_observation = changed_action["metadata"]["upstream_review_observation"]
+
+    assert first["outcome"] == "routed"
+    assert replay["wait_type"] == "repair_generation_reused"
+    assert changed["wait_type"] == "repair_writer_active"
+    assert first_observation["blocker_identity"] == changed_observation["blocker_identity"]
+    assert first_observation["evidence_generation"] != changed_observation[
+        "evidence_generation"
+    ]
+    assert changed_action["attempt_count"] == 0

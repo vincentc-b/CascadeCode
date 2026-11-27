@@ -376,6 +376,7 @@ def _actionable_evidence_identity(
             "result_generation": results.get("generation")
             if isinstance(results, Mapping)
             else None,
+            "policy": _json_identity(snapshot.get("required_check_policy")),
         }
     elif state == "actionable_human_feedback":
         feedback = snapshot.get("review_feedback")
@@ -407,6 +408,50 @@ def _actionable_evidence_identity(
         ).encode()
     ).hexdigest()
     return digest, evidence
+
+
+def _blocker_identity(evidence: Mapping[str, object]) -> str:
+    """Identify the upstream obligation independently of its run generation."""
+
+    blocker = evidence.get("blocker")
+    if evidence.get("health_state") == "failed" and isinstance(blocker, Mapping):
+        checks = blocker.get("checks")
+        blocker = {
+            "checks": sorted(str(name) for name in checks)
+            if isinstance(checks, Mapping)
+            else _json_identity(checks)
+        }
+    identity = {
+        "review": evidence.get("review"),
+        "health_state": evidence.get("health_state"),
+        "blocker": blocker,
+    }
+    return hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
+
+
+def _record_downstream_review_fence(
+    root: Path,
+    feature_id: str,
+    *,
+    evidence: Mapping[str, object],
+    evidence_generation: str,
+    repair_action_id: object,
+    repair_generation: object,
+) -> None:
+    """Publish one normalized upstream observation to existing Task actions."""
+
+    from cascade.task_rollup import record_upstream_review_observation
+
+    record_upstream_review_observation(
+        feature_id,
+        blocker_identity=_blocker_identity(evidence),
+        evidence_generation=evidence_generation,
+        repair_action_id=(repair_action_id if isinstance(repair_action_id, str) else None),
+        repair_generation=(repair_generation if type(repair_generation) is int else None),
+        root=root,
+    )
 
 
 def _existing_repair_identity(
@@ -461,6 +506,14 @@ def _route_actionable_review_health(
     existing = _existing_repair_identity(owner.id, core_identity, root=root)
     if existing is not None:
         action_id, _request_id, repair_generation, material_identity = existing
+        _record_downstream_review_fence(
+            root,
+            owner.id,
+            evidence=evidence,
+            evidence_generation=core_identity,
+            repair_action_id=action_id,
+            repair_generation=repair_generation,
+        )
         return {
             "owner_id": owner.id,
             "action_id": action_id,
@@ -511,6 +564,7 @@ def _route_actionable_review_health(
     repair_evidence = {
         "review_health": {
             "core_identity": core_identity,
+            "blocker_identity": _blocker_identity(evidence),
             "material_identity": material_identity,
             "repair_generation": repair_generation,
             "observation": evidence,
@@ -537,9 +591,25 @@ def _route_actionable_review_health(
             observed_review_generation=observed_generation,
         )
     except (OSError, PermissionError, ValueError):
+        _record_downstream_review_fence(
+            root,
+            owner.id,
+            evidence=evidence,
+            evidence_generation=core_identity,
+            repair_action_id=None,
+            repair_generation=None,
+        )
         return _health_wait(
             owner.id, "repair_admission_unavailable", "repair_admission_failed"
         )
+    _record_downstream_review_fence(
+        root,
+        owner.id,
+        evidence=evidence,
+        evidence_generation=core_identity,
+        repair_action_id=routed.get("action_id"),
+        repair_generation=routed.get("generation"),
+    )
     return {
         "owner_id": owner.id,
         "action_id": routed.get("action_id"),

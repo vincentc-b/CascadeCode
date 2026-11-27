@@ -339,6 +339,14 @@ owner creates any repair Task and uses the guarded resolution publication path;
 the observer never reruns CI, executes forge text, opens another review or merges
 the original review.
 
+The same actionable observation calls the Task-owned
+[record_upstream_review_observation](../task_rollup.py) boundary for queued
+deliveries owned by that Feature. Watchdog supplies the normalized blocker and
+material generation but does not claim or retry a downstream Task. The
+[Task delivery contract](../task/DESIGN.md#durable-delivery-collaborators) owns
+generation comparison, attempt charging and release after the independent
+verified repair postcheck.
+
 ```mermaid
 flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]

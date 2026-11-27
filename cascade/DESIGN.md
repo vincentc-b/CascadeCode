@@ -453,6 +453,10 @@ generation, while pending, missing, stale, approval-only and unavailable evidenc
 remains a non-provider wait. The existing team adapter and Feature action ledger
 own admission and restart deduplication; this package boundary adds no scheduler,
 CI runner, provider launcher or merge authority.
+Affected queued Task actions retain the upstream blocker and material evidence
+generation through the [Task delivery fence](task/DESIGN.md#durable-delivery-collaborators).
+Watchdog observes evidence, Task owns retry charging, and the independent repair
+postcheck remains the only release evidence.
 
 `REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
 relationship before delegating recovery. Durable attempts, acknowledgements and

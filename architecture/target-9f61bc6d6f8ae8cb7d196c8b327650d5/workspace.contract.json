@@ -262,6 +262,7 @@
     {"dsl_identifier": "code_watchdog_incident_record", "semantic_id": "element.code.watchdog.incident-record", "fragment": "model.dsl"},
     {"dsl_identifier": "code_watchdog_stage_receipt", "semantic_id": "element.code.watchdog.stage-receipt", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_mismatch", "semantic_id": "element.code.task.parent-lifecycle-mismatch", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_upstream_review_fence", "semantic_id": "element.code.task.upstream-review-fence", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_revalidation", "semantic_id": "element.code.task.delivery-revalidation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_leases", "semantic_id": "element.code.task.leases", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_validation", "semantic_id": "element.code.task.validation", "fragment": "model.dsl"}
@@ -283,6 +284,7 @@
     {"dsl_identifier": "code_watchdog_health_to_snapshot", "semantic_id": "relationship.code-watchdog-health-to-snapshot", "fragment": "model.dsl", "source": "code_watchdog_review_health", "destination": "code_watchdog_review_snapshot"},
     {"dsl_identifier": "code_watchdog_health_to_actionable_review", "semantic_id": "relationship.code-watchdog-health-to-actionable-review", "fragment": "model.dsl", "source": "code_watchdog_review_health", "destination": "code_watchdog_actionable_review"},
     {"dsl_identifier": "code_watchdog_actionable_review_to_feature_request", "semantic_id": "relationship.code-watchdog-actionable-review-to-feature-request", "fragment": "model.dsl", "source": "code_watchdog_actionable_review", "destination": "code_epic_review_repair_request"},
+    {"dsl_identifier": "code_watchdog_actionable_review_to_task_fence", "semantic_id": "relationship.code-watchdog-actionable-review-to-task-fence", "fragment": "model.dsl", "source": "code_watchdog_actionable_review", "destination": "code_task_upstream_review_fence"},
     {"dsl_identifier": "code_watchdog_snapshot_to_evidence_health", "semantic_id": "relationship.code-watchdog-snapshot-to-review-evidence-health", "fragment": "model.dsl", "source": "code_watchdog_review_snapshot", "destination": "code_watchdog_review_evidence_health"},
     {"dsl_identifier": "code_boss_feature_to_pending", "semantic_id": "relationship.code-boss-feature-to-pending", "fragment": "model.dsl", "source": "code_boss_feature", "destination": "code_boss_review_pending"},
     {"dsl_identifier": "dashboard_post_to_epic_activation", "semantic_id": "relationship.code-dashboard-post-to-epic-activation", "source": "code_dashboard_post", "destination": "code_watchdog_activate_epic", "fragment": "model.dsl"},
@@ -579,6 +581,7 @@
     {"dsl_identifier": "code_epic_mismatch_route_to_feature_recover", "semantic_id": "relationship.code-epic-parent-lifecycle-mismatch-route-to-feature-recover", "source": "code_epic_mismatch_route", "destination": "code_feature_recover", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_registry_to_actions", "semantic_id": "relationship.code-task-registry-to-actions", "source": "code_task_registry", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_mismatch_to_actions", "semantic_id": "relationship.code-task-parent-lifecycle-mismatch-to-actions", "source": "code_task_mismatch", "destination": "code_task_actions", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_upstream_review_fence_to_actions", "semantic_id": "relationship.code-task-upstream-review-fence-to-actions", "source": "code_task_upstream_review_fence", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_actions_to_leases", "semantic_id": "relationship.code-task-actions-to-leases", "source": "code_task_actions", "destination": "code_task_leases", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_validation_to_actions", "semantic_id": "relationship.code-task-validation-to-actions", "source": "code_task_validation", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_budget_bind_to_actions", "semantic_id": "relationship.code-task-incident-budget-bind-to-actions", "source": "code_task_budget_bind", "destination": "code_task_actions", "fragment": "model.dsl"},

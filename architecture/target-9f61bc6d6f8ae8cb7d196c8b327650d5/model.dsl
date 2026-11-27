@@ -2532,6 +2532,15 @@ code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one co
     }
 }
 
+code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker and evidence generation separately from downstream Task failure and evaluated generation." {
+    properties {
+        "cascade.semanticId" "element.code.task.upstream-review-fence"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "record_upstream_review_observation"
+    }
+}
+
 code_task_revalidation = element "_request_delivery_revalidation" "Function" "Synchronize a moved Feature base and queue the original Task for an exact replacement final-validation pair." {
     properties {
         "cascade.semanticId" "element.code.task.delivery-revalidation"
@@ -2850,6 +2859,12 @@ code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
 code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppresses unchanged delivery retries on the original action" {
     properties {
         "cascade.semanticId" "relationship.code-task-parent-lifecycle-mismatch-to-actions"
+    }
+}
+
+code_task_upstream_review_fence_to_actions = code_task_upstream_review_fence -> code_task_actions "Stores observed and evaluated generations on the existing queued action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-actions"
     }
 }
 
@@ -4256,6 +4271,12 @@ code_watchdog_health_to_actionable_review = code_watchdog_review_health -> code_
 code_watchdog_actionable_review_to_feature_request = code_watchdog_actionable_review -> code_epic_review_repair_request "Joins the existing direct-parent Feature repair admission and single-writer gate" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-feature-request"
+    }
+}
+
+code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized upstream blocker evidence without claiming downstream delivery" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-task-fence"
     }
 }
 

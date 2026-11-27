@@ -342,6 +342,37 @@ action to the Watchdog postcheck. It does not treat a request, worker completion
 or local status move as verification; original action and incident history remain
 inspectable after authoritative resolution.
 
+`REQ-TASK-DELIVERY-003`: A downstream delivery blocked by an upstream open
+review stores the upstream blocker identity and its material evidence generation
+separately from the downstream Task failure and attempt history. Repeated polls
+of unchanged evidence do not claim the Task action or consume another attempt.
+A changed generation admits one reevaluation through the ordinary delivery,
+dependency and recovery gates. An unrelated Task failure remains owned by its
+normal recovery classification.
+
+`DEC-TASK-DELIVERY-003`: Keep the fence as additive metadata on the existing
+queued action. [record_upstream_review_observation](../task_rollup.py) receives
+the Watchdog's normalized blocker and evidence identities, while
+[retry_pending_task_merges](../task_rollup.py) records the generation it actually
+evaluated only when the Boss gate returns the completed-parent mismatch. Release
+requires the matching Feature repair action's independent `verified` postcheck;
+a green poll alone is not merge or intended-target evidence. This adds neither a
+ledger nor a scheduler.
+
+```mermaid
+flowchart TD
+    Red[Normalized upstream blocker and evidence generation] --> Persist[Queued Task action metadata]
+    Persist --> Compare{Already evaluated?}
+    Compare -->|same| Wait[Retain queue; no claim or attempt]
+    Compare -->|changed| Gates[Ordinary dependency and recovery gates]
+    Gates -->|same upstream refusal| Evaluate[Record evaluated generation]
+    Gates -->|unrelated Task failure| TaskOwner[Keep normal Task recovery actionable]
+    Evaluate --> Compare
+    Persist --> Verify{Exact repair postcheck verified?}
+    Verify -->|no| Wait
+    Verify -->|yes| Gates
+```
+
 `REQ-TASK-DELIVERY-002`: A queued delivery is valid only for its exact Task
 source and Feature target heads. [retry_pending_task_merges](../task_rollup.py)
 uses branch synchronization before
