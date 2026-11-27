@@ -505,6 +505,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_df804097f3012dceb120369dfb2f6303dff4ed01cc6c67a05779c96ffb21610b",
+      "dependency_id": "dep_docker",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:f5662bd521b6b86bbae77806e0561505329bab583ecb2b6e032921f2f384d5d5",
+      "recipe_revision": "sha256:3201dab154d2cdfe7474fc1bfd0bc807989944b41d5cc77e2c9789848e019675",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib, hashlib, subprocess; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/usr/bin/docker'\"'\"').read_bytes()).hexdigest() == '\"'\"'sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49'\"'\"'; s=subprocess.check_output(['\"'\"'/usr/bin/docker'\"'\"','\"'\"'--version'\"'\"'],text=True); assert '\"'\"'28.0.0'\"'\"' in s; print(s)'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T08:21:09.690966+00:00",
+      "selected_version": "28.0.0",
+      "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+      "lock_references": [
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
