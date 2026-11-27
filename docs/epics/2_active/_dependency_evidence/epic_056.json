@@ -1295,6 +1295,26 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_f33e95193b4498c6e25fd0c01f7285913d2136ea134035ee04dd046b921853a2",
+      "dependency_id": "dep_structurizr",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:9ccc41067ff902ab19193c67c690e021e0de12e37bf80c8e8374b4ab16cc7034",
+      "recipe_revision": "sha256:34048a31140c613e673c2891634ac48911da44ccdf3d144d914e54b1e89b2835",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import subprocess,json; x=json.loads(subprocess.check_output([\"/usr/bin/docker\",\"image\",\"inspect\",'\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"'],text=True)); assert '\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"' in x[0][\"RepoDigests\"]; subprocess.run([\"/usr/bin/docker\",\"info\",\"--format\",\"{{.ServerVersion}}\"],check=True); print('\"'\"'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c'\"'\"')'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T08:22:28.265322+00:00",
+      "selected_version": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "lock_references": [
+        "cascade/workspace/c4_render.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
