@@ -109,12 +109,16 @@ def test_upstream_review_generation_fences_downstream_retry_across_restart(
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
-        root, id="feat_001", title="Feature", tier="feature",
+        root, id="feat_001", title="Upstream", tier="feature",
         status="completed", parent="epic_001",
     )
     add_doc(
+        root, id="feat_002", title="Dependent", tier="feature",
+        status="active", parent="epic_001", depends_on=["feat_001"],
+    )
+    add_doc(
         root, id="task_001", title="Task", tier="task",
-        status="active", parent="feat_001",
+        status="active", parent="feat_002",
     )
     attempts: list[str] = []
 
@@ -125,8 +129,23 @@ def test_upstream_review_generation_fences_downstream_retry_across_restart(
     monkeypatch.setattr("cascade.boss.merge.merge_task_branch", refused)
     monkeypatch.setattr("cascade.task_rollup._merge_head_pair", lambda *_a: None)
     queue_task_merge("task_001", root=root)
+    assert record_upstream_review_observation(
+        "feat_001",
+        source_ref="feat/feat_001",
+        target_ref="epic/wrong",
+        blocker_identity="required-check:build",
+        evidence_generation="run:41",
+        repair_action_id="repair:feat_001",
+        repair_generation=3,
+        root=root,
+    ) == []
+    assert "upstream_review_observation" not in load_action(
+        "task_001:queued_merge", root=root
+    )["metadata"]
     record_upstream_review_observation(
         "feat_001",
+        source_ref="feat/feat_001",
+        target_ref="epic/epic_001",
         blocker_identity="required-check:build",
         evidence_generation="run:41",
         repair_action_id="repair:feat_001",
@@ -137,12 +156,12 @@ def test_upstream_review_generation_fences_downstream_retry_across_restart(
     assert retry_pending_task_merges(root) == []
     first = load_action("task_001:queued_merge", root=root)
     assert first is not None
-    assert first["attempt_count"] == 1
-    assert first["metadata"]["upstream_review_observation"] != first["metadata"][
-        "parent_lifecycle_mismatch"
-    ]
+    assert first["attempt_count"] == 0
     assert first["metadata"]["upstream_review_evaluation"] == {
         "feature_id": "feat_001",
+        "dependent_feature_id": "feat_002",
+        "source_ref": "feat/feat_001",
+        "target_ref": "epic/epic_001",
         "blocker_identity": "required-check:build",
         "evidence_generation": "run:41",
     }
@@ -151,6 +170,8 @@ def test_upstream_review_generation_fences_downstream_retry_across_restart(
     for _ in range(2):
         record_upstream_review_observation(
             "feat_001",
+            source_ref="feat/feat_001",
+            target_ref="epic/epic_001",
             blocker_identity="required-check:build",
             evidence_generation="run:41",
             repair_action_id="repair:feat_001",
@@ -158,11 +179,13 @@ def test_upstream_review_generation_fences_downstream_retry_across_restart(
             root=root,
         )
         assert retry_pending_task_merges(root) == []
-    assert load_action("task_001:queued_merge", root=root)["attempt_count"] == 1
+    assert load_action("task_001:queued_merge", root=root)["attempt_count"] == 0
 
     # A new run generation admits exactly one ordinary reevaluation.
     record_upstream_review_observation(
         "feat_001",
+        source_ref="feat/feat_001",
+        target_ref="epic/epic_001",
         blocker_identity="required-check:build",
         evidence_generation="run:42",
         repair_action_id="repair:feat_001",
@@ -172,8 +195,11 @@ def test_upstream_review_generation_fences_downstream_retry_across_restart(
     assert retry_pending_task_merges(root) == []
     assert retry_pending_task_merges(root) == []
     changed = load_action("task_001:queued_merge", root=root)
-    assert changed["attempt_count"] == 2
-    assert attempts == ["task_001", "task_001"]
+    assert changed["attempt_count"] == 0
+    assert changed["metadata"]["upstream_review_evaluation"][
+        "evidence_generation"
+    ] == "run:42"
+    assert attempts == []
 
 
 def test_verified_upstream_review_releases_delivery_and_unrelated_failure_is_not_fenced(
@@ -182,33 +208,47 @@ def test_verified_upstream_review_releases_delivery_and_unrelated_failure_is_not
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
-        root, id="feat_001", title="Feature", tier="feature",
+        root, id="feat_001", title="Upstream", tier="feature",
+        status="active", parent="epic_001",
+    )
+    add_doc(
+        root, id="feat_002", title="Dependent", tier="feature",
+        status="active", parent="epic_001", depends_on=["feat_001"],
+    )
+    add_doc(
+        root, id="feat_003", title="Unrelated", tier="feature",
         status="active", parent="epic_001",
     )
     add_doc(
         root, id="task_001", title="Task", tier="task",
-        status="active", parent="feat_001",
+        status="active", parent="feat_002",
+    )
+    add_doc(
+        root, id="task_002", title="Unrelated task", tier="task",
+        status="active", parent="feat_003",
     )
     monkeypatch.setattr("cascade.task_rollup._merge_head_pair", lambda *_a: None)
+    monkeypatch.setattr(
+        "cascade.boss.merge.merge_task_branch",
+        lambda *_a, **_k: MergeResult(ok=False, reason="branch_conflict"),
+    )
     queue_task_merge("task_001", root=root)
+    queue_task_merge("task_002", root=root)
     record_upstream_review_observation(
         "feat_001",
+        source_ref="feat/feat_001",
+        target_ref="epic/epic_001",
         blocker_identity="required-check:build",
         evidence_generation="run:42",
         repair_action_id="repair:feat_001",
         repair_generation=3,
         root=root,
     )
-    action = load_action("task_001:queued_merge", root=root)
-    metadata = dict(action["metadata"])
-    metadata["upstream_review_evaluation"] = {
-        "feature_id": "feat_001",
-        "blocker_identity": "required-check:build",
-        "evidence_generation": "run:42",
-    }
-    from cascade.task.action_recovery import replace_action_metadata
-
-    replace_action_metadata(action["action_id"], metadata, root=root)
+    assert retry_pending_task_merges(root) == []
+    assert load_action("task_001:queued_merge", root=root)["attempt_count"] == 0
+    unrelated = load_action("task_002:queued_merge", root=root)
+    assert "upstream_review_observation" not in unrelated["metadata"]
+    assert unrelated["failure_classification"] == "owner_decision"
     monkeypatch.setattr(
         "cascade.feature.repair.feature_repair_actions",
         lambda *_a, **_k: [{
@@ -218,11 +258,6 @@ def test_verified_upstream_review_releases_delivery_and_unrelated_failure_is_not
             "verification_postcheck": {"verified": True},
         }],
     )
-    monkeypatch.setattr(
-        "cascade.boss.merge.merge_task_branch",
-        lambda *_a, **_k: MergeResult(ok=False, reason="branch_conflict"),
-    )
-
     assert retry_pending_task_merges(root) == []
     failed = load_action("task_001:queued_merge", root=root)
     assert failed["attempt_count"] == 1

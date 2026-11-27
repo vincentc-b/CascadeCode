@@ -209,7 +209,7 @@ watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-o
     }
 }
 
-watchdog_records_task_review_evidence = watchdog_component -> task_team "Records upstream review blocker and evidence generation on owned queued Task actions; Task owns retry and verified release" {
+watchdog_records_task_review_evidence = watchdog_component -> task_team "Records exact-route upstream review evidence on queued Tasks owned by declared same-Epic dependent Features; Task owns retry and verified release" {
     properties {
         "cascade.semanticId" "relationship.watchdog-records-task-review-evidence"
     }
@@ -2669,12 +2669,21 @@ code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one co
     }
 }
 
-code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker and evidence generation separately from downstream Task failure and evaluated generation." {
+code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker, exact review route and evidence generation on affected dependent Feature Tasks separately from Task failure and evaluated generation." {
     properties {
         "cascade.semanticId" "element.code.task.upstream-review-fence"
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task_rollup.py"
         "cascade.sourceSymbol" "record_upstream_review_observation"
+    }
+}
+
+code_task_upstream_dependency = element "_dependent_feature_for_task" "Function" "Prove the queued Task's direct Feature owner declares the observed upstream Feature as a dependency under the same Epic." {
+    properties {
+        "cascade.semanticId" "element.code.task.upstream-review-dependency"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "_dependent_feature_for_task"
     }
 }
 
@@ -3044,6 +3053,12 @@ code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppres
 code_task_upstream_review_fence_to_actions = code_task_upstream_review_fence -> code_task_actions "Stores observed and evaluated generations on the existing queued action" {
     properties {
         "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-actions"
+    }
+}
+
+code_task_upstream_review_fence_to_dependency = code_task_upstream_review_fence -> code_task_upstream_dependency "Requires exact source/target route and current same-Epic dependency ownership" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-dependency"
     }
 }
 
@@ -4486,7 +4501,7 @@ code_watchdog_actionable_review_to_feature_request = code_watchdog_actionable_re
     }
 }
 
-code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized upstream blocker evidence without claiming downstream delivery" {
+code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized blocker generation and exact review route without claiming downstream delivery" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-task-fence"
     }

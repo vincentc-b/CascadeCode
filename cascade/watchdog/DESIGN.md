@@ -388,8 +388,11 @@ the original review.
 
 The same actionable observation calls the Task-owned
 [record_upstream_review_observation](../task_rollup.py) boundary for queued
-deliveries owned by that Feature. Watchdog supplies the normalized blocker and
-material generation but does not claim or retry a downstream Task. The
+deliveries owned by dependent Features. Watchdog supplies the normalized blocker,
+material generation and observed source/target route but does not claim or retry
+a downstream Task. Task admits the observation only when the route names the
+observed Feature and its Epic and the queued Task's direct owner declares that
+same-Epic Feature dependency. The
 [Task delivery contract](../task/DESIGN.md#durable-delivery-collaborators) owns
 generation comparison, attempt charging and release after the independent
 verified repair postcheck. The Watchdog-to-Task observation edge is visible in
@@ -404,7 +407,7 @@ flowchart TD
     Persist -->|write succeeds| Classify[Normalized evidence classification]
     Persist -->|missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
     Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
-    Identity --> Fence[Record evidence on owned queued Task actions]
+    Identity --> Fence[Prove route and dependency; record affected queued Tasks]
     Fence --> Task[Task-owned generation comparison and verified release]
     Identity --> Repair[Join one Feature repair generation]
     Repair --> Publish[Guarded exact-head publication]

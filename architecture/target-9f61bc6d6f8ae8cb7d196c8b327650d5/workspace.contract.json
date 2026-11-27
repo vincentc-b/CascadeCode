@@ -274,6 +274,7 @@
     {"dsl_identifier": "code_watchdog_stage_receipt", "semantic_id": "element.code.watchdog.stage-receipt", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_mismatch", "semantic_id": "element.code.task.parent-lifecycle-mismatch", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_upstream_review_fence", "semantic_id": "element.code.task.upstream-review-fence", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_upstream_dependency", "semantic_id": "element.code.task.upstream-review-dependency", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_revalidation", "semantic_id": "element.code.task.delivery-revalidation", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_leases", "semantic_id": "element.code.task.leases", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_validation", "semantic_id": "element.code.task.validation", "fragment": "model.dsl"}
@@ -609,6 +610,7 @@
     {"dsl_identifier": "code_task_registry_to_actions", "semantic_id": "relationship.code-task-registry-to-actions", "source": "code_task_registry", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_mismatch_to_actions", "semantic_id": "relationship.code-task-parent-lifecycle-mismatch-to-actions", "source": "code_task_mismatch", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_upstream_review_fence_to_actions", "semantic_id": "relationship.code-task-upstream-review-fence-to-actions", "source": "code_task_upstream_review_fence", "destination": "code_task_actions", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_task_upstream_review_fence_to_dependency", "semantic_id": "relationship.code-task-upstream-review-fence-to-dependency", "source": "code_task_upstream_review_fence", "destination": "code_task_upstream_dependency", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_actions_to_leases", "semantic_id": "relationship.code-task-actions-to-leases", "source": "code_task_actions", "destination": "code_task_leases", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_validation_to_actions", "semantic_id": "relationship.code-task-validation-to-actions", "source": "code_task_validation", "destination": "code_task_actions", "fragment": "model.dsl"},
     {"dsl_identifier": "code_task_budget_bind_to_actions", "semantic_id": "relationship.code-task-incident-budget-bind-to-actions", "source": "code_task_budget_bind", "destination": "code_task_actions", "fragment": "model.dsl"},

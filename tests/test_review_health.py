@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -429,14 +430,44 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
     root, turn = _execution_ready_turn(tmp_path)
     add_doc(
         root,
-        id="task_035_001_999",
+        id="feat_035_002",
+        title="Dependent Feature",
+        tier="feature",
+        status="active",
+        parent="epic_035",
+        depends_on=["feat_035_001"],
+    )
+    add_doc(
+        root,
+        id="task_035_002_999",
         title="Downstream delivery",
         tier="task",
         status="active",
-        parent="feat_035_001",
+        parent="feat_035_002",
     )
-    queue_task_merge("task_035_001_999", root=root)
-    run = {"id": 41}
+    add_doc(
+        root,
+        id="feat_035_003",
+        title="Unrelated Feature",
+        tier="feature",
+        status="active",
+        parent="epic_035",
+    )
+    add_doc(
+        root,
+        id="task_035_003_999",
+        title="Unrelated delivery",
+        tier="task",
+        status="active",
+        parent="feat_035_003",
+    )
+    queue_task_merge("task_035_002_999", root=root)
+    queue_task_merge("task_035_003_999", root=root)
+    material = {
+        "run_id": 41,
+        "source_head": "s" * 40,
+        "target_head": turn.observed_target_sha,
+    }
 
     monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
 
@@ -449,21 +480,37 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
             "main",
             False,
         )
+        runner = _github_evidence_runner(
+            transport_mr,
+            policy={"contexts": ["build"]},
+            checks=[{
+                "id": material["run_id"],
+                "name": "build",
+                "head_sha": material["source_head"],
+                "conclusion": "failure",
+                "completed_at": (
+                    f"2026-01-{material['run_id'] - 39:02d}T00:00:00Z"
+                ),
+            }],
+            target_sha=material["target_head"],
+        )
+
+        def material_runner(
+            args: list[str], runner_root: Path
+        ) -> subprocess.CompletedProcess[str]:
+            result = runner(args, runner_root)
+            if args[:3] == ["gh", "pr", "view"] and result.returncode == 0:
+                payload = json.loads(result.stdout)
+                payload["commits"] = [{"oid": material["source_head"]}]
+                return subprocess.CompletedProcess(
+                    args, 0, json.dumps(payload), ""
+                )
+            return result
+
         return tracking.merge_request_snapshot(
             root,
             transport_mr,
-            runner=_github_evidence_runner(
-                transport_mr,
-                policy={"contexts": ["build"]},
-                checks=[{
-                    "id": run["id"],
-                    "name": "build",
-                    "head_sha": "s" * 40,
-                    "conclusion": "failure",
-                    "completed_at": f"2026-01-{run['id'] - 39:02d}T00:00:00Z",
-                }],
-                target_sha=turn.observed_target_sha,
-            ),
+            runner=material_runner,
         )
 
     durable_actions: list[dict[str, object]] = []
@@ -502,18 +549,40 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
 
     first = reconcile_open_review_health(root)[0]
     replay = reconcile_open_review_health(root)[0]
-    first_action = load_action("task_035_001_999:queued_merge", root=root)
+    first_action = load_action("task_035_002_999:queued_merge", root=root)
     first_observation = first_action["metadata"]["upstream_review_observation"]
-    run["id"] = 42
+    material["run_id"] = 42
     changed = reconcile_open_review_health(root)[0]
-    changed_action = load_action("task_035_001_999:queued_merge", root=root)
+    changed_action = load_action("task_035_002_999:queued_merge", root=root)
     changed_observation = changed_action["metadata"]["upstream_review_observation"]
+    material["source_head"] = "t" * 40
+    source_changed = reconcile_open_review_health(root)[0]
+    source_observation = load_action(
+        "task_035_002_999:queued_merge", root=root
+    )["metadata"]["upstream_review_observation"]
+    material["target_head"] = "u" * 40
+    target_changed = reconcile_open_review_health(root)[0]
+    target_action = load_action("task_035_002_999:queued_merge", root=root)
+    target_observation = target_action["metadata"]["upstream_review_observation"]
+    unrelated_action = load_action("task_035_003_999:queued_merge", root=root)
 
     assert first["outcome"] == "routed"
     assert replay["wait_type"] == "repair_generation_reused"
     assert changed["wait_type"] == "repair_writer_active"
+    assert source_changed["wait_type"] == "repair_writer_active"
+    assert target_changed["wait_type"] == "repair_writer_active"
     assert first_observation["blocker_identity"] == changed_observation["blocker_identity"]
     assert first_observation["evidence_generation"] != changed_observation[
         "evidence_generation"
     ]
-    assert changed_action["attempt_count"] == 0
+    assert len({
+        changed_observation["evidence_generation"],
+        source_observation["evidence_generation"],
+        target_observation["evidence_generation"],
+    }) == 3
+    assert target_action["attempt_count"] == 0
+    assert first_observation["feature_id"] == "feat_035_001"
+    assert first_observation["dependent_feature_id"] == "feat_035_002"
+    assert first_observation["source_ref"] == "feat/feat_035_001"
+    assert first_observation["target_ref"] == "epic/epic_035"
+    assert "upstream_review_observation" not in unrelated_action["metadata"]

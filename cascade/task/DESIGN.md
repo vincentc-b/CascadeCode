@@ -354,26 +354,31 @@ normal recovery classification.
 queued action. [record_upstream_review_observation](../task_rollup.py) receives
 the Watchdog's normalized blocker and evidence identities, while
 [retry_pending_task_merges](../task_rollup.py) records the generation it actually
-evaluated only when the Boss gate returns the completed-parent mismatch. Release
-requires the matching Feature repair action's independent `verified` postcheck;
-a green poll alone is not merge or intended-target evidence. This adds neither a
-ledger nor a scheduler. The observer selects queued Tasks owned by the observed
-Feature; this metadata boundary does not select Tasks in other Features by
-dependency. The Watchdog-to-Task edge in `cascade-team-components` exposes the
-observation interface, and `cascade-task-code` exposes its persistence entry
-point. Verification: [queued-delivery tests](../../tests/task/test_rollup_queue.py)
-cover unchanged evidence, changed generations, verified release and unrelated
-Task failure ownership.
+evaluated without claiming the Task action or charging its incident budget.
+Release requires the matching Feature repair action's independent `verified`
+postcheck; a green poll alone is not merge or intended-target evidence. This adds
+neither a ledger nor a scheduler. The observer selects only Tasks whose direct
+Feature owner declares the observed Feature as a dependency in the same Epic,
+and only when the review route is exactly `feat/{upstream}` to
+`epic/{shared-parent}`. The relationship is rechecked before every wait, so
+removed dependencies or changed ownership cannot retain a stale fence. The
+Watchdog-to-Task edge in `cascade-team-components` exposes the observation
+interface, and `cascade-task-code` exposes its persistence and dependency-proof
+entry points. Verification: [queued-delivery tests](../../tests/task/test_rollup_queue.py)
+cover exact-route selection, unchanged evidence, changed generations, verified
+release and unrelated Task failure ownership.
 
 ```mermaid
 flowchart TD
     Red[Normalized upstream blocker and evidence generation] --> Persist[Queued Task action metadata]
     Persist --> Compare{Already evaluated?}
     Compare -->|same| Wait[Retain queue; no claim or attempt]
-    Compare -->|changed| Gates[Ordinary dependency and recovery gates]
-    Gates -->|same upstream refusal| Evaluate[Record evaluated generation]
+    Compare -->|changed| Relationship[Recheck route and declared dependency]
+    Relationship -->|proven and red| Evaluate[Record evaluated generation without claim]
+    Relationship -->|not proven| Gates[Ordinary recovery gates]
+    Evaluate --> Wait
+    Gates -->|eligible| Attempt[Ordinary Task action claim]
     Gates -->|unrelated Task failure| TaskOwner[Keep normal Task recovery actionable]
-    Evaluate --> Compare
     Persist --> Verify{Exact repair postcheck verified?}
     Verify -->|no| Wait
     Verify -->|yes| Gates

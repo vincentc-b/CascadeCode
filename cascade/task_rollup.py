@@ -57,6 +57,9 @@ class UpstreamReviewFence(TypedDict):
 
     schema_version: int
     feature_id: str
+    dependent_feature_id: str
+    source_ref: str
+    target_ref: str
     blocker_identity: str
     evidence_generation: str
     repair_action_id: str | None
@@ -312,6 +315,8 @@ def pending_task_merges(root: Path) -> set[str]:
 def record_upstream_review_observation(
     feature_id: str,
     *,
+    source_ref: str,
+    target_ref: str,
     blocker_identity: str,
     evidence_generation: str,
     repair_action_id: str | None,
@@ -331,6 +336,18 @@ def record_upstream_review_observation(
     repo = resolve_root(root)
     from cascade.task.action_recovery import recovery_actions
 
+    try:
+        upstream = read_doc(feature_id, root=repo)
+    except NotFound:
+        return []
+    if (
+        upstream.meta.tier != "feature"
+        or not upstream.meta.parent
+        or source_ref != f"feat/{feature_id}"
+        or target_ref != f"epic/{upstream.meta.parent}"
+    ):
+        return []
+
     affected: list[str] = []
     for action in recovery_actions(root=repo):
         if (
@@ -340,13 +357,18 @@ def record_upstream_review_observation(
             continue
         metadata = action.get("metadata")
         task_id = metadata.get("task_id") if isinstance(metadata, Mapping) else None
-        if not isinstance(task_id, str) or not _owned_by_feature(
-            task_id, feature_id, repo
-        ):
+        dependent_feature_id = _dependent_feature_for_task(
+            task_id, upstream_feature_id=feature_id, epic_id=upstream.meta.parent,
+            root=repo,
+        ) if isinstance(task_id, str) else None
+        if dependent_feature_id is None:
             continue
         observation: UpstreamReviewFence = {
             "schema_version": 1,
             "feature_id": feature_id,
+            "dependent_feature_id": dependent_feature_id,
+            "source_ref": source_ref,
+            "target_ref": target_ref,
             "blocker_identity": blocker_identity,
             "evidence_generation": evidence_generation,
             "repair_action_id": repair_action_id,
@@ -423,7 +445,7 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
                 removable.append(task_id)
             continue
 
-        if _unchanged_upstream_review_fence(action, repo):
+        if _upstream_review_fence_waits(action, repo):
             # An upstream review poll is not a downstream Task retry.  Only one
             # ordinary gated reevaluation is admitted for each exact evidence
             # generation, even across supervisor restart.
@@ -511,6 +533,27 @@ def _owned_by_feature(task_id: str, feature_id: str, root: Path) -> bool:
         return read_doc(task_id, root=root).meta.parent == feature_id
     except NotFound:
         return False
+
+
+def _dependent_feature_for_task(
+    task_id: str, *, upstream_feature_id: str, epic_id: str, root: Path
+) -> str | None:
+    """Return the direct Task owner only for a declared same-Epic dependency."""
+
+    try:
+        task = read_doc(task_id, root=root)
+        dependent = read_doc(task.meta.parent or "", root=root)
+    except NotFound:
+        return None
+    if (
+        task.meta.tier != "task"
+        or dependent.meta.tier != "feature"
+        or dependent.meta.id == upstream_feature_id
+        or dependent.meta.parent != epic_id
+        or upstream_feature_id not in dependent.meta.depends_on
+    ):
+        return None
+    return dependent.meta.id
 
 
 def _delivery_turn_busy(task_id: str, root: Path) -> bool:
@@ -610,14 +653,6 @@ def _unchanged_parent_lifecycle_mismatch(
     """Observe an unchanged mismatch without spending another merge attempt."""
 
     metadata = action.get("metadata")
-    if isinstance(metadata, Mapping):
-        observation = metadata.get("upstream_review_observation")
-        evaluated = metadata.get("upstream_review_evaluation")
-        if isinstance(observation, Mapping) and isinstance(evaluated, Mapping) and any(
-            evaluated.get(field) != observation.get(field)
-            for field in ("feature_id", "blocker_identity", "evidence_generation")
-        ):
-            return False
     if action.get("failure_classification") != "parent_lifecycle_mismatch":
         return False
     recorded = (
@@ -635,23 +670,72 @@ def _unchanged_parent_lifecycle_mismatch(
     )
 
 
-def _unchanged_upstream_review_fence(
+_UPSTREAM_REVIEW_EVALUATION_FIELDS = (
+    "feature_id",
+    "dependent_feature_id",
+    "source_ref",
+    "target_ref",
+    "blocker_identity",
+    "evidence_generation",
+)
+
+
+def _upstream_review_fence_waits(
     action: Mapping[str, Any], root: Path
 ) -> bool:
-    """Whether this downstream action already evaluated the observed blocker."""
+    """Evaluate one upstream generation without claiming the Task action."""
 
     metadata = action.get("metadata")
     if not isinstance(metadata, Mapping):
         return False
     observation = metadata.get("upstream_review_observation")
     evaluated = metadata.get("upstream_review_evaluation")
-    if not isinstance(observation, Mapping) or not isinstance(evaluated, Mapping):
+    if not isinstance(observation, Mapping):
+        return False
+    if not _upstream_review_relationship_current(observation, action, root):
         return False
     if _upstream_review_verified(observation, root):
         return False
-    return all(
-        evaluated.get(field) == observation.get(field)
-        for field in ("feature_id", "blocker_identity", "evidence_generation")
+    current = {
+        field: observation.get(field) for field in _UPSTREAM_REVIEW_EVALUATION_FIELDS
+    }
+    if not isinstance(evaluated, Mapping) or any(
+        evaluated.get(field) != value for field, value in current.items()
+    ):
+        merge_action_metadata(
+            str(action["action_id"]),
+            {"upstream_review_evaluation": current},
+            root=root,
+        )
+    return True
+
+
+def _upstream_review_relationship_current(
+    observation: Mapping[str, Any], action: Mapping[str, Any], root: Path
+) -> bool:
+    """Recheck route and dependency ownership before retaining the fence."""
+
+    upstream_id = observation.get("feature_id")
+    dependent_id = observation.get("dependent_feature_id")
+    metadata = action.get("metadata")
+    task_id = metadata.get("task_id") if isinstance(metadata, Mapping) else None
+    if not all(isinstance(value, str) for value in (upstream_id, dependent_id, task_id)):
+        return False
+    try:
+        upstream = read_doc(upstream_id, root=root)
+    except NotFound:
+        return False
+    return bool(
+        upstream.meta.tier == "feature"
+        and upstream.meta.parent
+        and observation.get("source_ref") == f"feat/{upstream_id}"
+        and observation.get("target_ref") == f"epic/{upstream.meta.parent}"
+        and _dependent_feature_for_task(
+            task_id,
+            upstream_feature_id=upstream_id,
+            epic_id=upstream.meta.parent,
+            root=root,
+        ) == dependent_id
     )
 
 
@@ -695,7 +779,7 @@ def _store_parent_lifecycle_mismatch(task_id: str, root: Path) -> dict[str, Any]
     if isinstance(observation, Mapping):
         updates["upstream_review_evaluation"] = {
             field: observation.get(field)
-            for field in ("feature_id", "blocker_identity", "evidence_generation")
+            for field in _UPSTREAM_REVIEW_EVALUATION_FIELDS
         }
     merge_action_metadata(action_id, updates, root=root)
     return mismatch

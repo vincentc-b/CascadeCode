@@ -457,8 +457,9 @@ Watchdog bounds and persists each current normalized observation in the canonica
 review registry before classification can route work. Persistence failure remains
 a typed evidence-unavailable wait, so War Room and delivery projections never
 derive repair authority from an observation they cannot inspect after restart.
-Affected queued Task actions retain the upstream blocker and material evidence
-generation through the [Task delivery fence](task/DESIGN.md#durable-delivery-collaborators).
+Affected queued Task actions in same-Epic dependent Features retain the upstream
+blocker, exact review route and material evidence generation through the
+[Task delivery fence](task/DESIGN.md#durable-delivery-collaborators).
 Watchdog observes evidence, Task owns retry charging, and the independent repair
 postcheck remains the only release evidence.
 
