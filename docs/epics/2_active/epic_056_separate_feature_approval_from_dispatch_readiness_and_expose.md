@@ -144,6 +144,11 @@ Reviewed relevant approval/readiness sections in DESIGN.md, cascade/DESIGN.md, c
   Chose Deliver feat_056_001 followed by feat_056_002, with design/Code-view work and bounded API, real-Git and browser evidence inside each Feature..
   Rationale: One backend authority contract followed by its UI consumer provides the smallest coherent delivery. Reuse current receipt, lifecycle state and test fixtures; require architecture reconciliation before plan sign-off.
   Honors: Epic success criteria 3 and 4; frugal-engineering and design skill contracts..
+
+- `dec_003` · 2026-11-27 · Epic Architect · **Approval declaration fence and evidence compatibility**
+  Chose Bind a canonical sorted unique depends_on declaration to both scope and exact approval evidence and to the displayed approval request; predecessor lifecycle facts remain outside the approval identity..
+  Rationale: The current _revision omits depends_on. Changed declarations must require explicit review, while lifecycle progress must release already authorized work. Extend the existing receipt with a versioned declaration fingerprint; never upgrade an old receipt from today's declaration without immutable historical proof. Unknown proof remains non-dispatchable and requires explicit review.
+  Honors: Success criteria 1, 2 and 4; delegated tactical scope mode, corrective exact mode, changed-plan invalidation, restart and concurrency fences..
 ## Amendment log
 
 _(none)_
