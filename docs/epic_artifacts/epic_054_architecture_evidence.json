@@ -1,8 +1,8 @@
 {
   "work_id": "epic_054",
   "role": "epic_architect",
-  "design_revision": "4827ef66f615820e258206d1f28d2f2903e0aab7",
-  "model_revision": "8b870e45845e89eb782be9f48f9bb4d612ba0486",
+  "design_revision": "5abe8b2d020ed0facf08542bc46379245cdfc417",
+  "model_revision": "5abe8b2d020ed0facf08542bc46379245cdfc417",
   "reviewed_designs": [
     "DESIGN.md",
     "cascade/DESIGN.md",
@@ -41,12 +41,13 @@
     "27 C4 source/review tests passed in 5.73s, including malformed metadata and ownership/source guards.",
     "validate_c4_workspace passed; all four added source symbols are module-level Function declarations by AST; changed DESIGN file links resolve; no symbol rename/deletion or component ownership change.",
     "Pinned local renderer produced all 25 views with existing image and CPU/memory/PID/timeout bounds.",
-    "Actual browser context -> container -> component -> Code, deep-link restoration, pinned source opening and Level up passed for all four added nodes. Cold ready 80.76s, full journey 136.24s; render count remained 1 -> 1, showing warm reuse without per-view renderer startup.",
-    "git diff --check passed; reviewed changed prose has no delivery-history attribution. Stable requirements remain with existing owners."
+    "Actual browser context -> container -> component -> Code, deep-link restoration, pinned source and Level up passed for all four nodes at 5abe8b2d020ed0facf08542bc46379245cdfc417. Cold ready 75.09s, full journey 129.30s; render count remained 2 -> 2 through warm navigation.",
+    "git diff --check passed; reviewed changed prose has no delivery-history attribution. Stable requirements remain with existing owners.",
+    "Final changed design file and heading links resolve; corrected authenticated artifact references materialize with owner epic_054 and the exact rendered closure digest."
   ],
   "render": {
-    "operation_id": "c4-render-90422e4b2a0194f83eee8e493a76a6d2464d81cddfb0bc94d0d0f9e8e1fa8345",
-    "closure_digest": "841bff720298fb3fa71c7d76c0fd039fa06b09e31ff9420fd15aa1c77c0119cf",
+    "operation_id": "c4-render-b59e1bbdbd2b8dfed9f31c1cc8ba8ef894c0279ed497afabb69729b1260d81b0",
+    "closure_digest": "23442fbccacfb97a6bb29af0efc426e46e8181708f61920b16fda7a5c64a4158",
     "semantic_digest": "229463e1cf437f701d5382848b27a47299cba91b51f13981fd9a6872ffa49fe6",
     "image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
     "settings": {
@@ -66,5 +67,14 @@
   "child_correction": "feat_054_001 canonical write 697771ee662cea820998bc0e5e55937c90c3c73e adds Teams ownership and mandatory Task acceptance. No tasks exist before dispatch.",
   "publication_request": "docs/epic_artifacts/epic_054_architecture_review.json",
   "handoff": "Epic Manager must review and sign the revised epic plan before human approval. Pending architecture publication must be resumed with the identical saved request on a later turn.",
-  "reviewed_plan_revision": "fb8ed5f3ea12583069d4a7db289b6212c74a6e0c"
+  "reviewed_plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+  "source_artifact_owner": "epic_054; component semantic owners unchanged",
+  "initial_publication_failure": {
+    "request_commit": "aa3d3d73",
+    "operation_id": "architecture-publication-1ad9804c8dbeaaa353cbfb2b1ab3c1ed005a44d5f632d9666e397228f5b22b46",
+    "status": "failed",
+    "reason_code": "invalid_publication",
+    "message": "C4 owner mismatch for workspace.dsl: contract='epic_056', reference='epic_054'",
+    "resolution": "Corrected workspace/fragment owners at 5abe8b2d; exact publication references now materialize with matching owner and closure. Re-rendered and repeated browser verification against that pin."
+  }
 }

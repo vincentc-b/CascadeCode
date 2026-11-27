@@ -8,7 +8,7 @@
       "deep_link_restored": true,
       "pinned_source_opened": true,
       "level_up": true,
-      "elapsed_seconds": 12.846213043900207
+      "elapsed_seconds": 13.091539358021691
     },
     {
       "component": "boss",
@@ -18,7 +18,7 @@
       "deep_link_restored": true,
       "pinned_source_opened": true,
       "level_up": true,
-      "elapsed_seconds": 14.192605420015752
+      "elapsed_seconds": 11.613597647054121
     },
     {
       "component": "workspace",
@@ -28,7 +28,7 @@
       "deep_link_restored": true,
       "pinned_source_opened": true,
       "level_up": true,
-      "elapsed_seconds": 13.401793488999829
+      "elapsed_seconds": 14.17876295815222
     },
     {
       "component": "workspace",
@@ -38,14 +38,14 @@
       "deep_link_restored": true,
       "pinned_source_opened": true,
       "level_up": true,
-      "elapsed_seconds": 14.544658491155133
+      "elapsed_seconds": 14.82208881387487
     }
   ],
   "http_errors": [],
-  "source_revision": "8b870e45845e89eb782be9f48f9bb4d612ba0486",
-  "initial_ready_seconds": 80.76257646502927,
-  "render_operations_before": 1,
-  "render_operations_after": 1,
-  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_054\nCode revision\n8b870e45845e89eb782be9f48f9bb4d612ba0486\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n8b870e45845e89eb782be9f48f9bb4d612ba0486\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
-  "total_seconds": 136.24213512218557
+  "source_revision": "5abe8b2d020ed0facf08542bc46379245cdfc417",
+  "initial_ready_seconds": 75.09004261996597,
+  "render_operations_before": 2,
+  "render_operations_after": 2,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_054\nCode revision\n5abe8b2d020ed0facf08542bc46379245cdfc417\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n5abe8b2d020ed0facf08542bc46379245cdfc417\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 129.30034686881118
 }
