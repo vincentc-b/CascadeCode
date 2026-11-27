@@ -168,6 +168,11 @@ No DESIGN.md/model edits are included in this planning turn: existing documents 
   Chose Keep prospective validation, actual accepted merge, exact merged-revision required CI, fresh remote/local sync, board proof and independently verified closure separate. Validate existing local prerequisites only; declaration does not authorize installation or establish remote CI/deployment..
   Rationale: Green source checks or a merged review cannot attest integrated target health. Unknown/stale evidence stays unavailable. Dirty/diverged work is preserved with supported owner prerequisites; no reset, force push, replacement ledger or implicit authority.
   Honors: Success criteria 1–6; declared software prerequisites and target identity; current review/incident/owner contracts..
+
+- `dec_003` · 2026-11-27 · Epic Architect · **Architecture ownership and planning review**
+  Chose Preserve validator/publication code under element.component.teams and cascade-teams-code. Assign every affected C4 level and owning design to the feature inventory; carry updates and source/render/navigation/recovery checks into Task acceptance. Keep unimplemented behavior in work records..
+  Rationale: Existing source contract passes and 18 publication safeguard tests pass, but those results do not verify proposed behavior. Current designs describe the present limitations. Epic Architect review and changed-view runtime/UI verification remain explicit gates; accepted architecture snapshots are not rewritten.
+  Honors: Design skill one-owner, implementation-depth, revision-pinned publication and review/closeout contract..
 ## Amendment log
 
 _(none)_
