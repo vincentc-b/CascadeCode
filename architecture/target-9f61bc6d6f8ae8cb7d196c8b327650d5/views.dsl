@@ -41,7 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
-    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_reserve code_feature_repair_verify
+    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_latest_open_review_repair code_feature_reserve code_feature_repair_verify
     autoLayout lr
 }
 
@@ -123,7 +123,7 @@ custom "cascade-watchdog-code" {
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_activate_epic code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
     include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_repair_postcheck code_watchdog_required_checks code_watchdog_verify code_watchdog_incident_projection
-    include code_watchdog_review_health code_watchdog_actionable_review code_watchdog_review_snapshot code_watchdog_review_evidence_health
+    include code_watchdog_review_health code_watchdog_actionable_review code_watchdog_review_snapshot code_watchdog_review_evidence_health code_watchdog_review_evidence_record
     autoLayout lr
 }
 
@@ -152,7 +152,7 @@ custom "cascade-war-room-http-code" {
     properties {
         "cascade.codeComponent" "element.component.war-room-http"
     }
-    include code_http_serve code_http_handler code_http_identity code_http_local
+    include code_http_serve code_http_handler code_http_identity code_http_local code_http_review_repair
     autoLayout lr
 }
 
@@ -170,7 +170,7 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
     include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_post
     include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr

@@ -58,6 +58,7 @@
     flightPanel: document.getElementById("flight-report-panel"),
     flightBody: document.getElementById("flight-report-body"),
     featurePlaceholder: document.getElementById("feature-room-placeholder"),
+    featureRoomReviewState: document.getElementById("feature-room-review-state"),
     amendmentPane: document.getElementById("amendment-pane"),
     amendmentPaneStatus: document.getElementById("amendment-pane-status"),
     amendmentList: document.getElementById("amendment-list"),
@@ -970,6 +971,7 @@
     reconcileLifecycleActions();
     updateAttentionStatus();
     renderCurrentDependencySummary(view);
+    renderFeatureRoomReview(view);
     if ((backlogPriorityUi && backlogPriorityUi.isDragging()) ||
         (backlogEpicPriorityUi && backlogEpicPriorityUi.isDragging())) return;
     if (!backlogPriorityUi && BacklogPriorityUiApi) {
@@ -1694,6 +1696,7 @@
         item.review.state === "awaiting_review" ? "Awaiting review" : "Preparing review";
       reviewStatus.setAttribute("aria-label", "Feature review status: " + reviewStatus.textContent);
       row.appendChild(reviewStatus);
+      appendAccountableReviewState(row, item.review, true);
       if (item.review.closeout_blocker && item.review.closeout_blocker.message) {
         const blocker = document.createElement("div");
         blocker.className = "feature-readiness-blockers";
@@ -1974,6 +1977,58 @@
     row.appendChild(actions);
     if (tier === "epics") appendLifecycleActionFeedback(row, item);
     return row;
+  }
+
+  function appendAccountableReviewState(container, review, compact) {
+    if (!container || !review) return;
+    const repair = review.repair || {};
+    const evidence = review.evidence || {};
+    const ci = evidence.ci || {};
+    const feedback = evidence.feedback || {};
+    const details = document.createElement("div");
+    details.className = compact ? "feature-review-accountability feature-review-accountability-compact" :
+      "feature-review-accountability";
+    const lines = [
+      "Accountable Feature: " + (review.accountable_feature_id || "unknown"),
+      "Implementation: " + (review.implementation_complete ? "complete" : (review.implementation_status || "unknown")) +
+        " · Delivery: " + (review.delivery_status || "unknown"),
+      "CI: " + (evidence.health_state || "unknown") +
+        " · policy: " + (ci.policy_status || "unknown") +
+        " · feedback: " + (feedback.approval_state || feedback.status || "unknown") +
+        " · freshness: " + (evidence.freshness || "unknown"),
+      "Repair generation: " + String(repair.generation || 0) +
+        " · " + (repair.verified ? "verified" : repair.executing ? "executing" :
+          repair.admitted ? "admitted" : repair.refused ? "refused" :
+          repair.waiting ? "waiting" : "not requested"),
+      "Next: " + (review.next_prerequisite || "unknown"),
+    ];
+    lines.forEach(function (text) {
+      const line = document.createElement("p");
+      line.textContent = text;
+      details.appendChild(line);
+    });
+    if (review.url && !compact) details.appendChild(actionLink("Open original review", review.url));
+    container.appendChild(details);
+  }
+
+  function renderFeatureRoomReview(view) {
+    if (!el.featureRoomReviewState) return;
+    el.featureRoomReviewState.innerHTML = "";
+    if (!focusGraphId || focusGraphId.indexOf("feat_") !== 0 || !view || !view.features) return;
+    let selected = null;
+    Object.keys(view.features).some(function (column) {
+      selected = (view.features[column] || []).find(function (item) {
+        return item.id === focusGraphId;
+      }) || null;
+      return !!selected;
+    });
+    if (!selected || !selected.review) {
+      const empty = document.createElement("p");
+      empty.textContent = "No accountable open-review state is published.";
+      el.featureRoomReviewState.appendChild(empty);
+      return;
+    }
+    appendAccountableReviewState(el.featureRoomReviewState, selected.review, false);
   }
 
   function taskExecutionStatus(item) {
@@ -3154,6 +3209,7 @@
         : "Epic War Room";
     el.btnDetach.hidden = !attachedGraphId;
     renderCurrentDependencySummary(lastBoardView);
+    renderFeatureRoomReview(lastBoardView);
     loadCurrentRecoveryProgress(focusGraphId).catch(function () {
       /* The persistent current-progress panel reports typed failures. */
     });
@@ -3794,6 +3850,9 @@
             btnRefreshOpenReviews: el.btnRefreshOpenReviews,
           },
           apiGet: apiGet,
+          apiPost: function (path, payload) {
+            return apiPost(path, payload, LIFECYCLE_ACTION_DEADLINE_MS);
+          },
         })
       : null;
 

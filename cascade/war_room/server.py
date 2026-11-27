@@ -97,7 +97,7 @@ from cascade.war_room.dependency_routes import (
     PING_TEAM_PATH,
     register_dependency_routes,
 )
-from cascade.war_room.review_routes import register_review_routes
+from cascade.war_room.review_routes import REVIEW_REPAIR_PATH, register_review_routes
 from cascade.war_room.room_settings_routes import (
     register_room_settings_routes,
     room_settings_api_path_exists,
@@ -154,6 +154,7 @@ _APPROVAL_POST_PATHS = frozenset(
         BOOTSTRAP_REVIEW_PATH,
         INSTALLATION_APPROVAL_PATH,
         PING_TEAM_PATH,
+        REVIEW_REPAIR_PATH,
     }
 )
 

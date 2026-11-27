@@ -876,6 +876,7 @@ def _backlog_open_feature(meta: WorkMeta) -> bool:
 def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
     ctx = review.context
     return {
+        **review.details,
         "id": review.id,
         "url": review.url,
         "state": review.state,
@@ -926,7 +927,9 @@ def board_view_from_index(board, *, root: Path) -> dict:
         {meta.id for meta in metas if meta.tier == "task"}, root=root
     )
     reviews = feature_review_views(
-        {meta.id for meta in metas if meta.tier == "feature"}, root=root
+        {meta.id for meta in metas if meta.tier == "feature"},
+        root=root,
+        board_snapshot=board,
     )
     pending_review_ids = frozenset(
         feature_id

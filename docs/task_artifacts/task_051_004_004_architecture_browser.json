@@ -1,0 +1,115 @@
+{
+  "paths": [
+    {
+      "component": "dashboard",
+      "view": "cascade-dashboard-code",
+      "node": "element.code.dashboard.review-projection",
+      "symbol": "feature_review_views",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 11.564959139097482
+    },
+    {
+      "component": "war-room-http",
+      "view": "cascade-war-room-http-code",
+      "node": "element.code.http.review-repair",
+      "symbol": "handle_post_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 15.573251432972029
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.open-review-repair",
+      "symbol": "admit_open_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.411194530082867
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.latest-open-review-repair",
+      "symbol": "latest_feature_repair_records",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 10.5281966291368
+    },
+    {
+      "component": "task-team",
+      "view": "cascade-task-code",
+      "node": "element.code.task.upstream-review-fence",
+      "symbol": "record_upstream_review_observation",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 10.912899087183177
+    },
+    {
+      "component": "epic-team",
+      "view": "cascade-epic-code",
+      "node": "element.code.epic.review-repair-request",
+      "symbol": "request_feature_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 16.046049437951297
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.actionable-review-health",
+      "symbol": "_route_actionable_review_health",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 11.918506246060133
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.review-evidence-record",
+      "symbol": "record_feature_review_evidence",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 12.036064234096557
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.repair-postcheck-gate",
+      "symbol": "_current_open_review_postcheck_matches",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 11.796291520120576
+    },
+    {
+      "component": "workspace",
+      "view": "cascade-workspace-code",
+      "node": "element.code.workspace.retained-feature-delivery",
+      "symbol": "_retained_feature_delivery",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 15.188785546924919
+    }
+  ],
+  "http_errors": [],
+  "ready_seconds": 7.143915632972494,
+  "render_operations_before": 2,
+  "render_operations_after": 2,
+  "code_revision": "84c7cdd7e7e380a23b2d6a28df99a66fc96e67f0",
+  "documentation_revision": "84c7cdd7e7e380a23b2d6a28df99a66fc96e67f0",
+  "branch": "task/task_051_004_004",
+  "architecture_destination": "target",
+  "association_provenance": "colocated",
+  "working_tree_note": "The browser ran from the clean committed reconciliation; architecture, design and product source bytes were pinned to code_revision.",
+  "total_seconds": 137.62173159513623
+}
