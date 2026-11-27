@@ -525,6 +525,7 @@
   }
 
   var PAGE_LOAD_MS = 10000;
+  var LIFECYCLE_ACTION_MS = 120000;
   var MERMAID_SCRIPT_SRC = "/static/vendor/mermaid.min.js";
   var mermaidLoadPromise = null;
 
@@ -662,12 +663,16 @@
     });
   }
 
-  function postJson(path, payload) {
-    return fetch(path, {
+  function postJson(path, payload, timeoutMs) {
+    var request = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }).then(function (resp) {
+    };
+    if (timeoutMs != null && typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+      request.signal = AbortSignal.timeout(timeoutMs);
+    }
+    return fetch(path, request).then(function (resp) {
       return resp.text().then(function (raw) {
         var parsed;
         try {
@@ -774,6 +779,210 @@
     });
 
     return { chrome: chrome, refreshReadiness: refreshReadiness };
+  }
+
+  function featureReviewContextText(context) {
+    if (!context) return "";
+    return "Reviewed scope: plan " + context.plan_revision +
+      " · review " + context.review_unit_id +
+      " · tuple " + context.reviewed_tuple_digest +
+      " · repository " + context.target_repository_key + ".";
+  }
+
+  function initFeaturePlanApprovalChrome(workId, readiness, options) {
+    options = options || {};
+    var host = document.getElementById("epic-plan-readiness-host");
+    if (!host || !readiness) return null;
+
+    var state = {
+      phase: readiness.approval && readiness.approval.state === "approved" ? "saved" : "idle",
+      reviewContext: options.reviewContext || null,
+      readiness: readiness,
+      result: null,
+      retryAllowed: false,
+      observation: 0,
+    };
+    host.hidden = false;
+
+    function reasonRows() {
+      var explanation = state.readiness && state.readiness.explanation;
+      return explanation && Array.isArray(explanation.reasons) ? explanation.reasons : [];
+    }
+
+    function affectedWorkIds() {
+      var ids = [];
+      var resultIds = state.result && state.result.affected_work_ids;
+      if (Array.isArray(resultIds)) ids = ids.concat(resultIds);
+      reasonRows().forEach(function (reason) {
+        if (Array.isArray(reason.affected_work_ids)) ids = ids.concat(reason.affected_work_ids);
+      });
+      return ids.filter(function (value, index) { return ids.indexOf(value) === index; });
+    }
+
+    function render(focusButton) {
+      host.replaceChildren();
+      var region = document.createElement("section");
+      region.className = "feature-plan-approval feature-plan-approval-" + state.phase;
+      region.setAttribute("role", "region");
+      region.setAttribute("aria-label", "Feature approval for " + workId);
+
+      var scope = document.createElement("p");
+      scope.className = "feature-plan-approval-scope";
+      scope.textContent = state.reviewContext
+        ? featureReviewContextText(state.reviewContext)
+        : "No current reviewed scope is available. Complete the architecture review above, then refresh this plan.";
+      region.appendChild(scope);
+
+      var status = document.createElement("p");
+      status.className = "feature-plan-approval-status";
+      status.setAttribute("role", state.phase === "refused" ? "alert" : "status");
+      status.setAttribute("aria-live", state.phase === "refused" ? "assertive" : "polite");
+      var approval = state.readiness.approval || {};
+      var explanation = state.result && state.result.approval_explanation;
+      var code = explanation && explanation.code;
+      var ids = affectedWorkIds();
+      var codes = reasonRows().map(function (reason) { return reason.code; });
+      if (state.phase === "pending") {
+        status.textContent = "Approval pending for the displayed review tuple.";
+      } else if (state.phase === "unconfirmed") {
+        status.textContent = "Approval outcome unconfirmed. Canonical approval evidence is being checked before retry.";
+      } else if (state.phase === "refused") {
+        status.textContent = (explanation && explanation.message) || "Feature approval was refused.";
+        if (code) status.textContent += " Code: " + code + ".";
+      } else if (state.phase === "saved" || approval.state === "approved") {
+        var execution = state.result && state.result.execution_state;
+        status.textContent = execution === "waiting"
+          ? "Approval saved; execution is waiting for canonical prerequisites."
+          : "Feature approval is current.";
+        if (code) status.textContent += " Code: " + code + ".";
+        if (codes.length) status.textContent += " Prerequisites: " + codes.join(", ") + ".";
+      } else if (!state.reviewContext) {
+        status.textContent = "Approval is disabled until a current reviewed tuple is available.";
+      } else {
+        status.textContent = "Review the exact tuple above before approving this Feature.";
+      }
+      if (ids.length) status.textContent += " Affected: " + ids.join(", ") + ".";
+      region.appendChild(status);
+
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "feature-plan-approval-button";
+      button.textContent = state.phase === "pending" ? "Approving…" :
+        state.phase === "saved" || approval.state === "approved" ? "Approved" :
+        !state.reviewContext ? "Approve feature" :
+        state.phase === "refused" || state.phase === "unconfirmed" ? "Retry approval" :
+        "Approve feature";
+      button.disabled = !state.reviewContext || state.phase === "pending" ||
+        state.phase === "saved" || approval.state === "approved" ||
+        (state.phase === "unconfirmed" && !state.retryAllowed);
+      if (button.disabled) button.setAttribute("aria-disabled", "true");
+      button.setAttribute("aria-busy", state.phase === "pending" ? "true" : "false");
+      button.setAttribute("aria-label", button.textContent + " for " + workId);
+      region.appendChild(button);
+      host.appendChild(region);
+      if (focusButton) {
+        setTimeout(function () { button.focus(); }, 0);
+      }
+
+      button.addEventListener("click", function () {
+        if (button.disabled || !state.reviewContext) return;
+        var token = ++state.observation;
+        var submittedContext = state.reviewContext;
+        state.phase = "pending";
+        state.retryAllowed = false;
+        state.result = null;
+        render(true);
+        postJson("/api/approve_feature", {
+          id: workId,
+          review_context: submittedContext,
+        }, LIFECYCLE_ACTION_MS)
+          .then(function (body) {
+            if (token !== state.observation) return;
+            state.result = body;
+            state.phase = body && body.approval_result === "approved" ? "saved" : "refused";
+            render(true);
+            return refreshCanonical(token, false);
+          })
+          .catch(function (err) {
+            if (token !== state.observation) return;
+            if (err.status && err.body) {
+              state.phase = "refused";
+              state.result = err.body;
+              var refusal = err.body.approval_explanation || {};
+              if ([
+                "review_context_refused",
+                "stale_review_context",
+                "stale_revision",
+                "artifact_changed",
+                "review_required",
+              ].indexOf(refusal.code) !== -1) {
+                state.reviewContext = null;
+              }
+              state.retryAllowed = !!state.reviewContext;
+              render(true);
+              return;
+            }
+            state.phase = "unconfirmed";
+            state.result = {
+              approval_explanation: {
+                code: "transport_unconfirmed",
+                message: "Approval outcome was not confirmed.",
+              },
+              affected_work_ids: [workId],
+            };
+            render(true);
+            return refreshCanonical(token, true);
+          });
+      });
+      return button;
+    }
+
+    function refreshCanonical(token, reconcileTransport) {
+      return fetch("/api/doc/" + encodeURIComponent(workId), {
+        signal: pageLoadSignal(),
+        cache: "no-store",
+      })
+        .then(function (resp) {
+          if (!resp.ok) throw new Error("Failed to refresh Feature approval (" + resp.status + ")");
+          return resp.json();
+        })
+        .then(function (doc) {
+          if (token !== state.observation) return;
+          var next = doc.feature_readiness;
+          var canonicalApproval = next && next.approval;
+          if (canonicalApproval && canonicalApproval.state === "approved") {
+            state.readiness = next;
+            state.phase = "saved";
+            state.retryAllowed = false;
+            if (reconcileTransport) {
+              state.result = {
+                approval_explanation: {
+                  code: "canonical_approval_current",
+                  message: "Canonical receipt-backed approval evidence is current.",
+                },
+                affected_work_ids: canonicalApproval.affected_work_ids || [workId],
+                execution_state: next.blockers && next.blockers.length ? "waiting" : "admitted",
+              };
+            }
+          } else if (doc.meta && doc.meta.status !== "backlog" && doc.meta.status !== "ready_to_plan") {
+            state.phase = "saved";
+            state.retryAllowed = false;
+          } else if (reconcileTransport) {
+            state.readiness = next || state.readiness;
+            state.reviewContext = doc.paired_review && doc.paired_review.approval_context;
+            state.retryAllowed = !!state.reviewContext;
+          }
+          render(true);
+        })
+        .catch(function () {
+          if (token !== state.observation || !reconcileTransport) return;
+          state.retryAllowed = false;
+          render(true);
+        });
+    }
+
+    var approveButton = render();
+    return { state: state, approveButton: approveButton, refreshCanonical: refreshCanonical };
   }
 
   function initDependencyReviewChrome(workId, projection, readinessMount, options) {
@@ -4413,6 +4622,11 @@
               reviewContext: doc.paired_review && doc.paired_review.approval_context,
             });
           }
+          if (meta.tier === "feature" && doc.feature_readiness) {
+            initFeaturePlanApprovalChrome(workId, doc.feature_readiness, {
+              reviewContext: doc.paired_review && doc.paired_review.approval_context,
+            });
+          }
           if (meta.tier === "epic" && meta.dependency_status) {
             initDependencyReviewChrome(
               workId,
@@ -4471,6 +4685,7 @@
     MERMAID_SCRIPT_SRC: MERMAID_SCRIPT_SRC,
     initPlanComments: initPlanComments,
     initEpicPlanReadinessChrome: initEpicPlanReadinessChrome,
+    initFeaturePlanApprovalChrome: initFeaturePlanApprovalChrome,
     initDependencyReviewChrome: initDependencyReviewChrome,
     sortedDrillChoices: sortedDrillChoices,
     preferredDrillChoice: preferredDrillChoice,

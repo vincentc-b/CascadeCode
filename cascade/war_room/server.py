@@ -1700,6 +1700,26 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             readiness = compute_epic_plan_readiness(meta.id, root=self.server.root)
             if readiness is not None:
                 payload["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
+        elif meta.tier == "feature" and meta.path.parent.name == "1_backlog":
+            # Keep the plan page on the exact projection used by GET /api/board.
+            # This preserves receipt-backed approval and typed prerequisite
+            # evidence without introducing a second readiness interpretation.
+            board_view = board_view_from_index(
+                merged_board(self.server.root), root=self.server.root
+            )
+            for column in ("1_backlog", "2_active", "3_completed"):
+                row = next(
+                    (
+                        item
+                        for item in board_view["features"][column]
+                        if item.get("id") == meta.id
+                    ),
+                    None,
+                )
+                if row is not None:
+                    if isinstance(row.get("readiness"), dict):
+                        payload["feature_readiness"] = row["readiness"]
+                    break
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_architecture_get(self, path: str) -> None:

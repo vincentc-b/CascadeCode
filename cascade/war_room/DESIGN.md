@@ -424,8 +424,10 @@ not fabricate lifecycle state or require a full page reload. A refused write
 shows its reason directly on the affected work row across polling; a lost response
 is an unconfirmed outcome, not proof of failure. The activation route returns a
 JSON conflict for known board/workspace errors rather than dropping its connection.
-The plan viewer likewise shows pending and confirmed approval and retains the
-exact review tuple and dispatch-pending warning. A board Feature action first
+The Epic plan viewer shows pending and confirmed plan approval independently
+from the Feature plan viewer's individual approval control. The Feature control
+retains the exact review tuple, submits those displayed bytes, and shows typed
+waiting, refusal, and unconfirmed outcomes beside the plan. A board Feature action first
 loads and visibly presents its scoped review tuple, then submits that same tuple.
 Its row-local status renders the typed approval result, canonical approval state,
 explanation, affected work IDs, execution state, and readiness reasons. A timeout
@@ -471,7 +473,10 @@ action through Chromium with exact tuple display, delayed and repeated clicks,
 row replacement, typed refusal, ambiguous transport reconciliation and ARIA focus;
 `tests/war_room/epic_plan_readiness_integration.mjs` exercises pending approval,
 concurrent readiness updates, reviewed context, dispatch warnings and durable
-readback after a lost response. The real Chromium test in
+readback after a lost response;
+`tests/war_room/feature_plan_approval_integration.mjs` covers the corresponding
+Feature plan state machine, and `tests/war_room/test_board_feature_readiness.py`
+drives its loopback document and approval APIs through Chromium. The real Chromium test in
 `tests/war_room/test_ui_render.py` drives both buttons through a held pointer
 gesture, delayed POSTs, intervening polls and canonical lane/approval updates
 without navigating away. The HTTP deadline regression in

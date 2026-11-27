@@ -1802,6 +1802,15 @@ code_dashboard_plan_approval = element "initEpicPlanReadinessChrome" "Function" 
     }
 }
 
+code_dashboard_feature_plan_approval = element "initFeaturePlanApprovalChrome" "Function" "Shows the exact reviewed Feature tuple, submits one bounded approval action, and reconciles saved, refused or transport-uncertain outcomes with canonical document readiness." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-plan-approval"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "initFeaturePlanApprovalChrome"
+    }
+}
+
 code_dashboard_post = element "WarRoomRequestHandler.do_POST" "Method" "Routes operator lifecycle writes to canonical services with extended connection deadlines for activation and approval." {
     properties {
         "cascade.semanticId" "element.code.dashboard.post"
@@ -1868,6 +1877,18 @@ dashboard_plan_approval_to_post = code_dashboard_plan_approval -> code_dashboard
 dashboard_plan_approval_to_router = code_dashboard_plan_approval -> code_dashboard_router "Checks canonical approval and readiness after a refused or ambiguous write" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-plan-approval-to-router"
+    }
+}
+
+dashboard_feature_plan_approval_to_post = code_dashboard_feature_plan_approval -> code_dashboard_post "Submits the exact displayed Feature review tuple" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-feature-plan-approval-to-post"
+    }
+}
+
+dashboard_feature_plan_approval_to_router = code_dashboard_feature_plan_approval -> code_dashboard_router "Reconciles transport uncertainty and durable waiting state through the canonical document projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-feature-plan-approval-to-router"
     }
 }
 
