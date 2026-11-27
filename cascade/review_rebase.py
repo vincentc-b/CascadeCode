@@ -18,8 +18,7 @@ from cascade.review_validation import (
     ReviewValidationAdmissionError,
     ReviewValidationOperation,
     review_validation_timeout,
-    run_review_validation,
-    validate_publication_board,
+    validate_exact_merge_candidate,
 )
 from cascade.resolution_actions import resolution_action
 from cascade.task.action_recovery import (
@@ -236,16 +235,6 @@ def check_and_publish_review_rebase(
     if _dirty_paths(worktree):
         return _publication_blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree has uncommitted paths; they were left untouched.", worktree)
 
-    # A conflict-free Git tree can still contain duplicate lifecycle documents.
-    # Reject it before spawning checks or publishing any remote mutation.
-    from cascade.board.errors import SchemaError
-    try:
-        validate_publication_board(worktree)
-    except (SchemaError, OSError, ValueError) as exc:
-        return _publication_blocked(
-            "board", "board_validation_failed",
-            f"Resolved checkout has invalid lifecycle documents ({type(exc).__name__}); repair the board before publication.", worktree,
-        )
     try:
         trunk = locate_trunk(worktree)
         command = review_validation_command(
@@ -255,31 +244,58 @@ def check_and_publish_review_rebase(
             configured_command=validation_command(trunk),
         )
         timeout = review_validation_timeout(trunk)
-        check_result = run_review_validation(
-            command,
-            cwd=worktree,
+        validation = validate_exact_merge_candidate(
+            worktree,
+            execution.source_head,
+            turn.observed_target_sha,
+            command=command,
             timeout=timeout,
             operation=validation_operation,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return _publication_blocked(
-            "checks", "repository_checks_timed_out",
-            f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
-            checks=(ReviewRebaseCheck(command, 124, str(exc.output or ""), str(exc.stderr or "")),),
         )
     except (OSError, ValueError, ReviewValidationAdmissionError) as exc:
         return _publication_blocked(
             "checks", "repository_checks_unavailable",
-            f"Repository checks could not run ({type(exc).__name__}); no publication attempted.", worktree,
+            f"Exact-candidate repository checks could not run ({type(exc).__name__}); no publication attempted.",
+            worktree,
+        )
+    if validation.stage == "board":
+        return _publication_blocked(
+            "board", "board_validation_failed",
+            "The exact candidate has invalid lifecycle documents; repair the board before publication.",
+            worktree,
+        )
+    if validation.reason in {"source_head_changed", "validation_policy_changed"}:
+        message = (
+            "The validation candidate head changed during checks; the exact pair must be rerun."
+            if validation.reason == "source_head_changed"
+            else "The validation policy changed during checks; the approved profile must be rerun."
+        )
+        return _publication_blocked(
+            "checks", validation.reason, message, worktree,
+            checks=(ReviewRebaseCheck(
+                command, validation.returncode or 0,
+                validation.stdout, validation.stderr,
+            ),),
+        )
+    if validation.outcome == "timeout":
+        return _publication_blocked(
+            "checks", "repository_checks_timed_out",
+            f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
+            checks=(ReviewRebaseCheck(command, 124, validation.stdout, validation.stderr),),
+        )
+    if validation.outcome == "unavailable":
+        return _publication_blocked(
+            "checks", "repository_checks_unavailable",
+            f"Exact-candidate repository checks could not run; {validation.owner_action}", worktree,
         )
     check = ReviewRebaseCheck(
-        command, check_result.returncode,
-        check_result.stdout, check_result.stderr,
+        command, validation.returncode or 0,
+        validation.stdout, validation.stderr,
     )
-    if check.returncode:
+    if validation.outcome != "passed":
         return _publication_blocked(
             "checks", "repository_checks_failed",
-            "The repository-defined review-rebase checks failed; publication was not attempted.",
+            f"The exact candidate failed repository checks ({validation.outcome}); publication was not attempted.",
             worktree, checks=(check,),
         )
     if _dirty_paths(worktree):

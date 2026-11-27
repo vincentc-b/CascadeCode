@@ -66,6 +66,7 @@ custom "cascade-teams-code" {
     }
     include code_teams_epic code_teams_feature code_teams_task code_teams_skills code_teams_runtime code_teams_swe
     include code_teams_board_scan code_teams_publication code_teams_budget_reserve code_teams_validation_operation code_teams_validation_profile code_teams_validate_publish code_teams_validator
+    include code_teams_candidate_materialize code_teams_candidate code_teams_candidate_refusal code_teams_candidate_validate code_teams_candidate_evidence
     autoLayout lr
 }
 

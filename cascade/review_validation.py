@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -12,7 +14,9 @@ import sys
 import tempfile
 import tomllib
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from typing import Iterator, Literal, Mapping
 
 from cascade.task.incident_budget import (
     IncidentOperationDecision,
@@ -77,6 +81,50 @@ class ReviewValidationOperation:
     permit: IncidentOperationPermit
     environment_revision: dict[str, str]
     profile: ReviewValidationProfile
+
+
+@dataclass(frozen=True, slots=True)
+class MergeCandidateRefusal:
+    """Typed fail-closed result when an exact merge candidate cannot exist."""
+
+    kind: Literal["missing", "unknown", "conflict"]
+    source_sha: str | None
+    target_sha: str | None
+    message: str
+    owner_action: str
+    conflicted_paths: tuple[str, ...] = ()
+    diagnostics: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExactMergeCandidate:
+    """Identity and private checkout for one exact source/target merge result."""
+
+    source_sha: str
+    target_sha: str
+    result_commit: str
+    result_tree: str
+    checkout: Path
+
+
+@dataclass(frozen=True, slots=True)
+class ExactCandidateValidation:
+    """Bounded validation evidence tied to exact candidate and runtime bytes."""
+
+    outcome: Literal[
+        "passed", "product_assertion", "fixture_environment", "timeout", "unavailable"
+    ]
+    stage: Literal["materialization", "board", "process", "checks"]
+    candidate: ExactMergeCandidate | None
+    refusal: MergeCandidateRefusal | None
+    command: tuple[str, ...]
+    returncode: int | None
+    stdout: str
+    stderr: str
+    dependency_revision: str | None
+    environment_revision: Mapping[str, str]
+    owner_action: str
+    reason: str | None = None
 
 
 def review_validation_environment() -> dict[str, str]:
@@ -251,6 +299,7 @@ def run_review_validation(
     cwd: Path,
     timeout: float,
     operation: ReviewValidationOperation | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     # Files avoid unbounded in-memory capture; report only bounded diagnostic tails.
     def tail(handle):
@@ -286,6 +335,7 @@ def run_review_validation(
             process = subprocess.Popen(
                 command,
                 cwd=cwd,
+                env=None if env is None else dict(env),
                 stdout=stdout,
                 stderr=stderr,
                 start_new_session=True,
@@ -373,6 +423,373 @@ def run_review_validation(
                     "validator environment changed during repository checks"
                 )
         return result
+
+
+@contextmanager
+def materialize_exact_merge_candidate(
+    repository: Path,
+    source_sha: str | None,
+    target_sha: str | None,
+) -> Iterator[ExactMergeCandidate | MergeCandidateRefusal]:
+    """Create an owned checkout and resolve an exact pair with Git's merge path.
+
+    The source repository is only read.  The private clone, index, refs and
+    object store are removed together when the caller leaves the context.
+    """
+
+    source = source_sha.strip() if isinstance(source_sha, str) else ""
+    target = target_sha.strip() if isinstance(target_sha, str) else ""
+    if not source or not target:
+        yield MergeCandidateRefusal(
+            "missing", source or None, target or None,
+            "Both freshly observed source and target SHAs are required.",
+            "Refresh both review heads before requesting validation.",
+        )
+        return
+    if not all(re.fullmatch(r"[0-9a-fA-F]{40,64}", value) for value in (source, target)):
+        yield MergeCandidateRefusal(
+            "unknown", source, target,
+            "Source and target must be full observed commit SHAs, not symbolic or abbreviated revisions.",
+            "Refresh both review heads and retain their complete commit identities.",
+        )
+        return
+
+    repository = Path(repository).resolve()
+    with tempfile.TemporaryDirectory(prefix="cascade-merge-candidate-") as owned:
+        checkout = Path(owned) / "checkout"
+        clone = _candidate_git(
+            None, "clone", "--quiet", "--no-checkout", "--no-local",
+            str(repository), str(checkout),
+        )
+        if clone.returncode:
+            yield MergeCandidateRefusal(
+                "unknown", source, target,
+                "The repository could not provide an isolated candidate checkout.",
+                "Restore local Git object access, then refresh the exact review heads.",
+                diagnostics=_sanitized_tail(clone.stderr, repository, checkout),
+            )
+            return
+
+        resolved: list[str] = []
+        for label, revision in (("source", source), ("target", target)):
+            probe = _candidate_git(checkout, "rev-parse", "--verify", f"{revision}^{{commit}}")
+            value = probe.stdout.strip()
+            if probe.returncode or not re.fullmatch(r"[0-9a-f]{40,64}", value):
+                yield MergeCandidateRefusal(
+                    "unknown", source, target,
+                    f"The observed {label} SHA is not an available commit.",
+                    f"Fetch and re-observe the {label} head before validation.",
+                    diagnostics=_sanitized_tail(probe.stderr, repository, checkout),
+                )
+                return
+            resolved.append(value)
+        exact_source, exact_target = resolved
+
+        checkout_result = _candidate_git(checkout, "checkout", "--quiet", "--detach", exact_target)
+        if checkout_result.returncode:
+            yield MergeCandidateRefusal(
+                "unknown", exact_source, exact_target,
+                "Git could not check out the observed target commit.",
+                "Repair local Git object access and retry the same exact pair.",
+                diagnostics=_sanitized_tail(checkout_result.stderr, repository, checkout),
+            )
+            return
+
+        merge = _candidate_git(checkout, "merge", "--no-commit", "--no-ff", exact_source)
+        if merge.returncode:
+            conflicts = tuple(
+                line for line in _candidate_git(
+                    checkout, "diff", "--name-only", "--diff-filter=U"
+                ).stdout.splitlines() if line
+            )
+            yield MergeCandidateRefusal(
+                "conflict" if conflicts else "unknown", exact_source, exact_target,
+                (
+                    "The exact source/target pair has merge conflicts."
+                    if conflicts else "Git could not resolve the exact source/target pair."
+                ),
+                (
+                    "Resolve the listed product conflicts on the source branch and refresh both heads."
+                    if conflicts else "Inspect the bounded Git diagnostic and restore a mergeable exact pair."
+                ),
+                conflicts,
+                _sanitized_tail(f"{merge.stdout}\n{merge.stderr}", repository, checkout),
+            )
+            return
+
+        merge_head = checkout / ".git" / "MERGE_HEAD"
+        if merge_head.is_file():
+            tree = _candidate_git(checkout, "write-tree").stdout.strip()
+            if not re.fullmatch(r"[0-9a-f]{40,64}", tree):
+                yield MergeCandidateRefusal(
+                    "unknown", exact_source, exact_target,
+                    "Git resolved the pair but did not produce a valid tree identity.",
+                    "Inspect local Git integrity before retrying the exact pair.",
+                )
+                return
+            commit_env = {
+                **os.environ,
+                "GIT_AUTHOR_NAME": "Cascade candidate",
+                "GIT_AUTHOR_EMAIL": "candidate@cascade.invalid",
+                "GIT_AUTHOR_DATE": "@0 +0000",
+                "GIT_COMMITTER_NAME": "Cascade candidate",
+                "GIT_COMMITTER_EMAIL": "candidate@cascade.invalid",
+                "GIT_COMMITTER_DATE": "@0 +0000",
+            }
+            commit = _candidate_git(
+                checkout, "commit-tree", tree, "-p", exact_target, "-p", exact_source,
+                input_text="Cascade exact merge candidate\n", env=commit_env,
+            )
+            result_commit = commit.stdout.strip()
+            if commit.returncode or not result_commit:
+                yield MergeCandidateRefusal(
+                    "unknown", exact_source, exact_target,
+                    "Git resolved the tree but could not identify its prospective commit.",
+                    "Inspect local Git integrity before retrying the exact pair.",
+                    diagnostics=_sanitized_tail(commit.stderr, repository, checkout),
+                )
+                return
+            reset = _candidate_git(checkout, "reset", "--quiet", "--hard", result_commit)
+            if reset.returncode:
+                yield MergeCandidateRefusal(
+                    "unknown", exact_source, exact_target,
+                    "The prospective result could not be checked out for validation.",
+                    "Inspect local Git integrity before retrying the exact pair.",
+                    diagnostics=_sanitized_tail(reset.stderr, repository, checkout),
+                )
+                return
+        else:
+            # Source already contributes no new tree content to the target.
+            result_commit = exact_target
+            tree = _candidate_git(checkout, "rev-parse", f"{result_commit}^{{tree}}").stdout.strip()
+
+        effective_policy = repository / "cascade.toml"
+        if effective_policy.is_file() and not effective_policy.is_symlink():
+            candidate_policy = checkout / "cascade.toml"
+            if candidate_policy.is_symlink():
+                candidate_policy.unlink()
+            shutil.copyfile(effective_policy, candidate_policy)
+
+        yield ExactMergeCandidate(
+            exact_source, exact_target, result_commit, tree, checkout
+        )
+
+
+def validate_exact_merge_candidate(
+    repository: Path,
+    source_sha: str | None,
+    target_sha: str | None,
+    *,
+    command: tuple[str, ...],
+    timeout: float,
+    operation: ReviewValidationOperation | None = None,
+) -> ExactCandidateValidation:
+    """Materialize, board-scan and freshly validate one exact merge result."""
+
+    if (
+        not command
+        or not isinstance(command[0], str)
+        or not command[0]
+        or not all(isinstance(arg, str) for arg in command)
+        or isinstance(timeout, bool)
+        or not isinstance(timeout, (int, float))
+        or not 0 < timeout <= 3600
+    ):
+        return ExactCandidateValidation(
+            "unavailable", "process", None, None, command, None, "", "", None,
+            review_validation_environment(),
+            "Restore one nonempty approved argv and a positive finite timeout of at most 3600 seconds.",
+            "validation_profile_invalid",
+        )
+
+    with materialize_exact_merge_candidate(repository, source_sha, target_sha) as materialized:
+        if isinstance(materialized, MergeCandidateRefusal):
+            return ExactCandidateValidation(
+                "unavailable", "materialization", None, materialized, command, None, "",
+                materialized.diagnostics, None, review_validation_environment(),
+                materialized.owner_action,
+            )
+        candidate = materialized
+        dependency_revision = _candidate_dependency_revision(candidate.checkout)
+        runtime = {
+            **review_validation_environment(),
+            "dependency_revision": dependency_revision,
+            "source_tree": candidate.result_tree,
+        }
+        from cascade.board.errors import BoardError
+
+        try:
+            validate_publication_board(candidate.checkout)
+        except (BoardError, OSError, ValueError) as exc:
+            return ExactCandidateValidation(
+                "fixture_environment", "board", candidate, None, command, None, "", "",
+                dependency_revision, runtime,
+                f"Repair the candidate lifecycle documents ({type(exc).__name__}) before validation.",
+            )
+
+        unconfined = _unconfined_candidate_source(candidate.checkout)
+        if unconfined is not None:
+            return ExactCandidateValidation(
+                "fixture_environment", "board", candidate, None, command, None, "", "",
+                dependency_revision, runtime,
+                f"Replace candidate source/dependency symlink {unconfined} with repository bytes before validation.",
+            )
+
+        _remove_candidate_bytecode(candidate.checkout)
+        policy_revision = _optional_file_revision(candidate.checkout / "cascade.toml")
+        with tempfile.TemporaryDirectory(prefix="cascade-candidate-pycache-") as pycache:
+            env = {
+                **os.environ,
+                "PYTHONPATH": str(candidate.checkout),
+                "PYTHONPYCACHEPREFIX": pycache,
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONSAFEPATH": "1",
+                "CASCADE_CANDIDATE_COMMIT": candidate.result_commit,
+                "CASCADE_CANDIDATE_TREE": candidate.result_tree,
+                "CASCADE_CANDIDATE_DEPENDENCY_SHA256": dependency_revision,
+            }
+            env.pop("PYTHONHOME", None)
+            env.pop("PYTHONSTARTUP", None)
+            env.pop("PYTHONINSPECT", None)
+            try:
+                result = run_review_validation(
+                    command, cwd=candidate.checkout, timeout=timeout,
+                    operation=operation, env=env,
+                )
+            except subprocess.TimeoutExpired as exc:
+                return ExactCandidateValidation(
+                    "timeout", "process", candidate, None, command, 124,
+                    _sanitized_tail(str(exc.output or ""), repository, candidate.checkout),
+                    _sanitized_tail(str(exc.stderr or ""), repository, candidate.checkout),
+                    dependency_revision, runtime,
+                    "Inspect the bounded timeout diagnostic; narrow or repair the approved check before retrying.",
+                )
+            except (OSError, ValueError, ReviewValidationAdmissionError) as exc:
+                return ExactCandidateValidation(
+                    "unavailable", "process", candidate, None, command, None, "",
+                    type(exc).__name__, dependency_revision, runtime,
+                    "Restore the approved validation environment without weakening its argv or coverage.",
+                )
+
+        stdout = _sanitized_tail(result.stdout, repository, candidate.checkout)
+        stderr = _sanitized_tail(result.stderr, repository, candidate.checkout)
+        current_head = _candidate_git(
+            candidate.checkout, "rev-parse", "--verify", "HEAD^{commit}"
+        ).stdout.strip()
+        if current_head != candidate.result_commit:
+            return ExactCandidateValidation(
+                "fixture_environment", "checks", candidate, None, command,
+                result.returncode, stdout, stderr, dependency_revision, runtime,
+                "Discard the validator-created commit and rerun the unchanged exact pair.",
+                "source_head_changed",
+            )
+        if (
+            _optional_file_revision(candidate.checkout / "cascade.toml") != policy_revision
+            or _candidate_dependency_revision(candidate.checkout) != dependency_revision
+        ):
+            return ExactCandidateValidation(
+                "fixture_environment", "checks", candidate, None, command,
+                result.returncode, stdout, stderr, dependency_revision, runtime,
+                "Restore the approved profile/dependency bytes and rerun the exact pair.",
+                "validation_policy_changed",
+            )
+
+        if result.returncode == 0:
+            outcome = "passed"
+            action = "Candidate evidence is complete for this exact pair."
+        elif _is_product_assertion(f"{stdout}\n{stderr}"):
+            outcome = "product_assertion"
+            action = "Correct the product incompatibility; keep the approved assertion and coverage intact."
+        else:
+            outcome = "fixture_environment"
+            action = "Repair the fixture or environment, then rerun the unchanged approved assertion coverage."
+        return ExactCandidateValidation(
+            outcome, "checks", candidate, None, command, result.returncode, stdout, stderr,
+            dependency_revision, runtime, action,
+        )
+
+
+def _candidate_git(
+    cwd: Path | None,
+    *args: str,
+    input_text: str | None = None,
+    env: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    command = ["git", *args]
+    try:
+        return subprocess.run(
+            command, cwd=cwd, input=input_text, capture_output=True, text=True,
+            encoding="utf-8", timeout=30,
+            env=None if env is None else dict(env),
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            command, 124, str(exc.output or ""), str(exc.stderr or "Git operation timed out")
+        )
+    except OSError as exc:
+        return subprocess.CompletedProcess(command, 127, "", type(exc).__name__)
+
+
+def _candidate_dependency_revision(checkout: Path) -> str:
+    names = ["pyproject.toml", "poetry.lock", "uv.lock", "Pipfile.lock", "pdm.lock"]
+    paths = [checkout / name for name in names]
+    paths.extend(sorted(checkout.glob("requirements*.txt")))
+    digest = hashlib.sha256()
+    for path in paths:
+        if path.is_file() and not path.is_symlink():
+            digest.update(path.relative_to(checkout).as_posix().encode())
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _optional_file_revision(path: Path) -> str:
+    if not path.is_file() or path.is_symlink():
+        return "missing"
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _remove_candidate_bytecode(checkout: Path) -> None:
+    for path in sorted(checkout.rglob("*.py[co]")):
+        path.unlink(missing_ok=True)
+    for path in sorted(checkout.rglob("__pycache__"), reverse=True):
+        if path.is_symlink():
+            path.unlink(missing_ok=True)
+        elif path.is_dir():
+            shutil.rmtree(path)
+
+
+def _unconfined_candidate_source(checkout: Path) -> str | None:
+    manifests = {"pyproject.toml", "poetry.lock", "uv.lock", "Pipfile.lock", "pdm.lock"}
+    for directory, directories, files in os.walk(checkout, followlinks=False):
+        root = Path(directory)
+        if root == checkout / ".git" or (checkout / ".git") in root.parents:
+            directories[:] = []
+            continue
+        for name in directories:
+            path = root / name
+            if path.is_symlink():
+                return path.relative_to(checkout).as_posix()
+        for name in files:
+            path = root / name
+            if path.is_symlink() and (
+                name.endswith(".py") or name in manifests or name.startswith("requirements")
+            ):
+                return path.relative_to(checkout).as_posix()
+    return None
+
+
+def _sanitized_tail(value: str, *private_roots: Path) -> str:
+    text = value[-65536:]
+    for root in private_roots:
+        text = text.replace(str(Path(root).resolve()), "<checkout>")
+    return "".join(char if char in "\n\t" or ord(char) >= 32 else "?" for char in text)
+
+
+def _is_product_assertion(diagnostic: str) -> bool:
+    return bool(re.search(r"AssertionError|(^|\n)\s*assert\s|(^|\n)FAILED\s", diagnostic))
 
 
 def validate_publication_board(worktree: Path) -> None:

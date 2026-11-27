@@ -127,27 +127,38 @@ the [producer benchmark](../tests/watchdog/benchmark_audit_producer.py) and
 
 ## Review publication safeguards
 
-`REQ-REVIEW-PUBLISH-001`: a Git conflict resolution is not publishable until its
-physical checkout contains valid lifecycle documents with unique IDs, repository
-checks succeed within a finite budget, and the admitted remote heads and source
-lease still match. `review_validation.validate_publication_board` scans the actual
-source checkout, including in split-repository sessions; it does not redirect to a
-tracking root or silently omit malformed drafts as a normal board projection may.
+`REQ-REVIEW-PUBLISH-001`: a Git conflict resolution is not publishable until Git
+can materialize the freshly observed source and target commits into one prospective
+result commit/tree in a private checkout, that candidate contains valid lifecycle
+documents with unique IDs, repository checks succeed within a finite budget, and
+the admitted remote heads and source lease still match.
+`review_validation.validate_publication_board` scans the physical candidate,
+including in split-repository sessions; it does not redirect to a tracking root or
+silently omit malformed drafts as a normal board projection may.
 Duplicate backlog/completed copies are rejected without choosing or deleting one.
 This check establishes document consistency, not full Epic acceptance. It
-runs on the guarded review-publication source worktree; it is not a universal
+runs against an owned exact-pair candidate; it is not a universal
 precondition on every forge merge of a changed target. Successful source
 publication or forge merge alone does not prove that the actual merged target
 has unique board IDs or passes its own configured CI. An independent target
 check and local/remote trunk convergence remain separate evidence.
 
-`DEC-REVIEW-PUBLISH-001`: `review_rebase.check_and_publish_review_rebase` checks the
-board before spawning validation. Review publication uses changed Python test files,
-direct tests for changed modules, and the review publication safeguard tests.
+`DEC-REVIEW-PUBLISH-001`: `review_rebase.check_and_publish_review_rebase` delegates
+to a Teams-owned exact-candidate adapter before publication. The adapter creates a
+non-local private clone, checks out the exact target, invokes Git's merge machinery
+for the exact source, and returns deterministic prospective commit/tree identity or
+a typed missing, unknown, or conflict refusal. It removes only its owned temporary
+checkout; operator and team worktrees, refs, indexes and caches are read-only inputs.
+Review publication uses changed Python test files, direct tests for changed modules,
+and the review publication safeguard tests.
 An explicit repository-owned `validation.command` takes precedence; Task validation
 keeps its existing command. `validation.review_timeout_seconds` defaults to 300
-seconds and accepts 1–3600 seconds. Validation runs without a shell in its own
-process group, with file-backed output and bounded 64 KiB diagnostic tails. Timeout or cancellation
+seconds and accepts 1–3600 seconds. Before spawn the adapter scans candidate board
+files and removes candidate bytecode. The child receives the candidate as its sole
+`PYTHONPATH`, a fresh private bytecode prefix, disabled user-site imports, and hashes
+of the prospective tree and candidate dependency declarations. Validation runs
+without a shell in its own process group, with file-backed output and bounded,
+path-sanitized 64 KiB diagnostic tails. Timeout or cancellation
 kills the check group and reaps its leader. Failure preserves the checkout and
 returns a typed blocker; it never falls back to weaker checks or publishes anyway.
 A hard kill of the hosting process can still orphan validator children; the owning
@@ -173,7 +184,10 @@ verified reconciliation evidence, never merely from an enqueued investigation.
 Validation: `tests/test_review_publication_safeguards.py`,
 `tests/test_review_rebase.py`, and `tests/task/test_action_recovery.py` cover invalid
 boards, unchanged remotes on refusal, bounded checks, descendant cleanup, abrupt
-owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
+owner exit, PID reuse, live/unknown owners and durable exactly-once handoff. The
+publication safeguard fixture also covers real Git candidate red/green behavior,
+equal-size same-second Python corrections, stale tracked bytecode removal,
+deterministic identity, private cleanup, typed refusals and pre-spawn board failure.
 
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
@@ -221,7 +235,10 @@ The legacy action attempt bound is never enlarged by generation admission.
 `run_review_validation` verifies the live receipt before `Popen`, starts a local
 process group, and settles known runtime on green, red, launch failure and timeout.
 Timeout or interruption stops the complete local group; interruption retains the
-worst-case reservation conservatively. Provider work is metered separately at
+worst-case reservation conservatively. `validate_exact_merge_candidate` classifies
+evidence as product assertion, fixture/environment, timeout or unavailable and
+supplies a finite owner action; fixture repair never changes the approved argv or
+coverage. Provider work is metered separately at
 the shared Agent adapter boundary, which reserves a paid turn and worst-case model
 runtime before dispatch and settles one normalized invocation receipt. A green check
 is still insufficient to publish after source, target, validation policy,
@@ -245,13 +262,15 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [admit_provider_turn / settle_provider_turn](agent/provider_metering.py) | Consume the Task-owned allowance immediately around an incident-related provider dispatch and retain normalized invocation evidence plus the validated launch route without granting route-specific allowance. |
 | [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
 | [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
-| [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
+| [check_and_publish_review_rebase](review_rebase.py) | Validate the exact source/target candidate, recheck policy/remote authority and push the admitted source SHA under its lease. |
 | [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
+| [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
+| [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
 | [validate_publication_board](review_validation.py) | Parse every physical lifecycle-column document in the publication checkout and reject symlinks, malformed records and duplicate IDs before validation. Board owns schema invariants; Teams owns this publication gate. |
 
 The `cascade-teams-code` node `element.code.teams.board-scan` links this gate
-to the [Board parser](board/parse.py). It reads the source checkout, not a
-prospective forge merge tree, and does not prove terminal-history preservation
+to the [Board parser](board/parse.py). It reads the prospective Git merge
+candidate and does not prove terminal-history preservation
 or cross-root hierarchy. Its failure prevents validator execution and push;
 it does not repair or select among conflicting records.
 
@@ -259,11 +278,15 @@ it does not repair or select among conflicting records.
 flowchart TD
     Owner[Owner publication request] --> Generation[Recheck exact generation and durable claim]
     Generation -->|eligible| Budget[Reserve cumulative allowance under live claim]
-    Budget -->|permit| Checks[Validate immutable source and board]
+    Budget -->|permit| Candidate[Materialize exact source and target in private Git checkout]
+    Candidate -->|missing / unknown / conflict| Preserve[Preserve shared state and return finite owner action]
+    Candidate -->|commit and tree| Board[Parse physical candidate lifecycle documents]
+    Board -->|malformed / duplicate| Preserve
+    Board -->|valid| Checks[Run approved argv with fresh imports and dependency identity]
     Budget -->|pending / exhausted / owner decision| Pending[Retain pending or refusal]
     Generation -->|not material / live / gated| Pending[Retain pending or refusal]
     Checks --> Settle[Settle exact receipt]
-    Settle -->|red / timeout / interrupted| Preserve[Preserve checkout and conservative charge]
+    Settle -->|red / timeout / interrupted| Preserve
     Settle -->|green| Recheck[Recheck source, policy, remote heads and authority]
     Recheck -->|match| Push[Lease-publish tested SHA]
     Recheck -->|drift| Preserve

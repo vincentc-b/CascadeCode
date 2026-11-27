@@ -1,20 +1,25 @@
 from dataclasses import replace
 from pathlib import Path
 import os
+import py_compile
 import subprocess
 import sys
 import time
 
 import pytest
 
-from cascade import review_rebase
+from cascade import review_rebase, review_validation
 from cascade.review_owner import current_review_owner, review_owner_exited
 from cascade.review_validation import (
+    ExactMergeCandidate,
+    MergeCandidateRefusal,
     ReviewValidationAdmissionError,
     approved_review_validation_profile,
+    materialize_exact_merge_candidate,
     preflight_review_validation,
     run_review_validation,
     review_validation_timeout,
+    validate_exact_merge_candidate,
 )
 from cascade.validation_command import review_validation_command
 from cascade.task import action_recovery as actions
@@ -104,7 +109,7 @@ def test_duplicate_lifecycle_document_blocks_before_checks_and_push(
     _git(root, "commit", "-m", "simulate duplicate after conflict resolution")
     execution = replace(execution, source_head=_git(root, "rev-parse", "HEAD"))
     monkeypatch.setattr(
-        review_rebase,
+        review_validation,
         "run_review_validation",
         lambda *a, **k: pytest.fail("checks must not run"),
     )
@@ -351,3 +356,147 @@ def test_dead_claim_check_precedes_failing_board_projection(tmp_path, monkeypatc
     with pytest.raises(ValueError):
         loop.watchdog_tick(root=tmp_path)
     assert calls == ["reconcile", "board"]
+
+
+def _candidate_repo(tmp_path: Path) -> tuple[Path, str, str]:
+    root = tmp_path / "candidate-repo"
+    root.mkdir()
+    _git(root, "init")
+    _git(root, "config", "user.email", "test@example.com")
+    _git(root, "config", "user.name", "Test User")
+    (root / "product.py").write_text("VALUE = 'bad1'\n", encoding="utf-8")
+    tests = root / "tests"
+    tests.mkdir()
+    (tests / "test_source.py").write_text(
+        "from product import VALUE\n\ndef test_source():\n    assert len(VALUE) == 4\n",
+        encoding="utf-8",
+    )
+    _git(root, "add", ".")
+    _git(root, "commit", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "-b", "target")
+    (tests / "test_boot.py").write_text(
+        "from product import VALUE\n\ndef test_task_boot_contract():\n    assert VALUE == 'good'\n",
+        encoding="utf-8",
+    )
+    _git(root, "add", ".")
+    _git(root, "commit", "-m", "incompatible target boot assertion")
+    target = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "-b", "source", base)
+    return root, _git(root, "rev-parse", "HEAD"), target
+
+
+def test_exact_candidate_real_git_red_then_equal_size_same_second_green(tmp_path):
+    root, source, target = _candidate_repo(tmp_path)
+    command = (sys.executable, "-m", "pytest", "-q", "tests/test_boot.py")
+    source_only = subprocess.run(
+        (sys.executable, "-m", "pytest", "-q", "tests/test_source.py"),
+        cwd=root, capture_output=True, text=True,
+    )
+    assert source_only.returncode == 0
+
+    original_stat = (root / "product.py").stat()
+    py_compile.compile(str(root / "product.py"), doraise=True)
+    bytecode = next((root / "__pycache__").glob("product.*.pyc"))
+    _git(root, "add", "-f", str(bytecode.relative_to(root)))
+    _git(root, "commit", "-m", "retain source bytecode fixture")
+    source = _git(root, "rev-parse", "HEAD")
+    red = validate_exact_merge_candidate(
+        root, source, target, command=command, timeout=20
+    )
+    assert red.outcome == "product_assertion"
+    assert red.returncode == 1
+    assert "test_task_boot_contract" in red.stdout
+    assert "keep the approved assertion" in red.owner_action
+    assert red.candidate is not None and not red.candidate.checkout.exists()
+    assert bytecode.exists()  # Candidate cleanup never deletes the shared cache.
+
+    before = (root / "product.py").read_bytes()
+    (root / "product.py").write_text("VALUE = 'good'\n", encoding="utf-8")
+    assert len((root / "product.py").read_bytes()) == len(before)
+    os.utime(
+        root / "product.py",
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+    _git(root, "add", "product.py")
+    _git(root, "commit", "-m", "satisfy target boot assertion")
+    corrected = _git(root, "rev-parse", "HEAD")
+    green = validate_exact_merge_candidate(
+        root, corrected, target, command=command, timeout=20
+    )
+    assert green.outcome == "passed", (green.stdout, green.stderr)
+    assert green.candidate is not None
+    assert green.candidate.source_sha == corrected
+    assert green.candidate.target_sha == target
+    assert green.candidate.result_commit and green.candidate.result_tree
+    assert green.dependency_revision == green.environment_revision["dependency_revision"]
+    assert not green.candidate.checkout.exists()
+    assert bytecode.exists()
+
+
+def test_exact_candidate_materialization_is_private_deterministic_and_typed(tmp_path):
+    root, source, target = _candidate_repo(tmp_path)
+    head_before = _git(root, "rev-parse", "HEAD")
+    status_before = _git(root, "status", "--porcelain=v1")
+    refs_before = _git(root, "show-ref")
+    index_before = (root / ".git/index").read_bytes()
+    identities = []
+    checkouts = []
+    for _ in range(2):
+        with materialize_exact_merge_candidate(root, source, target) as result:
+            assert isinstance(result, ExactMergeCandidate)
+            assert result.checkout.is_dir()
+            identities.append((result.result_commit, result.result_tree))
+            checkouts.append(result.checkout)
+    assert identities[0] == identities[1]
+    assert all(not checkout.exists() for checkout in checkouts)
+    assert _git(root, "rev-parse", "HEAD") == head_before
+    assert _git(root, "status", "--porcelain=v1") == status_before
+    assert _git(root, "show-ref") == refs_before
+    assert (root / ".git/index").read_bytes() == index_before
+
+    with materialize_exact_merge_candidate(root, None, target) as missing:
+        assert isinstance(missing, MergeCandidateRefusal)
+        assert missing.kind == "missing"
+    with materialize_exact_merge_candidate(root, "0" * 40, target) as unknown:
+        assert isinstance(unknown, MergeCandidateRefusal)
+        assert unknown.kind == "unknown"
+
+
+def test_exact_candidate_conflict_and_malformed_board_refuse_before_spawn(tmp_path):
+    root, source, target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "source")
+    (root / "shared.txt").write_text("source\n", encoding="utf-8")
+    _git(root, "add", "shared.txt")
+    _git(root, "commit", "-m", "source shared")
+    conflict_source = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "target")
+    (root / "shared.txt").write_text("target\n", encoding="utf-8")
+    _git(root, "add", "shared.txt")
+    _git(root, "commit", "-m", "target shared")
+    conflict_target = _git(root, "rev-parse", "HEAD")
+    with materialize_exact_merge_candidate(
+        root, conflict_source, conflict_target
+    ) as conflict:
+        assert isinstance(conflict, MergeCandidateRefusal)
+        assert conflict.kind == "conflict"
+        assert conflict.conflicted_paths == ("shared.txt",)
+
+    _git(root, "checkout", "source")
+    broken = root / "docs/tasks/2_active/task_broken.md"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("---\nid: task_broken\n---\ninvalid", encoding="utf-8")
+    _git(root, "add", "docs")
+    _git(root, "commit", "-m", "malformed lifecycle document")
+    malformed_source = _git(root, "rev-parse", "HEAD")
+    marker = tmp_path / "validator-spawned"
+    result = validate_exact_merge_candidate(
+        root, malformed_source, target,
+        command=(sys.executable, "-c", f"open({str(marker)!r}, 'w').close()"),
+        timeout=10,
+    )
+    assert result.outcome == "fixture_environment"
+    assert "lifecycle documents" in result.owner_action
+    assert not marker.exists()

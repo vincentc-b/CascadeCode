@@ -3396,6 +3396,51 @@ code_teams_validator = element "run_review_validation" "Function" "Verify a live
     }
 }
 
+code_teams_candidate_materialize = element "materialize_exact_merge_candidate" "Function" "Clone into an owned private checkout, resolve the exact source/target commits with Git's merge path, and remove only the owned checkout on exit." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-materialize"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "materialize_exact_merge_candidate"
+    }
+}
+
+code_teams_candidate = element "ExactMergeCandidate" "Dataclass" "Carry exact source, target, prospective commit and tree identity plus the live private checkout during its bounded context." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ExactMergeCandidate"
+    }
+}
+
+code_teams_candidate_refusal = element "MergeCandidateRefusal" "Dataclass" "Represent missing, unknown or conflicted exact-pair refusal with finite owner action and bounded diagnostics." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-refusal"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "MergeCandidateRefusal"
+    }
+}
+
+code_teams_candidate_validate = element "validate_exact_merge_candidate" "Function" "Scan candidate lifecycle documents, purge candidate bytecode, pin source and dependency identity, and run the approved bounded argv." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-validate"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "validate_exact_merge_candidate"
+    }
+}
+
+code_teams_candidate_evidence = element "ExactCandidateValidation" "Dataclass" "Classify exact candidate evidence as passed, product assertion, fixture/environment, timeout or unavailable with finite owner action." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-evidence"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ExactCandidateValidation"
+    }
+}
+
 code_task_generation = element "admit_review_publication_generation" "Function" "Record material publication evidence without granting allowance or growing the attempt bound." {
     properties {
         "cascade.semanticId" "element.code.task.generation"
@@ -3585,9 +3630,39 @@ code_teams_validation_operation_to_code_teams_validation_profile = code_teams_va
     }
 }
 
-code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
+code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_candidate_validate "Validates the isolated exact candidate" {
     properties {
         "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
+    }
+}
+
+code_teams_candidate_validate_to_materialize = code_teams_candidate_validate -> code_teams_candidate_materialize "Owns one private exact-pair checkout" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-validate-to-materialize"
+    }
+}
+
+code_teams_candidate_materialize_to_candidate = code_teams_candidate_materialize -> code_teams_candidate "Yields prospective commit and tree identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-materialize-to-candidate"
+    }
+}
+
+code_teams_candidate_materialize_to_refusal = code_teams_candidate_materialize -> code_teams_candidate_refusal "Returns typed missing, unknown or conflict refusal" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-materialize-to-refusal"
+    }
+}
+
+code_teams_candidate_validate_to_validator = code_teams_candidate_validate -> code_teams_validator "Runs unchanged approved argv in the candidate" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-validate-to-validator"
+    }
+}
+
+code_teams_candidate_validate_to_evidence = code_teams_candidate_validate -> code_teams_candidate_evidence "Returns bounded classified evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-validate-to-evidence"
     }
 }
 
@@ -4946,7 +5021,7 @@ code_workspace_fast_forward = element "fast_forward_trunk" "Function" "Fetch and
     }
 }
 
-code_teams_publish_to_board_scan = code_teams_validate_publish -> code_teams_board_scan "Refuses malformed physical source before checks" {
+code_teams_publish_to_board_scan = code_teams_candidate_validate -> code_teams_board_scan "Refuses malformed physical candidate documents before checks" {
     properties {
         "cascade.semanticId" "relationship.code.teams.publish-board-scan"
     }

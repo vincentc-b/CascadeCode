@@ -62,6 +62,15 @@ custom "cascade-agent-code" {
     include code_agent_runner
     autoLayout lr
 }
+
+custom "cascade-teams-code" {
+    title "Tier teams — Code"
+    properties {
+        "cascade.codeComponent" "element.component.teams"
+    }
+    include code_teams_candidate_validate
+    autoLayout lr
+}
 """
 JOURNEY_MODEL = """operator = person "Operator" "Reviews branch architecture." {
     properties {
@@ -89,6 +98,11 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.agent"
             }
         }
+        team_component = component "Tier teams" "Validates exact review candidates." "cascade.review_validation" {
+            properties {
+                "cascade.semanticId" "element.component.teams"
+            }
+        }
     }
 }
 
@@ -101,6 +115,15 @@ code_agent_runner = element "run_role" "Function" "Dispatches a role turn throug
     }
 }
 
+code_teams_candidate_validate = element "validate_exact_merge_candidate" "Function" "Freshly validate one exact merge result." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-validate"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "validate_exact_merge_candidate"
+    }
+}
+
 operator_uses_war_room = operator -> war_room "Uses" {
     properties {
         "cascade.semanticId" "relationship.operator-uses-war-room"
@@ -109,6 +132,11 @@ operator_uses_war_room = operator -> war_room "Uses" {
 war_room_calls_supervisor = war_room -> supervisor "Invokes" {
     properties {
         "cascade.semanticId" "relationship.war-room-calls-supervisor"
+    }
+}
+teams_use_agent = team_component -> agent_component "Runs an approved validator" {
+    properties {
+        "cascade.semanticId" "relationship.teams-use-agent"
     }
 }
 """
@@ -172,6 +200,12 @@ def _install_model(root: Path, *, system_name: str | None = None) -> ProjectCont
         "def run_role():\n    \"\"\"Dispatch a provider role turn.\"\"\"\n",
         encoding="utf-8",
     )
+    validator = root / "cascade" / "review_validation.py"
+    validator.write_text(
+        "def validate_exact_merge_candidate():\n"
+        "    \"\"\"Freshly validate one exact merge result.\"\"\"\n",
+        encoding="utf-8",
+    )
     if system_name is not None:
         model = project.editable_architecture_root / "model.dsl"
         model.write_text(
@@ -197,11 +231,14 @@ def _limit_model_views(architecture: Path) -> None:
         "element.container.war-room",
         "element.container.supervisor",
         "element.component.agent",
+        "element.component.teams",
         "element.code.agent.runner",
+        "element.code.teams.candidate-validate",
     }
     relationship_ids = {
         "relationship.operator-uses-war-room",
         "relationship.war-room-calls-supervisor",
+        "relationship.teams-use-agent",
     }
     contract["elements"] = [
         element
@@ -222,6 +259,7 @@ def _limit_model_views(architecture: Path) -> None:
             "cascade-containers",
             "cascade-supervisor-components",
             "cascade-agent-code",
+            "cascade-teams-code",
         }
     ]
     contract_path.write_text(
@@ -561,9 +599,27 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         source_preview.filter(has_text="Dispatch a provider role turn").wait_for()
         assert "def run_role" in source_preview.inner_text()
 
+        # The exact-candidate Code node is independently restorable and its
+        # source binding resolves at the same pinned revision.
+        teams_link = deep_link.replace(
+            "view=cascade-agent-code", "view=cascade-teams-code"
+        ).replace(
+            "target=element.code.agent.runner",
+            "target=element.code.teams.candidate-validate",
+        )
+        page.goto(teams_link, wait_until="domcontentloaded")
+        _wait_for_snapshot(page, timeout=30_000)
+        assert "cascade-teams-code" in view.input_value()
+        assert page.locator(
+            '[aria-label="element element.code.teams.candidate-validate"]'
+        ).get_attribute("aria-pressed") == "true"
+        page.locator("#architecture-target-detail button", has_text="Open pinned source").click()
+        source_preview.filter(has_text="freshly validate one exact merge result").wait_for()
+        assert "def validate_exact_merge_candidate" in source_preview.inner_text()
+
         # Level up traverses Code → Components → Containers → Context.
         page.locator("#architecture-back").click()
-        assert "cascade-supervisor-components" in view.input_value()
+        assert "components" in view.input_value()
         page.locator("#architecture-back").click()
         assert "cascade-containers" in view.input_value()
         relationship = page.locator(
