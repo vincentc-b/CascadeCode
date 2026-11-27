@@ -4,7 +4,8 @@ title: Verify merge results and preserve canonical trunk integrity
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_054_001
 depends_on: []
 owners:
 - epic_manager
@@ -56,6 +57,7 @@ Reuse cascade/review_validation.py, review_rebase.py, team_review_recovery.py, r
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_054_001
 
 The Epic Team will create and sequence feature plans here.
 
