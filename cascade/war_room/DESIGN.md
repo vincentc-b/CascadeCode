@@ -575,11 +575,34 @@ stale receipt evidence never projects an approved state. Board GETs use the
 request-scoped board and cached provider facts and do not write receipts,
 dispatch work, or refresh external authority.
 
+This presentation consumes
+[`REQ-CASCADE-APPROVAL-001`](../DESIGN.md#feature-approval-authority). The board
+action first reads and displays the Feature's revision-pinned review context,
+then sends the Feature ID and those exact displayed context bytes to
+`POST /api/approve_feature`. The response separates `approval_result`,
+`approval_state`, `approval_explanation`, and `affected_work_ids` from
+`execution_state` and `dispatch_pending`. The browser holds only a per-Feature
+observation token, displayed context, in-flight request, and latest typed or
+transport-uncertain outcome. That transient state neither grants approval nor
+survives a browser or service restart. Durable state is the owning document's
+`approved_at` plus the matching receipt in the tracking repository; after a
+restart, only a current receipt-backed GET can reconstruct approved presentation.
+An explicit refusal remains visible until newer canonical evidence or an
+operator retry supersedes it. A timeout or disconnect remains unconfirmed until
+a canonical GET establishes a current receipt or a safe unapproved retry state;
+the client never converts transport uncertainty into success or an automatic
+second POST.
+
 `DEC-WARROOM-READINESS-001`: Board responses reuse request-scoped facts. Missing
 cached evidence remains unknown; polling does not discover providers, perform
 expensive per-feature Git probes, dispatch, or mutate lifecycle state. Action
 boundaries re-evaluate their gates. This preserves truthful explanations without
-turning browser refreshes into execution or repeated discovery.
+turning browser refreshes into execution or repeated discovery. The API/client
+split keeps the action state ephemeral and receipt ownership server-side: the
+client may suppress duplicate gestures and order observations, while only the
+approval service may write authorization and only canonical reconciliation may
+report admission. Refusal and unconfirmed transport are therefore explicit
+fail-closed gates, not alternate authorization paths.
 
 `REQ-WARROOM-ATTENTION-001`: New-feature markers and collapsed-epic counts remain
 separate from lifecycle and activation summaries. Viewing or rendering a feature
