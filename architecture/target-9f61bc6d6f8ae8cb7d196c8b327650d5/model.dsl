@@ -4553,6 +4553,15 @@ code_approval_dependencies = element "evaluate_action_dependencies" "Function" "
     }
 }
 
+code_approval_eligibility = element "require_feature_approval_dependencies" "Function" "Allows only satisfied or legally incomplete predecessors and fences owner and declaration changes before individual approval writes." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-dependency-eligibility"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "require_feature_approval_dependencies"
+    }
+}
+
 code_approval_strict = element "require_action_dependencies" "Function" "Refuses every unsatisfied or unknown dependency at strict planning boundaries." {
     properties {
         "cascade.semanticId" "element.code.approval.strict-dependencies"
@@ -4607,7 +4616,7 @@ code_feature_receipt_read = element "approval_evidence" "Function" "Returns curr
     }
 }
 
-code_feature_revision = element "_revision" "Function" "Hashes exact or delegated scope body and selection metadata; dependency declarations are outside this digest." {
+code_feature_revision = element "_revision" "Function" "Hashes exact or delegated scope body, sorted dependency declarations and selection metadata without mutable predecessor state." {
     properties {
         "cascade.semanticId" "element.code.feature.approval-revision"
         "cascade.parent" "element.component.feature-team"
@@ -4679,9 +4688,21 @@ rel_approval_workspace = approval_component -> workspace_component "Requires rev
     }
 }
 
-rel_approval_feature_dependencies = code_approval_feature -> code_approval_strict "Requires strict dependency evidence" {
+rel_approval_feature_dependencies = code_approval_feature -> code_approval_eligibility "Requires approval-specific dependency eligibility and a pre-write declaration fence" {
     properties {
         "cascade.semanticId" "relationship.approval-feature-dependencies"
+    }
+}
+
+rel_approval_eligibility_evaluation = code_approval_eligibility -> code_approval_dependencies "Refreshes canonical owner and dependency facts" {
+    properties {
+        "cascade.semanticId" "relationship.approval-eligibility-evaluation"
+    }
+}
+
+rel_approval_epic_dependencies = code_approval_epic -> code_approval_strict "Keeps Epic plan approval on the satisfied-only dependency policy" {
+    properties {
+        "cascade.semanticId" "relationship.approval-epic-dependencies"
     }
 }
 

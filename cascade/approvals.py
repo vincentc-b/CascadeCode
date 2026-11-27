@@ -19,7 +19,10 @@ from cascade.board.lock import process_lock
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import WorkMeta
 from cascade.epic.plan_readiness import require_epic_plan_ready_for_approval
-from cascade.planning_action_dependencies import require_action_dependencies
+from cascade.planning_action_dependencies import (
+    require_action_dependencies,
+    require_feature_approval_dependencies,
+)
 from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
 from cascade.workspace.architecture_review import ReviewApprovalContext
 from cascade.watchdog.events import append_event
@@ -97,7 +100,7 @@ def approve_feature(
         meta = board.by_id.get(feature_id)
         if meta is None or meta.tier != "feature":
             raise ValueError("feature approval requires a feature on the board")
-        evidence = require_action_dependencies(feature_id, root=repo)
+        evidence = require_feature_approval_dependencies(feature_id, root=repo)
         assert evidence.board is not None
         with merged_board_snapshot(repo, evidence.board):
             current = evidence.board.by_id.get(feature_id)
@@ -123,6 +126,10 @@ def approve_feature(
                     root=repo,
                     approval_context=review_context,
                 )
+                evidence = require_feature_approval_dependencies(
+                    feature_id, root=repo, prior=evidence
+                )
+                assert evidence.board is not None
             newly = _set_feature_approved(feature_id, root=repo)
     result: dict[str, object] = {
         "ok": True, "feature_id": feature_id, "newly_approved": newly

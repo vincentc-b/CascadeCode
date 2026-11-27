@@ -241,8 +241,10 @@ This implements the [shared approval boundary](../DESIGN.md#feature-approval-aut
 replacement. Ordinary receipts use scope mode: `_scope_body` excludes named
 delegated planning sections, so tactical decomposition can proceed without a new
 scope approval. Corrective Features use exact mode. `_revision` hashes body,
-parent and provider/model configuration; scope mode also hashes the title.
-Frontmatter `depends_on` is not part of that digest.
+parent, sorted frontmatter `depends_on` IDs and provider/model configuration;
+scope mode also hashes the title. Dependency lifecycle state is not hashed, so
+predecessor completion does not stale an approval while a declaration change
+does.
 
 [`_set_feature_approved`](../approvals.py) writes the document before the receipt.
 A crash between these writes leaves unknown evidence. For an open backlog
@@ -263,7 +265,7 @@ stateDiagram-v2
     [*] --> NeedsApproval
     NeedsApproval --> Unknown: timestamp saved, receipt absent
     Unknown --> Current: explicit approval passes gates and saves receipt
-    Current --> Stale: hashed scope or selection changes
+    Current --> Stale: hashed scope, dependency declaration or selection changes
     Stale --> Current: explicit approval of current scope
     Current --> Waiting: execution gates block
     Waiting --> Current: facts reevaluated

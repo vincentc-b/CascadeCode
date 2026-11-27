@@ -214,6 +214,6 @@ custom "cascade-approval-code" {
     properties {
         "cascade.codeComponent" "element.component.approval"
     }
-    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_strict code_approval_review code_approval_save code_approval_reconcile
+    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_strict code_approval_review code_approval_save code_approval_reconcile
     autoLayout lr
 }

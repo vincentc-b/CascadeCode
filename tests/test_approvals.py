@@ -87,6 +87,130 @@ def test_approve_feature_persists_and_is_idempotent(tmp_path: Path) -> None:
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
 
 
+def test_dependency_declaration_is_revision_fenced_but_completion_is_not(
+    tmp_path: Path,
+) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+    from cascade.board.store import move_doc
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="First", tier="feature", parent="epic_001")
+    add_doc(root, id="feat_004", title="Fourth", tier="feature", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_002",
+        title="Second",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_004", "feat_001"],
+    )
+    _select_supported(root, "feat_002")
+
+    approve_feature("feat_002", root=root)
+    owner = read_doc("feat_002", root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "current"
+    assert dispatch_feature("feat_002", "boss", root=root).reason == "dependency_unmet"
+
+    owner.meta.depends_on.reverse()
+    write_doc(owner, root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "current"
+
+    move_doc("feat_001", "completed", root=root)
+    owner = read_doc("feat_002", root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "current"
+
+    add_doc(root, id="feat_003", title="Third", tier="feature", parent="epic_001")
+    owner.meta.depends_on.append("feat_003")
+    write_doc(owner, root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "stale"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "reason", "affected_ids"),
+    [
+        (
+            "declaration",
+            "dependency_declaration_changed",
+            ("feat_001", "feat_002", "feat_003"),
+        ),
+        ("owner", "dependency_owner_changed", ("feat_001", "feat_002")),
+    ],
+)
+def test_feature_approval_refuses_dependency_owner_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    reason: str,
+    affected_ids: tuple[str, ...],
+) -> None:
+    from cascade.planning_action_dependencies import DependencyActionRefused
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="First", tier="feature", parent="epic_001")
+    add_doc(root, id="feat_003", title="Third", tier="feature", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_002",
+        title="Owner",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+    _select_supported(root, "feat_002")
+
+    def change_declaration(*_args: object, **_kwargs: object) -> None:
+        doc = read_doc("feat_002", root=root)
+        if mutation == "declaration":
+            doc.meta.depends_on.append("feat_003")
+        else:
+            doc.meta.owners.append("replacement")
+        write_doc(doc, root=root)
+
+    monkeypatch.setattr(
+        "cascade.lifecycle_review_gate.require_lifecycle_review_gate",
+        change_declaration,
+    )
+    with pytest.raises(DependencyActionRefused) as refused:
+        approve_feature("feat_002", root=root)
+
+    assert refused.value.reasons == (reason,)
+    assert refused.value.affected_work_ids == affected_ids
+    assert read_doc("feat_002", root=root).meta.approved_at is None
+
+
+def test_retry_repairs_interrupted_approval_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.feature import readiness_evidence
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+    real_write = readiness_evidence.write_approval_evidence
+    calls = 0
+
+    def interrupt_once(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("interrupted receipt write")
+        real_write(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(readiness_evidence, "write_approval_evidence", interrupt_once)
+    with pytest.raises(OSError, match="interrupted receipt write"):
+        approve_feature("feat_001", root=root)
+    interrupted = read_doc("feat_001", root=root)
+    assert interrupted.meta.approved_at is not None
+    assert readiness_evidence.approval_evidence(interrupted.meta, root=root)[0] == "unknown"
+
+    assert approve_feature("feat_001", root=root)["newly_approved"] is True
+    repaired = read_doc("feat_001", root=root)
+    assert readiness_evidence.approval_evidence(repaired.meta, root=root)[0] == "current"
+
+
 def test_epic_approval_snapshots_children_and_is_idempotent(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
