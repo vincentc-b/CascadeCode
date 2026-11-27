@@ -76,5 +76,32 @@
     "reason_code": "invalid_publication",
     "message": "C4 owner mismatch for workspace.dsl: contract='epic_056', reference='epic_054'",
     "resolution": "Corrected workspace/fragment owners at 5abe8b2d; exact publication references now materialize with matching owner and closure. Re-rendered and repeated browser verification against that pin."
+  },
+  "architect_sign_off": {
+    "ok": true,
+    "epic_id": "epic_054",
+    "role": "epic_architect",
+    "plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+    "newly_signed": true,
+    "evidence_snapshot_id": "evidence_08062f97501b400d80b2564f56348a1b",
+    "sign_offs": {
+      "epic_architect": {
+        "role": "epic_architect",
+        "plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+        "signed_at": "2026-11-27T19:42:34.221314+00:00",
+        "evidence_snapshot_id": "evidence_08062f97501b400d80b2564f56348a1b"
+      }
+    }
+  },
+  "publication_receipt": {
+    "operation_id": "architecture-publication-88b164f02b4e880427bf1b6bf86bc9ab330bb046fe4298240adb9cd468766b58",
+    "status": "pending",
+    "render_operation_id": "c4-render-417cc64826af1ad429d50b06ef8f83116e26565a5d130979ac91e90b4058b010",
+    "baseline_render_operation_id": null,
+    "review_unit_id": null,
+    "reviewed_tuple_digest": "bf1093ec5af7e1b4907642109ad3d8d138eee6aa079b1465738bc907777cd802",
+    "amendment_id": null,
+    "reason_code": null,
+    "message": "bounded architecture render is pending"
   }
 }
