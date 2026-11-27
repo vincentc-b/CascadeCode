@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-27T05:52:48.065970+00:00'
 ---
 # Bound persisted review evidence and passive review responses
 
