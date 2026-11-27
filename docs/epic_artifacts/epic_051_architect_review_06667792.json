@@ -34,20 +34,22 @@
     "Real pinned Structurizr render reached ready at ca23bc11 with one attempt, no recovery and unchanged CPU/memory/PID/timeout bounds. Applied test_c4_render._assert_cascade_view_coverage to the rendered semantic workspace: all components have native Code views, all Code nodes are covered by their matching component, and every source path/symbol/declaration kind matches actual source.",
     "Browser traversed context -> containers -> supervisor components -> Code for both new Boss/Workspace nodes; restored selected-node deep links, opened pinned source and returned Level up. No observed architecture HTTP errors. Cold readiness 106.62s; Boss journey 26.70s and Workspace journey 13.59s; total 147.39s. Render operations remained 4 -> 4 during navigation/reloads, demonstrating reuse rather than per-view process startup.",
     "No source symbols were renamed/deleted and no Code component owners changed in the integrated diff. All current source declarations were verified against the rendered metadata; replacement semantic relationship is absent from model and contract.",
-    "No implementation/model changed after browser pin. Subsequent design edits add a verification link and clarify the active-input label on the corrected queue flow. All changed-design local file links and git diff --check passed."
+    "No implementation/model changed after browser pin. Subsequent design edits add a verification link and clarify the active-input label on the corrected queue flow. All changed-design local file links and git diff --check passed.",
+    "Final canonical read confirmed plan 06667792 unchanged. All six submitted references match committed SHA-256 digests and checkout bytes. Canonical publish_architecture_review admitted the integrated proposal with expected_generation=null and returned durable pending. No accepted architecture or completed publication is claimed."
   ],
   "owner_handoffs": {
     "feature_3": "Complete dec_008 integration-dependent consumer verification for completed/missing/closed-unmerged/stale review evidence without conflating lifecycle planning readiness with supported stacked dispatch. Route any accepted-work contract change through the amendment protocol.",
     "feature_4": "Restore meaningful setup for the final-journey cases identified by dec_008 and verify the complete red-CI repair/dependency flow. Do not bypass activation or approval guards.",
     "architecture_runtime": "Earlier failed render/publication still require supported recovery with preserved identity, failure history, bounds and accepted-lineage guards. No exposed Epic tool repairs terminal failed publication state; no canonical ledger was edited.",
-    "epic_architect": "Reconcile any new publication receipt through the canonical tool; pending calls must be replayed identically on a later turn."
+    "epic_architect": "On a later Architect turn, replay docs/epic_artifacts/epic_051_architecture_review_06667792.json unchanged through publish_architecture_review to discover completion. Do not substitute newer pins or poll within this planning turn. The plan is still 06667792; if it changes, preserve this receipt and reconcile the current-plan guard explicitly."
   },
   "limitations": [
     "Feature 1 historical review has no returned acceptance/promotion receipt.",
     "Final red-CI journey, dependency-consumer acceptance and known baseline test setup remain downstream obligations.",
     "Browser checks isolate unrelated operational panels and do not establish full application health or a latency SLA.",
     "No dependency installed, runtime implementation edited, accepted snapshot rewritten or lifecycle gate bypassed.",
-    "Rapid browser navigation produced server BrokenPipe diagnostics for cancelled requests; asserted paths returned successfully. This smoke does not establish general HTTP cancellation behavior."
+    "Rapid browser navigation produced server BrokenPipe diagnostics for cancelled requests; asserted paths returned successfully. This smoke does not establish general HTTP cancellation behavior.",
+    "Epic approval already occurred. No additional sign-off, plan amendment or board-body update was made in this integration review; the work record is this committed evidence artifact. Publication remains pending and Epic completion is not recommended."
   ],
   "browser_receipt": "docs/epic_artifacts/epic_051_delivery_architecture_browser.json",
   "render": {
@@ -93,5 +95,20 @@
       "cascade-workspace-code",
       "cascade-workspace-commands-code"
     ]
+  },
+  "publication": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_06667792.json",
+    "submitted": true,
+    "receipt": {
+      "operation_id": "architecture-publication-fa6e5725e8b8a14b93383ed51b62daa5e1239eba3f07015cad532b0d103bf8aa",
+      "status": "pending",
+      "render_operation_id": "c4-render-5750f452992a913e4c4dee1ebec8a11f6baa1c9b48f26499391ba3c3c11d5ac1",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "985bd16c4dcf097dbe6c5b06000f02af0dfe72e1c6e7931ec84ccd500ea1c882",
+      "amendment_id": null,
+      "reason_code": null,
+      "message": "bounded architecture render is pending"
+    }
   }
 }
