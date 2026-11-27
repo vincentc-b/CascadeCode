@@ -10,6 +10,7 @@ children:
 - feat_051_003
 - feat_051_004
 - feat_051_005
+- feat_051_006
 depends_on: []
 owners:
 - epic_manager
@@ -162,6 +163,7 @@ The declared target is the existing local verification host `ip-172-31-37-14`, L
 Exact existing prerequisites: Python 3.12.8; PyYAML 6.0.3; cursor-sdk 1.0.37; langgraph 1.2.14; langgraph-checkpoint-sqlite 3.1.1; pytest 9.0.3; Git 2.34.1; Node 20.20.2; Docker 28.0.0; Playwright 1.64.0; Chromium 156.0.8078.4/build 1248; Structurizr 2026.09.19-playwright at `sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c`. The canonical manifest owns exact source/install locations, executable or installed RECORD digest identities and bounded verification recipes. These are existing-installation checks, not new dependency constraints for users or installation authority. Acceptance uses scripted forge/provider transport with production adapters and needs no live forge credentials or paid provider calls.
 
 ## Feature breakdown
+- feat_051_006
 - feat_051_005
 
 | Feature | Depends on | Shippable responsibility and success criteria |
