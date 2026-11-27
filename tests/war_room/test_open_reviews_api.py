@@ -353,6 +353,7 @@ def test_open_review_projects_canonical_repair_and_bounded_failed_check_evidence
             }
         ],
         "truncated": False,
+        "omitted": 0,
     }
     assert row["repair"] == {
         "request_id": "review-health:failed-build",
@@ -406,6 +407,101 @@ def test_open_review_projects_canonical_repair_and_bounded_failed_check_evidence
     assert verified["repair"]["executing"] is False
     assert verified["evidence"]["source"] == "verification_postcheck"
     assert verified["evidence"]["health_state"] == "green"
+
+
+def test_open_reviews_preserve_distinct_names_and_report_omitted_rows(
+    war_room_server,
+):
+    base, root = war_room_server
+    names = [f"check-{index:02d}" for index in range(18)] + [
+        "same-prefix-A",
+        "same-prefix-B",
+        "tail-20",
+        "tail-21",
+    ]
+    checks = {name: {"status": "success", "generation": 0} for name in names}
+    assert record_feature_review_evidence(
+        "feat_001",
+        {
+            "review_health": {"state": "green", "checks": names},
+            "required_check_policy": {"available": True, "required": names},
+            "required_check_results": {
+                "available": True,
+                "generation": "🧪" * 64,
+                "statuses": {name: "success" for name in names},
+                "checks": checks,
+            },
+            "review_feedback": {"available": True, "actionable": False},
+        },
+        root=root,
+    )
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    evidence = {item["id"]: item for item in payload["reviews"]}["feat_001"]["evidence"]
+    projected_names = [row["name"] for row in evidence["ci"]["checks"]]
+    assert len(projected_names) == 20
+    assert "same-prefix-A" in projected_names
+    assert "same-prefix-B" in projected_names
+    assert evidence["ci"]["truncated"] is True
+    assert evidence["ci"]["omitted"] == 2
+    assert len(json.dumps(evidence, ensure_ascii=False).encode("utf-8")) < 32 * 1024
+
+
+@pytest.mark.parametrize("fallback", ["registry", "repair_request", "postcheck"])
+def test_open_reviews_bound_oversized_legacy_and_repair_fallbacks(
+    war_room_server, fallback
+):
+    base, root = war_room_server
+    oversized = "🧪" * 65
+    reviews = _representative_registry()
+    if fallback == "registry":
+        reviews["feat_001"].update(
+            review_health={"state": "green"},
+            required_check_policy={"available": True},
+            required_check_results={
+                "available": True,
+                "checks": {"build": {"status": "success", "generation": oversized}},
+            },
+        )
+        _write_reviews(root, reviews)
+    else:
+        action = {
+            "kind": "feature_repair",
+            "repair_route": "open_review",
+            "action_id": f"feature_repair:feat_001:{fallback}",
+            "request_id": fallback,
+            "feature_id": "feat_001",
+            "generation": 1,
+            "phase": "delivery_pending",
+        }
+        checks = {"build": {"status": "success", "generation": oversized}}
+        if fallback == "repair_request":
+            action["request_evidence"] = {
+                "review_health": {
+                    "observation": {
+                        "health_state": "green",
+                        "blocker": {"checks": checks},
+                    }
+                }
+            }
+        else:
+            action["verification_postcheck"] = {
+                "verified": True,
+                "required_check_results": {"available": True, "checks": checks},
+            }
+        _write_repair(root, action)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    evidence = {item["id"]: item for item in payload["reviews"]}["feat_001"]["evidence"]
+    assert evidence["health_state"] == "unavailable"
+    assert evidence["health_reason"] == "review_evidence_out_of_bounds"
+    assert evidence["ci"] == {
+        "policy_status": "unavailable",
+        "results_status": "unavailable",
+        "checks": [],
+        "truncated": False,
+        "omitted": 0,
+    }
 
 
 def test_open_reviews_read_does_not_mutate_or_invoke_forge_or_provider(

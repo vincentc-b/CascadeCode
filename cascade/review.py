@@ -52,6 +52,12 @@ from cascade.workspace.integration_worktree import (
 
 _LOG = logging.getLogger(__name__)
 
+_REVIEW_EVIDENCE_MAX_BYTES = 32 * 1024
+_REVIEW_EVIDENCE_MAX_IDENTITY_BYTES = 256
+_REVIEW_EVIDENCE_MAX_INTEGER_DIGITS = 64
+_REVIEW_EVIDENCE_MAX_CHECK_ROWS = 20
+_REVIEW_EVIDENCE_UNAVAILABLE = "review_evidence_out_of_bounds"
+
 
 @dataclass(frozen=True)
 class OpenReviewContext:
@@ -442,6 +448,68 @@ def review_record_for_feature(
     return dict(record) if isinstance(record, dict) else None
 
 
+def _review_evidence_name(value: object) -> str:
+    """Return one exact check identity or refuse the complete observation."""
+
+    if not isinstance(value, str):
+        raise ValueError("check name must be a string")
+    if len(value.encode("utf-8")) > _REVIEW_EVIDENCE_MAX_IDENTITY_BYTES:
+        raise ValueError("check name exceeds the UTF-8 byte limit")
+    return value
+
+
+def _review_evidence_generation(value: object) -> str | int | None:
+    """Keep an authoritative generation losslessly within its scalar bound."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise ValueError("check generation must be a string or integer")
+    if isinstance(value, str):
+        if len(value.encode("utf-8")) > _REVIEW_EVIDENCE_MAX_IDENTITY_BYTES:
+            raise ValueError("string check generation exceeds the UTF-8 byte limit")
+        return value
+    if len(str(abs(value))) > _REVIEW_EVIDENCE_MAX_INTEGER_DIGITS:
+        raise ValueError("integer check generation exceeds the decimal-digit limit")
+    return value
+
+
+def _review_evidence_unavailable_marker(observed_at: str) -> dict[str, object]:
+    return {
+        "review_health": {
+            "state": "unavailable",
+            "reason": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "checks": [],
+            "checks_omitted": 0,
+        },
+        "required_check_policy": {
+            "available": False,
+            "error": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "source_head": None,
+            "target_head": None,
+            "required": [],
+            "required_omitted": 0,
+        },
+        "required_check_results": {
+            "available": False,
+            "error": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "source_head": None,
+            "generation": None,
+            "statuses": {},
+            "checks": {},
+            "checks_omitted": 0,
+        },
+        "review_feedback": {
+            "available": False,
+            "error": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "approval_state": None,
+            "actionable": False,
+            "actionable_count": 0,
+        },
+        "review_observed_at": observed_at,
+    }
+
+
 def record_feature_review_evidence(
     feature_id: str, snapshot: Mapping[str, object], *, root: Path
 ) -> bool:
@@ -457,94 +525,134 @@ def record_feature_review_evidence(
         value = " ".join(value.split())
         return value[:limit] if value else None
 
-    health_raw = snapshot.get("review_health")
-    health_raw = health_raw if isinstance(health_raw, Mapping) else {}
-    checks_raw = health_raw.get("checks")
-    health = {
-        "state": text(health_raw.get("state"), 64) or "unknown",
-        "reason": text(health_raw.get("reason"), 160),
-        "checks": [text(str(name), 80) for name in checks_raw[:20]]
-        if isinstance(checks_raw, list)
-        else [],
-    }
-
-    policy_raw = snapshot.get("required_check_policy")
-    policy_raw = policy_raw if isinstance(policy_raw, Mapping) else {}
-    required = policy_raw.get("required")
-    policy = {
-        "available": policy_raw.get("available") is True,
-        "error": text(policy_raw.get("error")),
-        "source_head": text(policy_raw.get("source_head"), 80),
-        "target_head": text(policy_raw.get("target_head"), 80),
-        "required": [text(str(name), 80) for name in required[:20]]
-        if isinstance(required, list)
-        else [],
-    }
-
-    results_raw = snapshot.get("required_check_results")
-    results_raw = results_raw if isinstance(results_raw, Mapping) else {}
-    statuses_raw = results_raw.get("statuses")
-    statuses_raw = statuses_raw if isinstance(statuses_raw, Mapping) else {}
-    check_results_raw = results_raw.get("checks")
-    check_results_raw = (
-        check_results_raw if isinstance(check_results_raw, Mapping) else {}
-    )
-    names = sorted({str(name) for name in (*statuses_raw.keys(), *check_results_raw.keys())})[:20]
-    checks: dict[str, object] = {}
-    statuses: dict[str, object] = {}
-    for name in names:
-        check = check_results_raw.get(name)
-        check = check if isinstance(check, Mapping) else {}
-        status = text(statuses_raw.get(name) or check.get("status") or check.get("conclusion"), 40)
-        statuses[name] = status or "unknown"
-        checks[name] = {
-            "status": status or "unknown",
-            "generation": check.get("generation")
-            if isinstance(check.get("generation"), (str, int))
-            and not isinstance(check.get("generation"), bool)
-            else None,
-            "source_head": text(check.get("source_head"), 80),
-            "observed_at": text(check.get("observed_at"), 64),
-        }
-    results = {
-        "available": results_raw.get("available") is True,
-        "error": text(results_raw.get("error")),
-        "source_head": text(results_raw.get("source_head"), 80),
-        "generation": results_raw.get("generation")
-        if isinstance(results_raw.get("generation"), (str, int))
-        and not isinstance(results_raw.get("generation"), bool)
-        else None,
-        "statuses": statuses,
-        "checks": checks,
-    }
-
-    feedback_raw = snapshot.get("review_feedback")
-    feedback_raw = feedback_raw if isinstance(feedback_raw, Mapping) else {}
-    actionable_raw = feedback_raw.get("actionable_feedback")
-    feedback = {
-        "available": feedback_raw.get("available") is True,
-        "error": text(feedback_raw.get("error")),
-        "approval_state": text(feedback_raw.get("approval_state"), 40),
-        "actionable": feedback_raw.get("actionable") is True,
-        "actionable_count": len(actionable_raw[:100])
-        if isinstance(actionable_raw, list)
-        else 0,
-    }
     observed_at = datetime.now(timezone.utc).isoformat()
-    return (
-        _update_record(
-            locate_trunk(root),
-            feature_id,
-            {
-                "review_health": health,
-                "required_check_policy": policy,
-                "required_check_results": results,
-                "review_feedback": feedback,
-                "review_observed_at": observed_at,
-            },
+    trunk = locate_trunk(root)
+    try:
+        health_raw = snapshot.get("review_health")
+        health_raw = health_raw if isinstance(health_raw, Mapping) else {}
+        health_checks_raw = health_raw.get("checks")
+        if health_checks_raw is not None and not isinstance(health_checks_raw, list):
+            raise ValueError("health checks must be a list")
+        health_names = (
+            [_review_evidence_name(name) for name in health_checks_raw]
+            if isinstance(health_checks_raw, list)
+            else []
         )
-        is not None
-    )
+        health = {
+            "state": text(health_raw.get("state"), 64) or "unknown",
+            "reason": text(health_raw.get("reason"), 160),
+            "checks": health_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS],
+            "checks_omitted": max(
+                0, len(health_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS
+            ),
+        }
+
+        policy_raw = snapshot.get("required_check_policy")
+        policy_raw = policy_raw if isinstance(policy_raw, Mapping) else {}
+        required_raw = policy_raw.get("required")
+        if required_raw is not None and not isinstance(required_raw, list):
+            raise ValueError("required checks must be a list")
+        required_names = (
+            [_review_evidence_name(name) for name in required_raw]
+            if isinstance(required_raw, list)
+            else []
+        )
+        policy = {
+            "available": policy_raw.get("available") is True,
+            "error": text(policy_raw.get("error")),
+            "source_head": text(policy_raw.get("source_head"), 80),
+            "target_head": text(policy_raw.get("target_head"), 80),
+            "required": required_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS],
+            "required_omitted": max(
+                0, len(required_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS
+            ),
+        }
+
+        results_raw = snapshot.get("required_check_results")
+        results_raw = results_raw if isinstance(results_raw, Mapping) else {}
+        statuses_raw = results_raw.get("statuses")
+        if statuses_raw is not None and not isinstance(statuses_raw, Mapping):
+            raise ValueError("check statuses must be a mapping")
+        statuses_raw = statuses_raw if isinstance(statuses_raw, Mapping) else {}
+        check_results_raw = results_raw.get("checks")
+        if check_results_raw is not None and not isinstance(
+            check_results_raw, Mapping
+        ):
+            raise ValueError("check results must be a mapping")
+        check_results_raw = (
+            check_results_raw if isinstance(check_results_raw, Mapping) else {}
+        )
+        status_names = [_review_evidence_name(name) for name in statuses_raw]
+        check_names = [_review_evidence_name(name) for name in check_results_raw]
+        normalized_generations: dict[str, str | int | None] = {}
+        for name, raw_check in check_results_raw.items():
+            if not isinstance(raw_check, Mapping):
+                raise ValueError("check result must be a mapping")
+            normalized_generations[name] = _review_evidence_generation(
+                raw_check.get("generation")
+            )
+        all_names = sorted(set(status_names) | set(check_names))
+        names = all_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]
+        checks: dict[str, object] = {}
+        statuses: dict[str, object] = {}
+        for name in names:
+            check = check_results_raw.get(name)
+            check = check if isinstance(check, Mapping) else {}
+            status = text(
+                statuses_raw.get(name)
+                or check.get("status")
+                or check.get("conclusion"),
+                40,
+            )
+            statuses[name] = status or "unknown"
+            checks[name] = {
+                "status": status or "unknown",
+                "generation": normalized_generations.get(name),
+                "source_head": text(check.get("source_head"), 80),
+                "observed_at": text(check.get("observed_at"), 64),
+            }
+        results = {
+            "available": results_raw.get("available") is True,
+            "error": text(results_raw.get("error")),
+            "source_head": text(results_raw.get("source_head"), 80),
+            "generation": _review_evidence_generation(results_raw.get("generation")),
+            "statuses": statuses,
+            "checks": checks,
+            "checks_omitted": max(0, len(all_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS),
+        }
+
+        feedback_raw = snapshot.get("review_feedback")
+        feedback_raw = feedback_raw if isinstance(feedback_raw, Mapping) else {}
+        actionable_raw = feedback_raw.get("actionable_feedback")
+        feedback = {
+            "available": feedback_raw.get("available") is True,
+            "error": text(feedback_raw.get("error")),
+            "approval_state": text(feedback_raw.get("approval_state"), 40),
+            "actionable": feedback_raw.get("actionable") is True,
+            "actionable_count": len(actionable_raw[:100])
+            if isinstance(actionable_raw, list)
+            else 0,
+        }
+        observation = {
+            "review_health": health,
+            "required_check_policy": policy,
+            "required_check_results": results,
+            "review_feedback": feedback,
+            "review_observed_at": observed_at,
+        }
+        serialized = json.dumps(
+            observation, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+        if len(serialized) > _REVIEW_EVIDENCE_MAX_BYTES:
+            raise ValueError("normalized review observation exceeds the byte limit")
+    except (TypeError, ValueError, UnicodeError):
+        _update_record(
+            trunk,
+            feature_id,
+            _review_evidence_unavailable_marker(observed_at),
+        )
+        return False
+    return _update_record(trunk, feature_id, observation) is not None
 
 
 def _load(root: Path) -> dict[str, dict[str, object]]:
@@ -1355,28 +1463,67 @@ def _review_evidence_projection(
 
     raw_checks = results.get("checks")
     check_rows: list[dict[str, object]] = []
-    if isinstance(raw_checks, Mapping):
-        for name in sorted(raw_checks, key=str)[:20]:
-            check = raw_checks[name]
-            check = check if isinstance(check, Mapping) else {}
-            check_rows.append(
-                {
-                    "name": _bounded_text(str(name), limit=80),
-                    "status": _bounded_text(
-                        check.get("status") or check.get("conclusion"), limit=40
-                    )
-                    or "unknown",
-                    "generation": check.get("generation")
-                    if isinstance(check.get("generation"), (str, int))
-                    else None,
-                    "observed_at": _bounded_text(check.get("observed_at"), limit=64),
-                }
-            )
-    elif isinstance(raw_checks, list):
-        check_rows = [
-            {"name": _bounded_text(str(name), limit=80), "status": "unknown"}
-            for name in raw_checks[:20]
-        ]
+    evidence_unavailable = False
+    omitted = 0
+    try:
+        _review_evidence_generation(results.get("generation"))
+        raw_statuses = results.get("statuses")
+        if isinstance(raw_statuses, Mapping):
+            for name in raw_statuses:
+                _review_evidence_name(name)
+        elif raw_statuses is not None:
+            raise ValueError("check statuses must be a mapping")
+        if isinstance(raw_checks, Mapping):
+            names = sorted(_review_evidence_name(name) for name in raw_checks)
+            normalized_generations = {}
+            for name, raw_check in raw_checks.items():
+                if not isinstance(raw_check, Mapping):
+                    raise ValueError("check result must be a mapping")
+                normalized_generations[name] = _review_evidence_generation(
+                    raw_check.get("generation")
+                )
+            omitted = max(0, len(names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS)
+            for name in names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]:
+                check = raw_checks[name]
+                check = check if isinstance(check, Mapping) else {}
+                check_rows.append(
+                    {
+                        "name": name,
+                        "status": _bounded_text(
+                            check.get("status") or check.get("conclusion"), limit=40
+                        )
+                        or "unknown",
+                        "generation": normalized_generations[name],
+                        "observed_at": _bounded_text(
+                            check.get("observed_at"), limit=64
+                        ),
+                    }
+                )
+        elif isinstance(raw_checks, list):
+            names = [_review_evidence_name(name) for name in raw_checks]
+            omitted = max(0, len(names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS)
+            check_rows = [
+                {"name": name, "status": "unknown"}
+                for name in names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]
+            ]
+        elif raw_checks is not None:
+            raise ValueError("check results must be a mapping or list")
+        persisted_omitted = results.get("checks_omitted")
+        if persisted_omitted is not None:
+            normalized_omitted = _review_evidence_generation(persisted_omitted)
+            if type(normalized_omitted) is not int or normalized_omitted < 0:
+                raise ValueError("omitted check count must be a non-negative integer")
+            omitted = max(omitted, normalized_omitted)
+    except (TypeError, ValueError, UnicodeError):
+        evidence_unavailable = True
+        check_rows = []
+        omitted = 0
+
+    if evidence_unavailable:
+        health_state = "unavailable"
+        health_reason = _REVIEW_EVIDENCE_UNAVAILABLE
+        policy = {"available": False}
+        results = {"available": False}
 
     stale = health_state == "conflict_or_moving_target" or bool(
         health_reason and "stale" in health_reason
@@ -1415,8 +1562,8 @@ def _review_evidence_projection(
             "policy_status": policy_status,
             "results_status": results_status,
             "checks": check_rows,
-            "truncated": isinstance(raw_checks, (Mapping, list))
-            and len(raw_checks) > len(check_rows),
+            "truncated": omitted > 0,
+            "omitted": omitted,
         },
         "feedback": {
             "status": feedback_status,

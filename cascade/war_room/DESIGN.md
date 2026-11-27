@@ -21,9 +21,12 @@ review; a review without generation metadata is represented as generation zero.
 Feature metadata remains explicit `unknown` or `unavailable`. Presentation does
 not infer green checks from an empty set or infer freshness without a persisted
 observation time. Check detail is limited to twenty sorted, single-line rows and
-bounded scalar fields so persisted forge payloads cannot expand a response
-without limit. The open-review endpoint returns at most one hundred rows and
-marks an omitted tail as `truncated`.
+reports the omitted count. Check names and string generations retain exact
+identity through 256 UTF-8 bytes; integer generations retain at most 64 decimal
+digits, including zero. A normalized persisted observation is at most 32 KiB.
+Oversized or malformed authoritative identity is projected as unavailable, not
+truncated into another identity or inferred green. The open-review endpoint
+returns at most one hundred rows and marks an omitted tail as `truncated`.
 
 `REQ-WARROOM-REVIEW-003`: `POST /api/open-reviews/repair` accepts only a
 request-scoped authenticated local human and one complete, bounded repair

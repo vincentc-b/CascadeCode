@@ -374,10 +374,15 @@ identity, exact heads, mergeability, policy, current check generations and human
 feedback. Before classification can route work,
 [record_feature_review_evidence](../review.py) bounds check names, generations,
 heads, feedback counts and diagnostic text and stores the current observation in
-the canonical review registry. The registry write is serialized and atomically
-replaced. If the review record is missing or persistence fails, reconciliation
-returns the typed `review_evidence_persistence_failed` prerequisite and does not
-route repair from evidence that read-only consumers cannot later inspect.
+the canonical review registry. Exact check names and string generations are
+limited to 256 UTF-8 bytes, integer generations to 64 decimal digits, check
+presentation to twenty rows plus an omitted count, and the serialized normalized
+observation to 32 KiB. Oversized or malformed authoritative identity writes a
+bounded unavailable marker when the registry remains writable and refuses the
+observation. The registry write is serialized and atomically replaced. If the
+review record is missing or persistence fails, reconciliation returns the typed
+`review_evidence_persistence_failed` prerequisite and does not route repair from
+evidence that read-only consumers cannot later inspect.
 [_route_actionable_review_health](../review_health.py) constructs the material
 identity and calls
 [request_feature_review_repair](../team_supervision.py), whose existing action
