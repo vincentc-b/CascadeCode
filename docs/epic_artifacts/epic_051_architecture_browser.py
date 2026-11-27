@@ -16,6 +16,7 @@ root=Path.cwd(); canonical=ProjectContext.colocated(locate_trunk(root))
 repo=RepositoryContext(root=root,repository_key=canonical.target.repository_key);set_project_context(ProjectContext(repo,repo))
 server=serve(root=root,port=0);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();base=f'http://127.0.0.1:{server.server_port}'
 delivery='--integrated-delivery' in sys.argv
+repair='--integrated-repair' in sys.argv
 result={'paths':[], 'http_errors':[], 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()};started=time.monotonic()
 try:
  with sync_playwright() as p:
@@ -45,6 +46,15 @@ try:
    cases = [
     ('supervisor','boss','cascade-boss-code','element.code.boss.feature-delivery-view','feature_delivery_view'),
     ('supervisor','workspace','cascade-workspace-code','element.code.workspace.retained-feature-delivery','_retained_feature_delivery')]
+  if repair:
+   cases = [
+    ('supervisor','epic-team','cascade-epic-code','element.code.epic.review-repair-request','request_feature_review_repair'),
+    ('supervisor','feature-team','cascade-feature-code','element.code.feature.open-review-repair','admit_open_review_repair'),
+    ('supervisor','feature-team','cascade-feature-code','element.code.feature.inspect-open-review-repair','inspect_open_review_repair'),
+    ('supervisor','feature-team','cascade-feature-code','element.code.feature.repair-verify','mark_feature_repair_verified'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.open-review-repair-identity','_require_open_review_repair_identity'),
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.repair-postcheck','reconcile_open_review_repair'),
+    ('supervisor','workspace','cascade-workspace-code','element.code.workspace.queue-kickoff','kickoff_graph_queue_event')]
   for container,component,cv,node,symbol in cases:
    tick=time.monotonic();select_view('cascade-context');target('element.system.cascade');assert 'cascade-containers' in view.input_value()
    target('element.container.'+container)
@@ -72,5 +82,5 @@ try:
 finally:
  server.shutdown();server.server_close();thread.join(timeout=5);set_project_context(None)
  result['total_seconds']=time.monotonic()-started
- (root/('.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
+ (root/('.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
  print(json.dumps(result,indent=2),flush=True)
