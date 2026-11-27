@@ -175,6 +175,11 @@ No DESIGN.md/model edits are included in this planning turn: existing documents 
   Chose Preserve validator/publication code under element.component.teams and cascade-teams-code. Assign every affected C4 level and owning design to the feature inventory; carry updates and source/render/navigation/recovery checks into Task acceptance. Keep unimplemented behavior in work records..
   Rationale: Existing source contract passes and 18 publication safeguard tests pass, but those results do not verify proposed behavior. Current designs describe the present limitations. Epic Architect review and changed-view runtime/UI verification remain explicit gates; accepted architecture snapshots are not rewritten.
   Honors: Design skill one-owner, implementation-depth, revision-pinned publication and review/closeout contract..
+
+- `dec_004` · 2026-11-27 · Epic Architect · **Architecture review and implementation ownership**
+  Chose Add four source-linked Function nodes and four relationships to the existing Teams, Boss and Workspace Code views for physical source-board validation, Epic merged-document verification, detached fetched-trunk inspection and fast-forward synchronization. Preserve existing component ownership and correct feat_054_001 to require cascade-teams-code in Task acceptance..
+  Rationale: The plan's proposed evidence dimensions and three-feature sequence are sound, but the current Code model omitted material existing gates. Current behavior is now documented explicitly: source-board parsing is not candidate/history proof; fetched trunk and merge/document ancestry are not exact merged CI; Git fast-forward permits non-overlapping local edits. These limits justify the planned implementation without presenting it as complete.
+  Honors: Design implementation-depth and one-owner contracts; current source accuracy; bounded validation and human review authority; revision-pinned architecture publication. Future candidate receipts, board/history gates and post-merge CI/sync recovery remain assigned to Features 1–3..
 ## Amendment log
 
 _(none)_
