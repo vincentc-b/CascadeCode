@@ -27,6 +27,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+plan_approved_at: '2026-11-27T16:40:57.709270+00:00'
 ---
 # Separate Feature approval from dispatch readiness and expose refusal reasons
 
