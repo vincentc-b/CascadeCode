@@ -4616,6 +4616,15 @@ code_approval_result = element "_add_feature_approval_contract" "Function" "Read
     }
 }
 
+code_approval_state = element "canonical_feature_approval_state" "Function" "Returns unapproved, approved, stale or unknown only after resolving the canonical Feature and matching receipt evidence." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-state"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "canonical_feature_approval_state"
+    }
+}
+
 code_feature_receipt_write = element "write_approval_evidence" "Function" "Atomically persists scope or exact receipt in tracking-root feature_approvals.json under a file lock." {
     properties {
         "cascade.semanticId" "element.code.feature.receipt-write"
@@ -4649,6 +4658,15 @@ code_feature_readiness = element "compute_feature_readiness" "Function" "Project
         "cascade.parent" "element.component.feature-team"
         "cascade.sourcePath" "cascade/feature/readiness.py"
         "cascade.sourceSymbol" "compute_feature_readiness"
+    }
+}
+
+code_feature_approval_eligibility = element "ApprovalEligibility" "Dataclass" "Carries approval-only eligibility, typed result, explanation and affected work IDs independently of execution blockers." {
+    properties {
+        "cascade.semanticId" "element.code.feature.approval-eligibility"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness.py"
+        "cascade.sourceSymbol" "ApprovalEligibility"
     }
 }
 
@@ -4775,6 +4793,12 @@ rel_approval_feature_result = code_approval_feature -> code_approval_result "Ret
     }
 }
 
+rel_approval_state_receipt = code_approval_state -> code_feature_receipt_read "Reads matching receipt evidence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-state-receipt"
+    }
+}
+
 rel_approval_result_readiness = code_approval_result -> code_feature_readiness "Reads independent execution blockers" {
     properties {
         "cascade.semanticId" "relationship.approval-result-readiness"
@@ -4784,6 +4808,12 @@ rel_approval_result_readiness = code_approval_result -> code_feature_readiness "
 rel_feature_readiness_approval_policy = code_feature_readiness -> code_approval_policy "Uses the same approval-only predecessor allowlist for read projection" {
     properties {
         "cascade.semanticId" "relationship.feature-readiness-approval-policy"
+    }
+}
+
+rel_feature_readiness_approval_eligibility = code_feature_readiness -> code_feature_approval_eligibility "Returns typed approval-only eligibility beside execution readiness" {
+    properties {
+        "cascade.semanticId" "relationship.feature-readiness-approval-eligibility"
     }
 }
 
@@ -4802,6 +4832,12 @@ rel_feature_read_revision = code_feature_receipt_read -> code_feature_revision "
 rel_http_approve_handler = code_http_handler -> code_http_approve_feature "Routes approval POST" {
     properties {
         "cascade.semanticId" "relationship.http-approve-handler"
+    }
+}
+
+rel_http_approve_state = code_http_approve_feature -> code_approval_state "Serializes canonical approval state on refusals" {
+    properties {
+        "cascade.semanticId" "relationship.http-approve-state"
     }
 }
 

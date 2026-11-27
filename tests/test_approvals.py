@@ -7,6 +7,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
@@ -85,6 +86,22 @@ def test_approve_feature_persists_and_is_idempotent(tmp_path: Path) -> None:
     second = approve_feature("feat_001", root=root)
     assert second["newly_approved"] is False
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
+
+
+def test_concurrent_feature_approval_commits_one_current_receipt(tmp_path: Path) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _item: approve_feature("feat_001", root=root), range(2)))
+
+    assert sorted(result["newly_approved"] for result in results) == [False, True]
+    doc = read_doc("feat_001", root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "current"
 
 
 def test_dependency_declaration_is_revision_fenced_but_completion_is_not(

@@ -40,7 +40,7 @@ custom "cascade-feature-code" {
     properties {
         "cascade.codeComponent" "element.component.feature-team"
     }
-    include code_feature_receipt_write code_feature_receipt_read code_feature_revision code_feature_readiness
+    include code_feature_receipt_write code_feature_receipt_read code_feature_revision code_feature_readiness code_feature_approval_eligibility
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
     include code_feature_mint code_feature_recover code_feature_retry code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_latest_open_review_repair code_feature_reserve code_feature_repair_verify
     autoLayout lr
@@ -214,6 +214,6 @@ custom "cascade-approval-code" {
     properties {
         "cascade.codeComponent" "element.component.approval"
     }
-    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_policy code_approval_strict code_approval_review code_approval_save code_approval_reconcile code_approval_result
+    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_policy code_approval_strict code_approval_review code_approval_save code_approval_reconcile code_approval_result code_approval_state
     autoLayout lr
 }

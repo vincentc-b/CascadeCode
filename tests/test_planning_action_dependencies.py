@@ -23,7 +23,11 @@ from cascade.planning_action_dependencies import (
     require_feature_approval_dependencies,
 )
 from cascade.watchdog import dispatch_feature
-from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+from cascade.workspace.integration_worktree import (
+    merged_board,
+    merged_board_snapshot,
+    save_registry,
+)
 from cascade.war_room.server import WarRoomRequestHandler
 from tests.support import (
     SyntheticDependencyLifecycle,
@@ -50,6 +54,23 @@ class _ApprovalHandler:
 
     def _json_error(self, status: HTTPStatus, message: str) -> None:
         self._json_response(status, {"error": message})
+
+
+@pytest.fixture(autouse=True)
+def dependency_tests_skip_unrelated_provider_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cascade.approvals._require_approval_selections", lambda *_args, **_kwargs: ()
+    )
+    monkeypatch.setattr(
+        "cascade.lifecycle_review_gate.require_lifecycle_review_gate",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def test_action_refresh_ignores_cached_and_request_scoped_board(tmp_path: Path) -> None:
@@ -192,6 +213,9 @@ def test_synthetic_sign_off_succeeds_then_refuses_stale_success(
     assert signed["newly_signed"] is True
 
     stale = merged_board(root)
+    # The fixture's registered stale copy is deliberately not a real worktree;
+    # remove that read-only incident evidence before exercising a legal write.
+    save_registry(root, [])
     move_doc(scenario.dependency_id, "backlog", root=root)
 
     with merged_board_snapshot(root, stale):
