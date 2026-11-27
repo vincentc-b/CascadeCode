@@ -2,7 +2,7 @@
 id: epic_056
 title: Separate Feature approval from dispatch readiness and expose refusal reasons
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_056_001
