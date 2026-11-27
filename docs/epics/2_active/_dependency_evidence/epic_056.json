@@ -357,6 +357,42 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_878b88cca20bd425ce4abeb1e63a791dc847ef8900a0b6cd24993eb8df58cd5a",
+      "dependency_id": "dep_python",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:fb075c6b24d7d887c6e680b488247de522adca2f3fc54da3a51c10258d8aa46c",
+      "recipe_revision": "sha256:70e5b90782adf222e16796f1822fbf13451c56dceff4e311211125b957a54f89",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import pathlib, hashlib, subprocess; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/bin/python3.12'\"'\"').read_bytes()).hexdigest() == '\"'\"'sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612'\"'\"'; s=subprocess.check_output(['\"'\"'/opt/conda/bin/python3.12'\"'\"','\"'\"'--version'\"'\"'],text=True); assert '\"'\"'3.12.8'\"'\"' in s; print(s)'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T08:20:57.130166+00:00",
+      "completed_at": "2026-11-27T08:20:59.067171+00:00",
+      "result": "succeeded",
+      "redacted_output": "Python 3.12.8\n\n",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
