@@ -33,12 +33,6 @@ epic_051
 
 ## Scope
 
-## Parent Epic
-
-epic_051
-
-## Scope
-
 Close the confirmed scalar/payload bound gap against existing REQ-WARROOM-REVIEW-002 in cascade/war_room/DESIGN.md. This is a narrow completion of existing passive review evidence requirements, not a new general payload framework. Feature 5 retains delivery-consumer and cross-Feature recovery acceptance. Sequence afterward to reconcile shared review.py and final architecture against its integrated source.
 
 At dcf55df7, record_feature_review_evidence caps rows but persists arbitrary-length check names and string generations; _review_evidence_projection passes generation strings through. The Architect's isolated 10,000-character reproduction is recorded in docs/epic_artifacts/epic_051_architect_feature_4_review.json.
@@ -74,10 +68,7 @@ TBD.
 
 ## Logic flow
 
-```mermaid
-flowchart TD
-  A[Start] --> B[End]
-```
+Feature planning must trace normalization → bounded persistence → passive projection, plus oversized/legacy evidence refusal and restart, against the production consumers before Task sign-off.
 
 ## Task breakdown
 
