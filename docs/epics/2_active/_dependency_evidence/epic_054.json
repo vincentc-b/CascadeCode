@@ -486,6 +486,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_8e6576eff94c4d512d2dfb2ccb7e63b726043f6f47c94442fd3b05e9f25a42cc",
+      "dependency_id": "dep_setuptools",
+      "manifest_revision": 1,
+      "entry_revision": "sha256:919399813a19e0319c216021e227b6e3a7b6d97f7dcfddb2ccda693fed698a36",
+      "recipe_revision": "sha256:1f875da007168b5abd92b9734a09b2fffb3333c909fd1f626c025db5d3ee9fe6",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"setuptools\"); assert d.version==\"80.9.0\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"7f890ca8dbc16b63b568c89312ed6a7f9f0a79d0b2b7f3c83bf796ac3d930615\"; print(\"setuptools 80.9.0 verified\")'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T19:22:51.880571+00:00",
+      "completed_at": "2026-11-27T19:22:53.442317+00:00",
+      "result": "succeeded",
+      "redacted_output": "setuptools 80.9.0 verified\n",
+      "selected_version": "80.9.0",
+      "integrity_reference": "sha256:7f890ca8dbc16b63b568c89312ed6a7f9f0a79d0b2b7f3c83bf796ac3d930615",
+      "lock_references": [
+        "pyproject.toml",
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
