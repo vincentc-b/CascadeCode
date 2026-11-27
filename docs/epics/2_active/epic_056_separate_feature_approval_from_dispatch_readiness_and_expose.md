@@ -129,6 +129,10 @@ Concrete documentation gap: root DESIGN.md describes durable approval in .cascad
 
 - 2026-11-27 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-27 · Epic Architect · **Approval boundary**
+  Chose Allow explicit approval with a known, valid, noncancelled incomplete predecessor; preserve unknown/invalid dependency and every independent authorization refusal..
+  Rationale: The direct approval path currently conflates ordinary sequencing with authorization. Limit the change to reviewed Feature approval while canonical Watchdog/Boss execution remains gated. Keep strict shared dependency checks elsewhere.
+  Honors: Epic success criteria 1 and 2; existing dependency, provider, architecture and software authority..
 ## Amendment log
 
 _(none)_
