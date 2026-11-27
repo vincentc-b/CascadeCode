@@ -1,0 +1,63 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_manager",
+  "trigger": "FeaturePlanningStarted feat_051_006",
+  "initial_plan_revision": "366005a41de130912448fed2c1bccc83c947aa49",
+  "saved_plan_revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+  "decision": "dec_012",
+  "feature_6_revision": "71a65f518636550c921c846ef65371d5a89dc7f0",
+  "integrated_source_revision": "a28d55bb",
+  "disposition": "Feature 6 may plan within existing bounded-evidence scope. Feature 5 is canonically completed and its PR #276 merge arrived in this owned checkout during the review.",
+  "canonical_actions": [
+    "Read Epic and Feature 6 through Cascade; list_children confirms Feature 5 completed and Feature 6 active with no Tasks.",
+    "Read architecture amendments: none.",
+    "Wrote the full Epic body through Cascade, recording Feature 6 handoff and successful prior architecture publication.",
+    "Recorded dec_012 through Cascade; read back revision, handoff and decision."
+  ],
+  "source_findings": [
+    "The evidence writer retains arbitrary-length check-name keys and string generations. The passive projection also passes check generations through.",
+    "reconcile_open_review_health persists then acts on the original snapshot; a bounded unavailable record cannot count as authority to act on rejected original evidence.",
+    "_review_evidence_projection gives verification_postcheck and request_evidence precedence over registry observations. Bounds and unavailable semantics must cover all three sources.",
+    "Independent _required_checks compares exact names and source/target facts and requires each required generation. Presentation row caps cannot substitute for this authority.",
+    "Feature 5 adds feature_delivery_satisfies_integration and passes exact source/target routes to the cross-Feature observation boundary. Feature 6 must preserve these inherited consumers."
+  ],
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/war_room/DESIGN.md"
+  ],
+  "design_disposition": "No design or model edits in this turn. Current producer/reader descriptions still accurately identify the scalar gap. Reviewed integrated package/Task interface changes and source; numeric policy remains proposed in work records until implemented. Feature 5 delivered architecture closeout was inspected as inherited evidence, not substituted for final Epic verification.",
+  "diagram_impact": {
+    "landscape_context": "cascade-landscape/cascade-context: same people, forge, provider and responsibility boundary; Feature 6 verifies against its final diff.",
+    "containers": "cascade-containers: existing review/action/checkpoint stores and in-process runtime; no new store or isolation boundary.",
+    "components": "cascade-supervisor-components/cascade-team-components/cascade-war-room-components: preserve integrated delivery and exact-route Task fences; reconcile evidence producer, registry, reader and refusal interfaces.",
+    "code": "cascade-watchdog-code: record_feature_review_evidence and reconcile_open_review_health. cascade-dashboard-code: _review_evidence_projection, feature_review_views and readers. Review HTTP/Feature/Task/Boss views when actual identity consumers change. Preserve new Feature 5 nodes and contract declarations.",
+    "behavior": "Watchdog/War Room own normal persistence/read and malformed, oversized, legacy/request/postcheck refusal across restart. Task retains downstream evaluation and budget ownership.",
+    "acceptance": "Feature Team carries inventory into Task criteria: source contracts and declaration kinds/ownership, bounded pinned render, actual Explore to native Code, Level up, deep-link restore, pinned source, stale symbols and measured warm reuse. Final Epic Architect owns integrated review/publication."
+  },
+  "verification": {
+    "focused_tests": {
+      "command": "/opt/conda/bin/python3.12 -m pytest -q tests/test_review_health.py tests/war_room/test_open_reviews_api.py",
+      "result": "28 passed in 20.92s",
+      "source_revision": "a28d55bb"
+    },
+    "local_design_file_links": 319,
+    "broken_file_links": 0,
+    "whitespace": "git diff a28d55bb --check passed; repeated with this receipt",
+    "canonical_readback": true
+  },
+  "publication": {
+    "prior_request": "docs/epic_artifacts/epic_051_architecture_review_366005a4.json",
+    "receipt": "docs/epic_artifacts/epic_051_architect_feature_6_publication_replay.json",
+    "status": "ready",
+    "instruction": "Do not replay as pending. Later integrated Feature 5/6 source requires a separately reviewed current tuple through normal publication."
+  },
+  "handoff": "Feature 6 owns numeric limits and minimal Task breakdown, collision-safe identity preservation and passive legacy/fallback bounds. Epic Architect reconciles integrated Feature 5/6 architecture and publishes current references. Completion remains gated.",
+  "limitations": [
+    "No new full Recovery-gate or browser run, live forge/provider action, deployment or dependency installation.",
+    "Prior lifecycle fixture/architecture failures and timeouts are not cleared by these 28 passes; reconcile Feature 5's delivered evidence at final acceptance.",
+    "No child worktree, trunk, lifecycle ledger or accepted snapshot modified. No post-approval sign-off retry: this is a planning handoff, not reapproval."
+  ]
+}

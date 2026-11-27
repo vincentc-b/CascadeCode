@@ -1,0 +1,228 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "publication_receipt": {
+    "operation_id": "architecture-publication-ef5da9cc52fd4dfd259b1acd7667c45fd400bc436b920e6d49b24deb77af0e77",
+    "status": "pending",
+    "render_operation_id": "c4-render-e0e31ce98ee3413fbed9540ba54e38a7069a64cf2b48a6422f98770e257f310d",
+    "baseline_render_operation_id": null,
+    "review_unit_id": null,
+    "reviewed_tuple_digest": "ce0b8b2591dff8019acbd710f6bd4794f446b8578a7a9fdd25b38cef1556fefb",
+    "amendment_id": null,
+    "reason_code": null,
+    "message": "bounded architecture render is pending"
+  },
+  "trigger": "FeatureCompleted feat_051_004",
+  "reviewed_initial_plan_revision": "c4a7d4a9e72dde65103e04905a45f9cf99eda9c8",
+  "reviewed_plan_revision": "62dcc64af14bab9a50524ad74bcb1493bf64e400",
+  "reviewed_implementation_revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6",
+  "comparison_revision": "6b61d27e",
+  "integrated_feature_merge": "c2a29829",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/feature/DESIGN.md",
+    "cascade/epic/DESIGN.md",
+    "cascade/boss/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/workspace/DESIGN.md",
+    "cascade/war_room/DESIGN.md",
+    "cascade/recovery_progress/DESIGN.md"
+  ],
+  "disposition": "Integrated architecture reviewed with explicit remaining implementation gaps. Epic completion and complete bounded-evidence compliance are not recommended.",
+  "design_result": "Reconciled current root/shared/Watchdog/War Room descriptions and two Code-node descriptions plus one relationship label against actual row/text caps. Kept REQ-WARROOM-REVIEW-002 intact and documented its remaining implementation gap. Added the real Boss source-completion helper to its implementation table. Feature, Epic, Task, Workspace and recovery-progress designs retain their unchanged ownership, stores, checkpoint/retry and publication contracts. Reviewed current behavior, failure gates, restart, source links and absence of delivery-history attribution. Five new War Room IDs each have one declaration.",
+  "source_traces": {
+    "normal": "Watchdog obtains normalized forge evidence and atomically records the current observation before classification. Passive feature_review_views joins review identity, latest durable repair and delivery projection; GET, board and room reuse it without forge transport. The authenticated repair POST validates a closed bounded envelope and delegates once to request_feature_review_repair. Admission/action/queue/checkpoint ownership survives restart. Guarded Task validation and publication keep original review identity. Boss refreshes independent exact-head/required-check/target postcheck, then closes the retained active source through _complete_verified_repair_source before retirement.",
+    "failure_resume": "Missing or unwritable review evidence returns review_evidence_persistence_failed before repair routing. Missing/stale policy/checks, unauthenticated or malformed HTTP requests, changed request content/heads and conflicting ownership cannot acquire repair authority. Replayed identical requests join the existing action; waiting/refused/verified generations remain visible in latest_feature_repair_records without authorizing work. A stale green postcheck cannot release closeout. The Task selector currently records observations only for Tasks owned by the observed Feature; cross-Feature behavior remains follow-up acceptance.",
+    "isolation": "Source views identify shared supervisor/graph functions and real persistence; Code components are not separately deployed services and tool path gates are not an OS sandbox. Browser operational panels are stubbed; production architecture routes/rendering and source reads are used."
+  },
+  "new_gap": {
+    "requirement": "REQ-WARROOM-REVIEW-002",
+    "source": [
+      "cascade/review.py:record_feature_review_evidence",
+      "cascade/review.py:_review_evidence_projection"
+    ],
+    "reproduction": {
+      "persisted_check_name_length": 10000,
+      "persisted_generation_length": 10000,
+      "response_check_name_length": 80,
+      "response_generation_length": 10000
+    },
+    "method": "Called production evidence persistence and response projection with a single 10,000-character name and string generation; substituted only _update_record with an in-memory capture and locate_trunk with identity. No registry or runtime state was written. This proves lack of a scalar length cap, not a live resource exhaustion incident.",
+    "routing": "Saved in the canonical Epic plan through read_doc then write_doc. Epic Manager must assign executable follow-up against the existing bound before closeout. Preserve generation equality and check-name collision safety when selecting refusal/presentation limits; do not truncate authoritative identities into equal values. Feature 5 scope is unchanged until explicitly assigned through normal planning/amendment.",
+    "reproduction_python": "from pathlib import Path\nfrom unittest.mock import patch\nfrom cascade.review import record_feature_review_evidence, _review_evidence_projection\nlong = 'x' * 10000\ncaptured = {}\ndef capture(root, feature, payload):\n    captured.update(payload)\n    return payload\nwith patch('cascade.review._update_record', capture), patch('cascade.review.locate_trunk', lambda p: p):\n    assert record_feature_review_evidence('feat_probe', {'required_check_results': {'available': True, 'checks': {long: {'generation': long}}}}, root=Path.cwd())\nprojection = _review_evidence_projection(captured, None)\nassert len(next(iter(captured['required_check_results']['checks']))) == 10000\nassert len(projection['ci']['checks'][0]['name']) == 80\nassert len(projection['ci']['checks'][0]['generation']) == 10000\n"
+  },
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": {
+      "owner": "cascade/DESIGN.md",
+      "result": "Unchanged actors and external dependencies: passive UI and explicit requests reuse operator, forge and existing teams. Context navigation verifies the retained entry."
+    },
+    "cascade-containers": {
+      "owner": "cascade/DESIGN.md",
+      "result": "Unchanged runtime/store/isolation boundaries. Review observations use the existing product review registry; repair action, tracking queue and SQLite checkpoints remain canonical. No scheduler, provider launcher or datastore is added."
+    },
+    "cascade-war-room-components": {
+      "owner": "cascade/war_room/DESIGN.md",
+      "result": "Existing Dashboard/HTTP own presentation and authenticated mutation. Their Code views add the implementation paths below; no new component identity."
+    },
+    "cascade-supervisor-components / cascade-team-components": {
+      "owner": "cascade/DESIGN.md",
+      "result": "Retain the four merged relationships absent from the child browser pin: Watchdog-to-Task evidence, Epic-to-Workspace queue, Boss-to-Watchdog postcheck, Watchdog-to-Feature verification. Verify both views in the current browser run."
+    },
+    "cascade-dashboard-code": {
+      "owner": "cascade/war_room/DESIGN.md",
+      "symbols": [
+        "cascade/war_room/review_routes.py:handle_get_open_reviews",
+        "cascade/review.py:feature_review_views",
+        "cascade/war_room/static/open_reviews_pane.js:createOpenReviewsPane"
+      ],
+      "result": "Three integrated Function nodes, router/GET/projection/UI/action relationships. Corrected projection description to row caps and unbounded string generations."
+    },
+    "cascade-war-room-http-code": {
+      "owner": "cascade/war_room/DESIGN.md",
+      "symbols": [
+        "cascade/war_room/review_routes.py:handle_post_review_repair"
+      ],
+      "result": "Integrated Function joins request-scoped human verification and existing Epic adapter; malformed/unauthenticated paths remain non-mutating."
+    },
+    "cascade-feature-code": {
+      "owner": "cascade/feature/DESIGN.md",
+      "symbols": [
+        "cascade/feature/repair.py:latest_feature_repair_records"
+      ],
+      "result": "Integrated Function projects greatest durable open-review generation including waits/refusals/verification. Existing admission/reservation/verification retain ownership."
+    },
+    "cascade-watchdog-code": {
+      "owner": "cascade/watchdog/DESIGN.md",
+      "symbols": [
+        "cascade/review.py:record_feature_review_evidence",
+        "cascade/review_health.py:reconcile_open_review_health"
+      ],
+      "result": "Integrated evidence Function remains owned by Watchdog despite shared review.py source. Corrected scalar-bound description and persistence-edge label; source/contract IDs remain synchronized."
+    },
+    "cascade-boss-code": {
+      "owner": "cascade/boss/DESIGN.md",
+      "symbols": [
+        "cascade/boss/rollup.py:try_complete_feature",
+        "cascade/boss/rollup.py:_complete_verified_repair_source"
+      ],
+      "result": "Existing closeout entry and postcheck gate cover the internal source-completion helper. Added source-table link and retained the terminal persistence sequence. A separate helper node would not add a new responsibility or state boundary; current entry source is opened in browser."
+    },
+    "cascade-task-code / cascade-epic-code / cascade-workspace-code / cascade-teams-code": {
+      "owner": [
+        "cascade/task/DESIGN.md",
+        "cascade/epic/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/DESIGN.md"
+      ],
+      "result": "No production changes in these modules in the Feature 4 diff. Existing observation-generation comparison, admission/queue, retained-owner and generic checkpoint wiring remain accurate; cross-Feature execution gates are explicitly unproved. Feature 5 scope carries affected Code/component updates and Task acceptance for source contracts, normal/failure/restart paths and actual navigation."
+    },
+    "supplementary_behavior": {
+      "owner": [
+        "cascade/war_room/DESIGN.md",
+        "cascade/watchdog/DESIGN.md",
+        "cascade/boss/DESIGN.md"
+      ],
+      "result": "Passive-read/authenticated-action sequences, persistence failure gate and verified terminal source flow match source. Corrected Watchdog flow label to actual row/selected-text caps."
+    }
+  },
+  "semantic_inventory": {
+    "elements": 272,
+    "relationships": 338,
+    "views": 24,
+    "added_elements_since_feature_3": 6,
+    "added_relationships_since_feature_3": 8,
+    "removed_elements": 0,
+    "removed_relationships": 0,
+    "renamed_existing_source_symbols_or_component_owners": 0
+  },
+  "verification": [
+    "61 focused C4/API/architecture HTTP/UI tests passed in 20.63s before descriptive corrections. No production code changed in this review.",
+    "Direct current source-contract validation passed: 272 elements, 338 relationships, 24 views. All 484 local file links in ten reviewed designs resolve. Five new War Room requirement/decision IDs each have one owning declaration.",
+    "Read-only ArchitectureReviewStore resolve_current and pending_promotion found no accepted epic lineage or reserved promotion; expected_generation remains null.",
+    "Canonical read_doc confirmed the initial plan and Feature 5 backlog scope; read_architecture_amendments returned []. write_doc saved the bounded-evidence finding at 62dcc64a. No decision-log entry or product-scope change was added.",
+    "51 focused tests passed in 65.21s: final C4 source/review/documentation, review-health normal/failure/replay and the real-Git parent-requested repair-to-retirement journey. This overlaps the prior C4 selection; counts are not additive unique coverage.",
+    "All rendered Code declaration kinds, source symbols and component owners match current source. Existing modeled source paths/symbols/owners and semantic IDs are unchanged across the scoped diff. The confined six-reference publication pins match Git and checkout SHA-256 values; the materialized closure digest matches the ready browser artifact.",
+    "All 97 Markdown heading links across the ten reviewed designs resolve. No directory boundary was added; this diff-scoped review retains existing parent coverage for generated/lifecycle directories. Changed prose, tables and flow labels were reviewed for delivery-history attribution; none added.",
+    "All 24 cited requirements/decisions have exactly one owning declaration, including the root dash-form requirement; every cited view exists in the current contract. The initial colon-only scanner was corrected to recognize the repository's root requirement format.",
+    "Same-pin warm browser retry passed all 13 context/container/component/Code paths across eight Code views, deep-link restore, pinned-source opening and Level up; all four merged component relationships are visible in both component views. Initial ready 8.80s, total 229.48s. Render-operation count stayed 8 -> 8; no client-observed architecture HTTP errors. Cold readiness timeout remains a separate unresolved runtime observation. Cancelled navigation requests emitted server BrokenPipe diagnostics; no timeout/render bound changed."
+  ],
+  "historical_publication_replay": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_feature_3.json",
+    "result": "stale_revision: plan revision changed before architecture publication",
+    "interpretation": "Replayed the exact saved request without substitutions. The stale current-plan guard prevents discovering its pending result; historical request and receipt remain intact."
+  },
+  "handoffs": {
+    "epic_manager": "Assign the documented REQ-WARROOM-REVIEW-002 size-bound gap to executable follow-up through normal planning/amendment. Feature 5 remains the existing delivery-consumer/cross-Feature acceptance owner. Do not recommend Epic completion until both are verified.",
+    "feature_5": "Carry the inherited diagram-impact inventory into Task criteria and reconcile gates/retry symbols and source/Code/navigation after implementation. Preserve lifecycle planning readiness, explicit stacked dispatch and guard-valid test setup. Retain the Manager Recovery-gate timeout and isolated pass separately; do not claim the full gate passed.",
+    "architecture_test_owner": "The five historical architecture fixture failures remain an assigned compatibility gap; reconcile revision-pinned fixtures without rewriting accepted snapshots or adding historical attribution to current designs.",
+    "architecture_runtime": "Historical terminal publication failure and stale pending requests remain distinct from the new publication. Use supported recovery/reconciliation with original identity; no direct ledger repair. Also assess the preserved cold browser readiness timeout: the render became ready but the initial UI never reached ready within 210 seconds; an abandoned slow snapshot response emitted BrokenPipe. The initiating cause is unclassified; no timeout or render bound was widened.",
+    "epic_architect": "Replay the separately saved current request unchanged on a later turn if pending; reconcile future Feature 5 changes separately. Pending render/publication is not architecture acceptance."
+  },
+  "limitations": [
+    "Epic completion remains gated on Feature 5 and the additional bounded-evidence requirement gap. No complete bounded-payload compliance claimed.",
+    "The 17 known lifecycle fixture failures and five historical architecture failures were not cleared; the prior full Recovery gate had one background-wait timeout with a passing isolated retry. No full-repository or full Recovery-gate rerun claimed here.",
+    "Scripted forge/provider seams in real-Git acceptance do not establish live deployment. Architecture-browser operational panels are isolated and timing is a local measurement, not a latency promise.",
+    "No production code edit, dependency install, other-team/trunk modification, accepted-snapshot rewrite, redundant post-approval sign-off or lifecycle completion mutation."
+  ],
+  "render": {
+    "operation_id": "c4-render-d3d3223d32b9ba9c4070f9edb45ab3201852341021b4a08868471618ce8d4d3d",
+    "render_identity": "d3d3223d32b9ba9c4070f9edb45ab3201852341021b4a08868471618ce8d4d3d",
+    "status": "ready",
+    "attempts": 1,
+    "recovery_attempts": 0,
+    "settings": {
+      "cpus": "2",
+      "memory": "1536m",
+      "pids_limit": 256,
+      "timeout_seconds": 180.0,
+      "tmpfs_size": "512m"
+    },
+    "revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6",
+    "closure_digest": "979224cb9675bdcad7df84894de6a7b2a91e700f3deec4b1a837f069c7d43b6b",
+    "semantic_workspace_sha256": "44f52aed3aec243ad4e2b11d6d21d7457ff2e4bb6502a987f6df630a6e7e4ab9",
+    "image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "view_keys": [
+      "cascade-agent-code",
+      "cascade-architecture-browser-code",
+      "cascade-board-code",
+      "cascade-boss-code",
+      "cascade-cli-components",
+      "cascade-collaboration-code",
+      "cascade-comparison-render-code",
+      "cascade-containers",
+      "cascade-context",
+      "cascade-dashboard-code",
+      "cascade-diagnostics-code",
+      "cascade-diagram-review-code",
+      "cascade-epic-code",
+      "cascade-feature-code",
+      "cascade-landscape",
+      "cascade-supervisor-components",
+      "cascade-task-code",
+      "cascade-team-components",
+      "cascade-teams-code",
+      "cascade-war-room-components",
+      "cascade-war-room-http-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-workspace-commands-code"
+    ]
+  },
+  "publication_request": "docs/epic_artifacts/epic_051_architecture_review_feature_4.json",
+  "browser_cold_attempt": {
+    "paths": [],
+    "http_errors": [],
+    "source_revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6",
+    "total_seconds": 213.66514270217158,
+    "result": "failed",
+    "reason": "Initial architecture-ready wait exceeded 210 seconds; no navigation path completed. Last snapshot response was abandoned while the real render completed in the background. No client-observed HTTP error; server BrokenPipe diagnostics do not establish the initiating cause. A same-pin warm retry follows with unchanged timeouts."
+  },
+  "verification_commands": [
+    "python -m pytest -q tests/workspace/test_c4_source.py tests/workspace/test_c4_review.py tests/workspace/test_c4_documentation.py tests/war_room/test_architecture_http.py tests/war_room/test_architecture_tab_ui.py tests/war_room/test_open_reviews_api.py --tb=short",
+    "python -m pytest -q tests/workspace/test_c4_source.py tests/workspace/test_c4_review.py tests/workspace/test_c4_documentation.py tests/test_late_repair_convergence.py::test_parent_requested_open_review_repair_reuses_identity_until_verified_retirement tests/test_review_health.py --tb=short",
+    "PYTHONPATH=. python docs/epic_artifacts/epic_051_architecture_browser.py --integrated-ui"
+  ],
+  "browser_receipt": "docs/epic_artifacts/epic_051_integrated_ui_architecture_browser.json"
+}

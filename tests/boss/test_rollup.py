@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -53,6 +54,86 @@ def _rollup_board(tmp_path: Path) -> Path:
         parent="feat_001",
     )
     return root
+
+
+def _reviewed_completed_feature(tmp_path: Path) -> tuple[Path, str, str]:
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        root,
+        id="task_001",
+        title="Task",
+        tier="task",
+        status="completed",
+        parent="feat_001",
+    )
+    commit_board(root, "target base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "epic/epic_001", base], cwd=root, check=True)
+    (root / "delivery.txt").write_text("accepted delivery\n", encoding="utf-8")
+    commit_board(root, "accepted delivery")
+    accepted = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "feat/feat_001", accepted], cwd=root, check=True)
+    return root, base, accepted
+
+
+def _store_review(
+    root: Path,
+    *,
+    base: str,
+    source: str,
+    generation: int = 0,
+    accepted: bool = False,
+) -> None:
+    review._store_review_generation(
+        root,
+        "feat_001",
+        {
+            "url": "https://example.test/pulls/1",
+            "number": "1",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": source,
+            "target_head": base,
+            "draft": False,
+            "closed": accepted,
+        },
+        generation=generation,
+        action_id=None if generation == 0 else f"repair:{generation}",
+    )
+    if accepted:
+        review._update_record(
+            root,
+            "feat_001",
+            {
+                "accepted_merge_sha": source,
+                "accepted_source_head": source,
+                "accepted_target_head": base,
+                "reconciliation_status": "accepted",
+            },
+        )
 
 
 def test_try_complete_feature_idempotent_when_already_completed(tmp_path: Path) -> None:
@@ -220,12 +301,91 @@ def test_current_repair_generation_fences_old_review_callback(
     assert not current_feature_obligation(
         "feat_001", root=root, review_generation=0
     ).satisfied
-    assert current_feature_obligation(
+    assert not current_feature_obligation(
         "feat_001", root=root, review_generation=1
     ).satisfied
 
 
-def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path) -> None:
+def test_completed_open_original_review_retains_closeout_and_owner(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, base, accepted = _reviewed_completed_feature(tmp_path)
+    _store_review(root, base=base, source=accepted)
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    assert try_complete_feature("feat_001", root=root, review_merged=True) is False
+    assert _feature_completed_events(root) == []
+    assert review.review_record_for_feature("feat_001", root=root)["url"] == (
+        "https://example.test/pulls/1"
+    )
+    assert (
+        subprocess.run(
+            ["git", "show-ref", "--verify", "refs/heads/feat/feat_001"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+def test_closeout_requires_exact_acceptance_and_intended_target_then_emits_once(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, base, accepted = _reviewed_completed_feature(tmp_path)
+    _store_review(root, base=base, source=accepted, generation=1, accepted=True)
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    # Exact forge acceptance is still pending until the accepted merge is an
+    # ancestor of the intended Epic branch.
+    assert try_complete_feature("feat_001", root=root, review_merged=True) is False
+    assert _feature_completed_events(root) == []
+
+    subprocess.run(
+        ["git", "branch", "-f", "epic/epic_001", accepted], cwd=root, check=True
+    )
+    assert try_complete_feature("feat_001", root=root, review_merged=True) is True
+    assert try_complete_feature("feat_001", root=root, review_merged=True) is True
+    assert len(_feature_completed_events(root)) == 1
+
+
+def test_closeout_rereads_verified_open_review_and_refuses_new_failed_run(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, base, accepted = _reviewed_completed_feature(tmp_path)
+    _store_review(root, base=base, source=accepted, generation=1, accepted=True)
+    subprocess.run(
+        ["git", "branch", "-f", "epic/epic_001", accepted], cwd=root, check=True
+    )
+    action = {
+        "repair_route": "open_review",
+        "action_id": "repair:1",
+        "generation": 1,
+        "phase": "verified",
+    }
+    monkeypatch.setattr(
+        "cascade.feature.repair.feature_repair_actions",
+        lambda *_args, **_kwargs: [action],
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.incident_postcheck.reconcile_open_review_repair",
+        lambda *_args, **_kwargs: {
+            "verified": False,
+            "reason": "required_checks_not_green",
+        },
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    assert try_complete_feature("feat_001", root=root, review_merged=True) is False
+    assert _feature_completed_events(root) == []
+
+
+def _feature_completed_events(root: Path) -> list[Event]:
+    events, _ = read_events("epic_001", 0, root=root)
+    return [event for event in events if event.type == "FeatureCompleted"]
+
+
+def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path, monkeypatch) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
@@ -275,6 +435,31 @@ def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path) -> N
     obligation = current_feature_obligation("feat_001", root=root)
     assert obligation.generation == 1
     assert obligation.reason == "local integration evidence is missing"
+
+    # Completed source documents can retain an undelivered repair obligation.
+    # Publication is permitted only after its exact child delivery gates pass;
+    # neither an older review nor a forged callback authorizes closeout.
+    move_doc("feat_001", "completed", root=root)
+    monkeypatch.setattr(review, "review_enabled", lambda _: True)
+    publications = []
+    monkeypatch.setattr(review, "ensure_feature_review", lambda feature_id, *, root: publications.append(feature_id))
+    for published in (None, 0, 1, 2):
+        if published is not None:
+            _store_review(root, base="base", source="source", generation=published)
+        view = review.feature_delivery_view("feat_001", root=root)
+        assert view["published_generation"] == published
+        obligation = current_feature_obligation("feat_001", root=root)
+        assert not obligation.satisfied
+        if published in (None, 0):
+            assert obligation.reason == "review_not_published"
+        elif published == 2:
+            assert obligation.reason == "current_review_generation_mismatch"
+        before = len(publications)
+        assert not try_complete_feature("feat_001", root=root, review_merged=True, review_generation=1)
+        assert len(publications) == before
+        assert not try_complete_feature("feat_001", root=root)
+        assert len(publications) == before + int(published in (None, 0))
+    assert _feature_completed_events(root) == []
 
 
 def test_on_task_merged_synthesizes_closeout_without_model_action(

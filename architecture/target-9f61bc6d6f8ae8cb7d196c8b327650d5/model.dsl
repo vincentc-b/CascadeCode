@@ -192,12 +192,12 @@ exports = supervisor -> structurizr_cli "Requests an isolated export from" {
         "cascade.semanticId" "relationship.supervisor-exports-with-cli"
     }
 }
-watchdog_reads_board = watchdog_component -> board_component "Observes lifecycle state" {
+watchdog_reads_board = watchdog_component -> board_component "Observes lifecycle state and current Feature delivery evidence" {
     properties {
         "cascade.semanticId" "relationship.watchdog-reads-board"
     }
 }
-watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches eligible work" {
+watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches work after lifecycle and integration-required delivery gates" {
     properties {
         "cascade.semanticId" "relationship.watchdog-dispatches-teams"
     }
@@ -206,6 +206,12 @@ watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches eli
 watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-owned incident operation gate after a distinct observation claim" {
     properties {
         "cascade.semanticId" "relationship.watchdog-uses-task-budget"
+    }
+}
+
+watchdog_records_task_review_evidence = watchdog_component -> task_team "Records exact-route upstream review evidence on queued Tasks owned by declared same-Epic dependent Features; Task owns retry and verified release" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-records-task-review-evidence"
     }
 }
 
@@ -224,7 +230,7 @@ teams_use_collaboration = team_component -> collaboration_component "Route comme
         "cascade.semanticId" "relationship.teams-use-collaboration"
     }
 }
-boss_reads_board = boss_component -> board_component "Computes gates and rollups from" {
+boss_reads_board = boss_component -> board_component "Computes candidate gates, current Feature delivery and rollups from" {
     properties {
         "cascade.semanticId" "relationship.boss-reads-board"
     }
@@ -301,7 +307,7 @@ epic_coordinates_feature = epic_team -> feature_team "Plans and coordinates" {
     }
 }
 
-feature_coordinates_task = feature_team -> task_team "Creates and coordinates" {
+feature_coordinates_task = feature_team -> task_team "Creates, coordinates and retries through canonical dispatch" {
     properties {
         "cascade.semanticId" "relationship.feature-coordinates-task"
     }
@@ -1250,6 +1256,24 @@ code_watchdog_dispatch = element "dispatch_task" "Function" "Checks Task admissi
     }
 }
 
+code_watchdog_dependency_delivery_gate = element "_dependency_review_pending" "Function" "Requires every Feature dependency to have current verified intended-target delivery before Task execution." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.dependency-delivery-gate"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/dispatch.py"
+        "cascade.sourceSymbol" "_dependency_review_pending"
+    }
+}
+
+code_watchdog_feature_dispatch_gate = element "feature_dispatch_blockers" "Function" "Applies current delivery evidence to serial Feature admission while preserving explicitly enabled stacked execution." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.feature-dispatch-gate"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/stacked_dispatch.py"
+        "cascade.sourceSymbol" "feature_dispatch_blockers"
+    }
+}
+
 code_watchdog_health = element "sweep_supervisor_health" "Function" "Checks child lifecycle and revalidates recoverable incidents." {
     properties {
         "cascade.semanticId" "element.code.watchdog.health"
@@ -1373,12 +1397,21 @@ code_boss_merge = element "merge_task_branch" "Function" "Integrates an approved
     }
 }
 
-code_boss_feature = element "try_complete_feature" "Function" "Evaluates child completion and Feature closeout gates." {
+code_boss_feature = element "try_complete_feature" "Function" "Refreshes scoped-review verification, then evaluates child completion and Feature closeout gates." {
     properties {
         "cascade.semanticId" "element.code.boss.feature"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/boss/rollup.py"
         "cascade.sourceSymbol" "try_complete_feature"
+    }
+}
+
+code_boss_repair_postcheck_gate = element "_current_open_review_postcheck_matches" "Function" "Require the fresh postcheck result to name the greatest scoped repair action before closeout side effects." {
+    properties {
+        "cascade.semanticId" "element.code.boss.repair-postcheck-gate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "_current_open_review_postcheck_matches"
     }
 }
 
@@ -1544,6 +1577,15 @@ code_http_local = element "LocalHumanIdentityVerifier" "Dataclass" "Verifies the
     }
 }
 
+code_http_review_repair = element "handle_post_review_repair" "Function" "Authenticates and validates one exact human open-review repair request, delegates to the durable adapter, and preserves its typed result." {
+    properties {
+        "cascade.semanticId" "element.code.http.review-repair"
+        "cascade.parent" "element.component.war-room-http"
+        "cascade.sourcePath" "cascade/war_room/review_routes.py"
+        "cascade.sourceSymbol" "handle_post_review_repair"
+    }
+}
+
 http_serve_to_handler = code_http_serve -> code_http_handler "Installs" {
     properties {
         "cascade.semanticId" "relationship.code-http-serve-to-handler"
@@ -1562,6 +1604,11 @@ http_local_to_identity = code_http_local -> code_http_identity "Implements" {
     }
 }
 
+http_review_repair_to_identity = code_http_review_repair -> code_http_identity "Verifies request-scoped local human authority" {
+    properties {
+        "cascade.semanticId" "relationship.code-http-review-repair-to-identity"
+    }
+}
 
 // Architecture browser — implementation.
 
@@ -1658,6 +1705,42 @@ code_dashboard_reader = element "read_audit_projection" "Function" "Reads a boun
     }
 }
 
+code_dashboard_open_reviews = element "handle_get_open_reviews" "Function" "Returns accountable open-review rows from persisted registry, delivery, and repair evidence without consulting forge or provider authority." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.open-reviews"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/review_routes.py"
+        "cascade.sourceSymbol" "handle_get_open_reviews"
+    }
+}
+
+code_dashboard_review_projection = element "feature_review_views" "Function" "Builds shared board, room, and open-review projections with original identity, accountable owners, delivery phase, row-capped CI/feedback evidence, and typed prerequisites; string generations retain input length." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.review-projection"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_review_views"
+    }
+}
+
+code_dashboard_review_ui = element "createOpenReviewsPane" "Function" "Renders accountable review state, submits only an explicit repair POST, preserves typed action results, and uses GET for refreshes." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.review-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/open_reviews_pane.js"
+        "cascade.sourceSymbol" "createOpenReviewsPane"
+    }
+}
+
+code_feature_latest_open_review_repair = element "latest_feature_repair_records" "Function" "Reads the canonical action ledger once and retains the latest waiting, active, refused, or verified open-review repair generation for presentation." {
+    properties {
+        "cascade.semanticId" "element.code.feature.latest-open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "latest_feature_repair_records"
+    }
+}
+
 code_dashboard_progress_contract = element "_derive_entry" "Function" "Defines the versioned safe recovery states, ordering priority, freshness and sanitized presentation fields materialized for Dashboard consumers." {
     properties {
         "cascade.semanticId" "element.code.dashboard.progress-contract"
@@ -1718,6 +1801,36 @@ code_dashboard_post = element "WarRoomRequestHandler.do_POST" "Method" "Routes o
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/server.py"
         "cascade.sourceSymbol" "WarRoomRequestHandler.do_POST"
+    }
+}
+
+dashboard_router_to_open_reviews = code_dashboard_router -> code_dashboard_open_reviews "Dispatches the open-review read route" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-router-to-open-reviews"
+    }
+}
+
+dashboard_open_reviews_to_review_projection = code_dashboard_open_reviews -> code_dashboard_review_projection "Requests the shared accountable review projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-open-reviews-to-review-projection"
+    }
+}
+
+dashboard_review_projection_to_repair_projection = code_dashboard_review_projection -> code_feature_latest_open_review_repair "Joins canonical repair generations without creating lifecycle state" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-projection-to-repair-projection"
+    }
+}
+
+dashboard_review_ui_to_open_reviews = code_dashboard_review_ui -> code_dashboard_open_reviews "Refreshes accountable state through GET only" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-ui-to-open-reviews"
+    }
+}
+
+dashboard_review_ui_to_repair_post = code_dashboard_review_ui -> code_http_review_repair "Submits one explicit exact repair request" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-ui-to-repair-post"
     }
 }
 
@@ -2046,7 +2159,7 @@ code_workspace_persist = element "terminal_doc_persisted_outside_worktree" "Func
     }
 }
 
-code_workspace_descendant_proof = element "prove_terminal_retirement" "Function" "Enumerates required terminal descendants, persists absent records to the exact parent owner, and requires canonical readback plus delivery provenance." {
+code_workspace_descendant_proof = element "prove_terminal_retirement" "Function" "Requires terminal shared Feature delivery evidence before enumerating descendants, persisting absent records, and accepting canonical readback." {
     properties {
         "cascade.semanticId" "element.code.workspace.descendant-proof"
         "cascade.parent" "element.component.workspace"
@@ -2091,7 +2204,7 @@ code_boss_retire = element "_retire_feature_worktree" "Function" "Calls the Work
     }
 }
 
-code_boss_review = element "ensure_feature_review" "Function" "Publish through review safeguards." {
+code_boss_review = element "ensure_feature_review" "Function" "Refresh an admitted scoped repair on the same open review; terminal or changed review identity fails before push or creation." {
     properties {
         "cascade.semanticId" "element.code.boss.review"
         "cascade.parent" "element.component.boss"
@@ -2100,12 +2213,21 @@ code_boss_review = element "ensure_feature_review" "Function" "Publish through r
     }
 }
 
-code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused or followed up." {
+code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused." {
     properties {
         "cascade.semanticId" "element.code.boss.review-route"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/review.py"
         "cascade.sourceSymbol" "_require_repair_review_route"
+    }
+}
+
+code_boss_open_review_identity = element "_require_open_review_repair_identity" "Function" "Bind publication to the admitted original review observation or its checkpointed repair action." {
+    properties {
+        "cascade.semanticId" "element.code.boss.open-review-repair-identity"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_require_open_review_repair_identity"
     }
 }
 
@@ -2127,7 +2249,7 @@ code_boss_lock = element "task_lifecycle_lock" "Function" "Tracking-root cross-p
     }
 }
 
-code_boss_obligation = element "current_feature_obligation" "Function" "Fence closeout and retirement on the current repair, child delivery, review, and integration evidence." {
+code_boss_obligation = element "current_feature_obligation" "Function" "Separate unpublished repair obligations from accepted delivery; admit idempotent publication after child gates and fence completion and retirement on exact accepted target evidence." {
     properties {
         "cascade.semanticId" "element.code.boss.current-obligation"
         "cascade.parent" "element.component.boss"
@@ -2142,6 +2264,33 @@ code_boss_review_generation = element "feature_review_generation" "Function" "Re
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/review.py"
         "cascade.sourceSymbol" "feature_review_generation"
+    }
+}
+
+code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase, retained owner, active and published generations, review identity and next prerequisite from canonical local evidence." {
+    properties {
+        "cascade.semanticId" "element.code.boss.feature-delivery-view"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_delivery_view"
+    }
+}
+
+code_boss_delivery_execution_predicate = element "feature_delivery_satisfies_integration" "Function" "Accept only verified intended-target delivery or an explicit supported terminal disposition for integration-required execution." {
+    properties {
+        "cascade.semanticId" "element.code.boss.feature-delivery-execution-predicate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_delivery_satisfies_integration"
+    }
+}
+
+code_boss_dependency_delivery_gate = element "_deps_met" "Function" "Keeps Task candidates hidden until lifecycle dependencies and current Feature delivery evidence both pass." {
+    properties {
+        "cascade.semanticId" "element.code.boss.dependency-delivery-gate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/view.py"
+        "cascade.sourceSymbol" "_deps_met"
     }
 }
 
@@ -2289,6 +2438,24 @@ code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Functio
     }
 }
 
+code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Refresh the original review, target and normalized check generations, then fence exact current-generation verification before every closeout." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.repair-postcheck"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "reconcile_open_review_repair"
+    }
+}
+
+code_watchdog_required_checks = element "_required_checks" "Function" "Require current-target policy and a source-bound, generation-bearing green result for every required check." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.required-checks"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "_required_checks"
+    }
+}
+
 code_watchdog_verify = element "verify_incident_postcheck" "Function" "Atomically convert one exact deferred incident to verified history while preserving prior attempts." {
     properties {
         "cascade.semanticId" "element.code.watchdog.verify"
@@ -2307,7 +2474,7 @@ code_watchdog_incident_projection = element "_incident_projection" "Function" "S
     }
 }
 
-code_feature_mint = element "mint_task" "Function" "Admit scoped child specification under lifecycle lock." {
+code_feature_mint = element "mint_task" "Function" "Under the lifecycle lock, join one admitted repair reservation and idempotently repair Task, parent and dispatch event persistence." {
     properties {
         "cascade.semanticId" "element.code.feature.mint"
         "cascade.parent" "element.component.feature-team"
@@ -2325,6 +2492,15 @@ code_feature_recover = element "recover_task" "Function" "Recover the existing d
     }
 }
 
+code_feature_retry = element "retry_task" "Function" "Claims one eligible Task retry and re-enters canonical dispatch so current dependency delivery evidence is rechecked." {
+    properties {
+        "cascade.semanticId" "element.code.feature.retry"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/recovery.py"
+        "cascade.sourceSymbol" "retry_task"
+    }
+}
+
 code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedDict" "Separates selected owner and operation, request, acknowledgement, execution, refusal, and verified postcheck evidence." {
     properties {
         "cascade.semanticId" "element.code.feature.parent-lifecycle-mismatch-recovery"
@@ -2334,7 +2510,7 @@ code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedD
     }
 }
 
-code_feature_repair = element "feature_repair" "Function" "Persist and authorize one exact late-repair generation." {
+code_feature_repair = element "feature_repair" "Function" "Persist, recheck and authorize one exact late-repair generation." {
     properties {
         "cascade.semanticId" "element.code.feature.repair"
         "cascade.parent" "element.component.feature-team"
@@ -2343,7 +2519,25 @@ code_feature_repair = element "feature_repair" "Function" "Persist and authorize
     }
 }
 
-code_feature_reserve = element "reserve_repair_child" "Function" "Persist the idempotent Task identity and rendered-spec digest before child and parent writes." {
+code_feature_open_review_repair = element "admit_open_review_repair" "Function" "Admit a content-addressed parent or authenticated-human request against the existing open Feature review." {
+    properties {
+        "cascade.semanticId" "element.code.feature.open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "admit_open_review_repair"
+    }
+}
+
+code_feature_inspect_open_review_repair = element "inspect_open_review_repair" "Function" "Read the canonical live-owner action and refuse a replay whose complete request digest changed under the same request identity." {
+    properties {
+        "cascade.semanticId" "element.code.feature.inspect-open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "inspect_open_review_repair"
+    }
+}
+
+code_feature_reserve = element "reserve_repair_child" "Function" "Persist one Task identity, mint-request digest and rendered-spec digest before child and parent writes; changed replay refuses." {
     properties {
         "cascade.semanticId" "element.code.feature.reserve-repair-child"
         "cascade.parent" "element.component.feature-team"
@@ -2367,6 +2561,21 @@ code_epic_supervise = element "supervise_child" "Function" "Inspect incidents an
         "cascade.parent" "element.component.epic-team"
         "cascade.sourcePath" "cascade/team_supervision.py"
         "cascade.sourceSymbol" "supervise_child"
+    }
+}
+
+code_epic_review_repair_request = element "request_feature_review_repair" "Function" "Authorize one direct-parent or authenticated-human request, admit its exact Feature repair action, and acknowledge wakeup separately from execution." {
+    properties {
+        "cascade.semanticId" "element.code.epic.review-repair-request"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/team_supervision.py"
+        "cascade.sourceSymbol" "request_feature_review_repair"
+    }
+}
+
+http_review_repair_to_adapter = code_http_review_repair -> code_epic_review_repair_request "Delegates the exact scoped request and returns typed admission state" {
+    properties {
+        "cascade.semanticId" "relationship.code-http-review-repair-to-adapter"
     }
 }
 
@@ -2457,6 +2666,24 @@ code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one co
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task_rollup.py"
         "cascade.sourceSymbol" "ParentLifecycleMismatch"
+    }
+}
+
+code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker, exact review route and evidence generation on affected dependent Feature Tasks separately from Task failure and evaluated generation." {
+    properties {
+        "cascade.semanticId" "element.code.task.upstream-review-fence"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "record_upstream_review_observation"
+    }
+}
+
+code_task_upstream_dependency = element "_dependent_feature_for_task" "Function" "Prove the queued Task's direct Feature owner declares the observed upstream Feature as a dependency under the same Epic." {
+    properties {
+        "cascade.semanticId" "element.code.task.upstream-review-dependency"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "_dependent_feature_for_task"
     }
 }
 
@@ -2577,6 +2804,12 @@ code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks f
     }
 }
 
+code_boss_review_to_open_identity = code_boss_review -> code_boss_open_review_identity "Joins the admitted original review" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-review-to-open-review-identity"
+    }
+}
+
 code_boss_queue_to_task_revalidation = code_boss_queue -> code_task_revalidation "Queues replacement final validation when either head moves" {
     properties {
         "cascade.semanticId" "relationship.code-boss-queue-to-task-revalidation"
@@ -2595,9 +2828,39 @@ code_boss_rollup_to_obligation = code_boss_feature -> code_boss_obligation "Chec
     }
 }
 
-code_boss_obligation_to_review_generation = code_boss_obligation -> code_boss_review_generation "Reads immutable current evidence" {
+code_boss_obligation_to_delivery_view = code_boss_obligation -> code_boss_delivery_view "Consumes current delivery and intended-target evidence" {
     properties {
-        "cascade.semanticId" "relationship.code-boss-obligation-to-review-generation"
+        "cascade.semanticId" "relationship.code-boss-obligation-to-feature-delivery-view"
+    }
+}
+
+code_boss_dependency_gate_to_delivery_predicate = code_boss_dependency_delivery_gate -> code_boss_delivery_execution_predicate "Uses current delivery eligibility for Task visibility" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-dependency-gate-to-delivery-predicate"
+    }
+}
+
+code_boss_delivery_predicate_to_view = code_boss_delivery_execution_predicate -> code_boss_delivery_view "Classifies the current delivery projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-delivery-predicate-to-view"
+    }
+}
+
+code_watchdog_dispatch_to_dependency_delivery_gate = code_watchdog_dispatch -> code_watchdog_dependency_delivery_gate "Rechecks integration-required Feature dependencies" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-dispatch-to-dependency-delivery-gate"
+    }
+}
+
+code_watchdog_dependency_gate_to_delivery_predicate = code_watchdog_dependency_delivery_gate -> code_boss_delivery_execution_predicate "Uses the shared current delivery predicate" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-dependency-gate-to-delivery-predicate"
+    }
+}
+
+code_watchdog_feature_gate_to_delivery_predicate = code_watchdog_feature_dispatch_gate -> code_boss_delivery_execution_predicate "Uses the shared predicate outside the explicit stacked exception" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-feature-gate-to-delivery-predicate"
     }
 }
 
@@ -2685,7 +2948,7 @@ code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses
     }
 }
 
-code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves before persistence" {
+code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves exact child and content before persistence" {
     properties {
         "cascade.semanticId" "relationship.code-feature-mint-to-reserve-repair-child"
     }
@@ -2694,6 +2957,18 @@ code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserv
 code_feature_registry_to_recover = code_feature_registry -> code_feature_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-feature-registry-to-recover"
+    }
+}
+
+code_feature_registry_to_retry = code_feature_registry -> code_feature_retry "Offers the bounded retry operation" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-retry"
+    }
+}
+
+code_feature_retry_to_watchdog_dispatch = code_feature_retry -> code_watchdog_dispatch "Re-enters canonical Task admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-retry-to-watchdog-dispatch"
     }
 }
 
@@ -2715,6 +2990,12 @@ code_feature_registry_to_repair = code_feature_registry -> code_feature_repair "
     }
 }
 
+code_feature_open_review_to_repair = code_feature_open_review_repair -> code_feature_repair "Uses the shared durable admission and introduction state machine" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-open-review-to-repair"
+    }
+}
+
 code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-registry-to-recover"
@@ -2724,6 +3005,24 @@ code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
 code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-recover-to-supervise"
+    }
+}
+
+code_epic_supervise_to_review_repair_request = code_epic_supervise -> code_epic_review_repair_request "Routes exact open-review requests without requiring a Task mismatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-supervise-to-review-repair-request"
+    }
+}
+
+code_epic_review_repair_request_to_feature_admission = code_epic_review_repair_request -> code_feature_open_review_repair "Uses the shared content-addressed admission contract" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-feature-admission"
+    }
+}
+
+code_epic_review_repair_request_to_feature_inspection = code_epic_review_repair_request -> code_feature_inspect_open_review_repair "Joins a live owner only after the canonical request digest still matches" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-feature-inspection"
     }
 }
 
@@ -2748,6 +3047,18 @@ code_task_registry_to_actions = code_task_registry -> code_task_actions "Uses" {
 code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppresses unchanged delivery retries on the original action" {
     properties {
         "cascade.semanticId" "relationship.code-task-parent-lifecycle-mismatch-to-actions"
+    }
+}
+
+code_task_upstream_review_fence_to_actions = code_task_upstream_review_fence -> code_task_actions "Stores observed and evaluated generations on the existing queued action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-actions"
+    }
+}
+
+code_task_upstream_review_fence_to_dependency = code_task_upstream_review_fence -> code_task_upstream_dependency "Requires exact source/target route and current same-Epic dependency ownership" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-dependency"
     }
 }
 
@@ -2829,12 +3140,21 @@ code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget
     }
 }
 
-code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
+code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event, request/review/claim bindings, current live action, mutation owner and committed active-document introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-authority"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/feature/repair.py"
         "cascade.sourceSymbol" "repair_event_authorizes"
+    }
+}
+
+code_feature_repair_verify = element "mark_feature_repair_verified" "Function" "Persist only an independently verified receipt naming the exact current action, repair generation and corrected checked source head." {
+    properties {
+        "cascade.semanticId" "element.code.feature.repair-verify"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "mark_feature_repair_verified"
     }
 }
 
@@ -2844,15 +3164,63 @@ code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_rep
     }
 }
 
+code_boss_feature_to_repair_postcheck = code_boss_feature -> code_watchdog_repair_postcheck "Requests fresh verification before the lifecycle critical section" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-watchdog-repair-postcheck"
+    }
+}
+
+code_boss_feature_to_repair_postcheck_gate = code_boss_feature -> code_boss_repair_postcheck_gate "Consumes only the matching fresh receipt before closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-repair-postcheck-gate"
+    }
+}
+
+code_watchdog_repair_postcheck_to_required_checks = code_watchdog_repair_postcheck -> code_watchdog_required_checks "Validates current policy and check generations" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-repair-postcheck-to-required-checks"
+    }
+}
+
+code_watchdog_repair_postcheck_to_feature_verify = code_watchdog_repair_postcheck -> code_feature_repair_verify "Fences the unchanged action and evidence digest before marking verified" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-repair-postcheck-to-feature-repair-verify"
+    }
+}
+
 boss_uses_workspace = boss_component -> workspace_component "Checks merge targets and retires worktrees" {
     properties {
         "cascade.semanticId" "relationship.boss-uses-workspace"
     }
 }
 
+workspace_uses_boss_delivery = workspace_component -> boss_component "Consumes shared Feature delivery eligibility for wakeup and retirement" {
+    properties {
+        "cascade.semanticId" "relationship.workspace-uses-boss-delivery"
+    }
+}
+
 watchdog_uses_boss = watchdog_component -> boss_component "Retries delivery and reconciles closeout" {
     properties {
         "cascade.semanticId" "relationship.watchdog-uses-boss"
+    }
+}
+
+epic_uses_workspace_queue = epic_team -> workspace_component "Schedules durable repair input after admission and defers to a live graph owner" {
+    properties {
+        "cascade.semanticId" "relationship.epic-uses-workspace-queue"
+    }
+}
+
+boss_uses_watchdog_postcheck = boss_component -> watchdog_component "Requests independent open-review repair verification before closeout" {
+    properties {
+        "cascade.semanticId" "relationship.boss-uses-watchdog-postcheck"
+    }
+}
+
+watchdog_verifies_feature_repair = watchdog_component -> feature_team "Fences and persists the exact repair verification receipt" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-verifies-feature-repair"
     }
 }
 
@@ -3573,6 +3941,27 @@ code_workspace_owner_live = element "graph_turn_owner_is_live" "Function" "Obser
     }
 }
 
+code_workspace_queue_kickoff = element "kickoff_graph_queue_event" "Function" "Schedule delivery only when the durable queue is ahead of its checkpoint cursor." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.queue-kickoff"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "kickoff_graph_queue_event"
+    }
+}
+
+code_epic_review_repair_request_to_owner_live = code_epic_review_repair_request -> code_workspace_owner_live "Defers to a live Feature graph owner" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-owner-live"
+    }
+}
+
+code_epic_review_repair_request_to_queue_kickoff = code_epic_review_repair_request -> code_workspace_queue_kickoff "Schedules the already-durable event after admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-queue-kickoff"
+    }
+}
+
 code_workspace_kickoff_live = element "_run_kickoff" "Function" "Brackets only the admitted graph invocation with an ephemeral process-bound token." {
     properties {
         "cascade.semanticId" "element.code.workspace.kickoff-live"
@@ -3930,5 +4319,202 @@ watchdog_incident_record_to_transition_receipt = code_watchdog_incident_record -
 watchdog_result_to_transition_notify = code_watchdog_result -> code_watchdog_transition_notify "Notifies only after the incident replacement commits" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-result-to-transition-notify"
+    }
+}
+
+// Review observation and graph queue eligibility.
+
+code_workspace_delivery = element "deliver_queue_kickoffs" "Function" "Select active, recovery, or retained nonterminal Feature owners whose queue is ahead of its cursor." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.delivery"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "deliver_queue_kickoffs"
+    }
+}
+
+code_workspace_resume = element "resume_inflight_graphs" "Function" "Rejoin eligible active, recovery, or retained Feature graphs after restart without waking an idle poll." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.resume"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "resume_inflight_graphs"
+    }
+}
+
+code_workspace_schedule = element "_schedule_queue_delivery" "Function" "Coalesce delivery into the process-local queue worker under graph ownership." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.schedule"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_schedule_queue_delivery"
+    }
+}
+
+code_workspace_delivery_locked = element "_run_queue_delivery_locked" "Function" "Recheck retained-owner eligibility under the graph lock, resume interruptions, and advance idle cursors without a role turn." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.delivery-locked"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_run_queue_delivery_locked"
+    }
+}
+
+code_workspace_retained_feature = element "_retained_feature_delivery" "Function" "Read the shared nonterminal delivery phase that retains a completed Feature graph without granting repair authority." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.retained-feature-delivery"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_retained_feature_delivery"
+    }
+}
+
+code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify normalized open-review evidence, persist its bounded current presentation in the review registry, return non-provider typed waits, and route actionable evidence through one Feature repair owner." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review_health.py"
+        "cascade.sourceSymbol" "reconcile_open_review_health"
+    }
+}
+
+code_watchdog_actionable_review = element "_route_actionable_review_health" "Function" "Bind original review, exact heads, check-run or feedback identity and repair generation before joining the durable Feature repair action." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.actionable-review-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review_health.py"
+        "cascade.sourceSymbol" "_route_actionable_review_health"
+    }
+}
+
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, mergeability, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-snapshot"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "merge_request_snapshot"
+    }
+}
+
+code_watchdog_review_evidence_health = element "_review_health" "Function" "Classify normalized current-generation evidence as green, failed, pending, missing, stale, approval-only, actionable feedback, conflict, unavailable or terminal." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-evidence-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "_review_health"
+    }
+}
+
+code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Persist a normalized health observation with capped rows and selected text in the canonical review registry; check-name keys and string generations retain input length." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-evidence-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "record_feature_review_evidence"
+    }
+}
+
+code_boss_review_pending = element "feature_review_pending" "Function" "Read open review state or the completed-document publication window without forging acceptance." {
+    properties {
+        "cascade.semanticId" "element.code.boss.review-pending"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_review_pending"
+    }
+}
+
+code_workspace_delivery_to_schedule = code_workspace_delivery -> code_workspace_schedule "Schedules unread queue delivery" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-delivery-to-schedule"
+    }
+}
+
+code_workspace_delivery_to_retained_feature = code_workspace_delivery -> code_workspace_retained_feature "Includes retained completed Feature owners" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-delivery-to-retained-feature"
+    }
+}
+
+code_workspace_resume_to_retained_feature = code_workspace_resume -> code_workspace_retained_feature "Rechecks retained ownership during restart" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resume-to-retained-feature"
+    }
+}
+
+code_workspace_locked_to_retained_feature = code_workspace_delivery_locked -> code_workspace_retained_feature "Rechecks the same eligibility under the graph lock" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-locked-to-retained-feature"
+    }
+}
+
+code_workspace_retained_feature_to_delivery_view = code_workspace_retained_feature -> code_boss_delivery_view "Consumes the shared read-only Feature delivery projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retained-feature-to-delivery-view"
+    }
+}
+
+code_workspace_descendant_proof_to_delivery_view = code_workspace_descendant_proof -> code_boss_delivery_view "Requires terminal current-generation delivery before persistence or removal" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-descendant-proof-to-delivery-view"
+    }
+}
+
+code_workspace_resume_to_schedule = code_workspace_resume -> code_workspace_schedule "Schedules interrupted or staged input replay" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resume-to-schedule"
+    }
+}
+
+code_workspace_schedule_to_locked = code_workspace_schedule -> code_workspace_delivery_locked "Runs the coalesced worker under its graph lock" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-schedule-to-locked"
+    }
+}
+
+code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_workspace_invoke "Stages durable input then invokes an eligible role turn" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-delivery-to-invoke"
+    }
+}
+
+code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads authoritative review identity, head, policy, check-generation and feedback facts before routing" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_watchdog_health_to_evidence_record = code_watchdog_review_health -> code_watchdog_review_evidence_record "Persists the current observation with row and selected-text caps before classification can route work" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-evidence-record"
+    }
+}
+
+code_watchdog_health_to_actionable_review = code_watchdog_review_health -> code_watchdog_actionable_review "Routes only failed checks, actionable feedback and confirmed conflicts" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-actionable-review"
+    }
+}
+
+code_watchdog_actionable_review_to_feature_request = code_watchdog_actionable_review -> code_epic_review_repair_request "Joins the existing direct-parent Feature repair admission and single-writer gate" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-feature-request"
+    }
+}
+
+code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized blocker generation and exact review route without claiming downstream delivery" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-task-fence"
+    }
+}
+
+code_watchdog_snapshot_to_evidence_health = code_watchdog_review_snapshot -> code_watchdog_review_evidence_health "Classifies only normalized evidence bound to the observed head pair" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-snapshot-to-review-evidence-health"
+    }
+}
+
+code_boss_feature_to_pending = code_boss_feature -> code_boss_review_pending "Retains pending publication and review obligations" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-pending"
     }
 }

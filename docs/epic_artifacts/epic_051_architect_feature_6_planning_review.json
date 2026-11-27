@@ -1,0 +1,212 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "trigger": "FeaturePlanningStarted feat_051_006; integrated Feature 5 review",
+  "reviewed_plan_revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+  "reviewed_feature_6_revision": "75d8da3216c3660a737e43182ee4a74947d88ca2",
+  "reviewed_source_revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/boss/DESIGN.md",
+    "cascade/feature/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/war_room/DESIGN.md",
+    "cascade/epic/DESIGN.md",
+    "cascade/workspace/DESIGN.md"
+  ],
+  "design_changes": [
+    "Root links shared delivery predicate and same-Epic Task fencing beneath dependency readiness.",
+    "Boss read behavior allows bounded local ancestry verification and excludes forge polling.",
+    "Task flow rechecks route and dependency before postcheck and evaluated-generation comparison."
+  ],
+  "diagram_impact": {
+    "landscape_context": {
+      "views": [
+        "cascade-landscape",
+        "cascade-context"
+      ],
+      "owner": "DESIGN.md",
+      "result": "No changed people or external systems. Existing forge/provider/operator boundary still contains repair and delivery; model renders unchanged structure."
+    },
+    "containers": {
+      "views": [
+        "cascade-containers"
+      ],
+      "owner": "DESIGN.md / cascade/DESIGN.md",
+      "result": "Existing in-process runtime, review registry, action ledger, checkpoint and repository; no added store, process or isolation boundary."
+    },
+    "components": {
+      "views": [
+        "cascade-supervisor-components",
+        "cascade-team-components",
+        "cascade-war-room-components"
+      ],
+      "owner": "cascade/DESIGN.md with Watchdog/Boss/Feature/Task/War Room",
+      "result": "Integrated descriptions show current delivery gates, canonical retry and exact-route dependent Task observations. Same component owners; passive board serializer uses the shared delivery decision."
+    },
+    "code": {
+      "cascade-watchdog-code": {
+        "design": "cascade/watchdog/DESIGN.md",
+        "symbols": [
+          "dispatch._dependency_review_pending",
+          "stacked_dispatch.feature_dispatch_blockers",
+          "review_health._route_actionable_review_health"
+        ],
+        "result": "Two added Function nodes; gate and route behavior matches source."
+      },
+      "cascade-boss-code": {
+        "design": "cascade/boss/DESIGN.md; cascade/DESIGN.md owns shared predicate",
+        "symbols": [
+          "review.feature_delivery_satisfies_integration",
+          "boss.view._deps_met",
+          "review.feature_delivery_view"
+        ],
+        "result": "Two added Function nodes and shared projection relationships."
+      },
+      "cascade-feature-code": {
+        "design": "cascade/feature/DESIGN.md",
+        "symbols": [
+          "recovery.retry_task"
+        ],
+        "result": "One Function node linked from registry and to canonical dispatch."
+      },
+      "cascade-task-code": {
+        "design": "cascade/task/DESIGN.md",
+        "symbols": [
+          "task_rollup._dependent_feature_for_task",
+          "task_rollup.record_upstream_review_observation",
+          "task_rollup._upstream_review_fence_waits"
+        ],
+        "result": "Dependency-proof Function node linked from observation. Corrected behavioral diagram covers retry evaluation ordering."
+      },
+      "cascade-workspace-code / cascade-epic-code": {
+        "design": "cascade/workspace/DESIGN.md; cascade/epic/DESIGN.md",
+        "result": "No source change to retained queue ownership, checkpoints, locks, parent admission or render scheduling. Existing native Code interfaces remain accurate."
+      },
+      "cascade-dashboard-code / cascade-war-room-http-code": {
+        "design": "cascade/war_room/DESIGN.md",
+        "symbols": [
+          "serialize.board_view_from_index",
+          "review.feature_review_views"
+        ],
+        "result": "Board serializer consumes the shared predicate; no new significant interface or node. Scalar-bound descriptions remain true until Feature 6 lands."
+      }
+    },
+    "behavior": "Normal: lifecycle readiness plus verified intended-target delivery releases ordinary guarded execution; explicit stacking uses its supported predecessor base. Failure/restart: exact-route same-Epic dependency is rechecked before waiting; a new generation is evaluated without a Task claim, unchanged evidence spends no retry, independently verified repair releases ordinary recovery gates."
+  },
+  "feature_6_acceptance": {
+    "status": "Feature-level contract reviewed; individual Task bodies remain delegated to their scoped Feature owners. Prior content_access_denied is not bypassed.",
+    "scope": "256 UTF-8 byte names/string generations, 64 decimal digit integer generations, 32 KiB normalized observation, twenty display rows; preserve equality and zero; malformed evidence cannot authorize repair.",
+    "owners": "Task 1 owns writer bounds and false-return admission refusal; Task 2 owns legacy/request/postcheck passive bounds and final design/model reconciliation. Feature Lead/Architect verify these Task criteria and route any Epic-owned model edit.",
+    "verification_required": "Exact final serialized API bytes and Unicode escaping; independent full-policy/head postcheck; normal and refusal/restart flows; source contract/kinds/ownership; context-to-Code Explore, Level up, deep links, pinned source, stale symbols and warm reuse.",
+    "no_design_preclaim": "Numeric proposal stays in work records; no speculative bounds added to current designs."
+  },
+  "verification": {
+    "lifecycle": {
+      "command": "python -m pytest -q tests/test_feature_delivery_consumer_gates.py tests/task/test_rollup_queue.py tests/test_review_health.py tests/test_feature_closeout_flow.py tests/workspace/test_kickoff.py",
+      "result": "73 passed, 1 failed in 91.38s",
+      "failure": "test_active_task_queue_recovers_missing_model_checkpoint: KeyError model_ids",
+      "isolated": "Current revision 1 passed in 1.48s; baseline 9d176203 1 passed in 3.24s. Unresolved suite-order/isolation observation; not a clean aggregate pass."
+    },
+    "c4": {
+      "command": "python -m pytest -q tests/workspace/test_c4_source.py tests/workspace/test_c4_closure.py tests/workspace/test_c4_bindings.py",
+      "result": "24 passed, 7 failed in 10.10s",
+      "baseline": "Closure tests at archived pre-integration 9d176203 reproduce the same 7 owner-mismatch failures; 2 passed in 7.06s. Fixture reference task_034_007_002 disagrees with epic_051 contract owner. No fixtures or accepted snapshots changed."
+    },
+    "review_documentation": "20 passed in 0.29s in test_c4_review.py and test_c4_documentation.py",
+    "current_contract": {
+      "elements": 278,
+      "relationships": 346,
+      "views": 24,
+      "added_elements": 6,
+      "added_relationships": 8,
+      "removed_elements": 0,
+      "removed_relationships": 0
+    },
+    "rendered_source_validation": "All current rendered declaration kinds, Python/JavaScript source symbols, parent components and native Code membership passed _assert_cascade_view_coverage.",
+    "links": {
+      "local_file_links": 481,
+      "heading_links": 91,
+      "broken": 0
+    },
+    "pins": "All six plan/design/contract/source references match committed and current bytes; confined source closure matches ready render.",
+    "accepted_lineage": "Read-only ArchitectureReviewStore found no accepted Epic lineage or pending promotion; expected_generation=null.",
+    "cited_ids": "All 27 cited requirements/decisions have exactly one owning declaration.",
+    "stale_symbols": "All existing modeled source identities, paths, symbols and component owners unchanged. Six added Functions validated against source; no removed or renamed declaration."
+  },
+  "render": {
+    "revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1",
+    "closure_digest": "e952f08caa0eb3659f5e529f607a936706ca746a38b31f0f820e83cceee89e5a",
+    "semantic_workspace_sha256": "f6cb51bcf86cd20d68265729ea3df80e39075e8c415f0cbc5bce618ca6083f19",
+    "image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "view_keys": [
+      "cascade-agent-code",
+      "cascade-architecture-browser-code",
+      "cascade-board-code",
+      "cascade-boss-code",
+      "cascade-cli-components",
+      "cascade-collaboration-code",
+      "cascade-comparison-render-code",
+      "cascade-containers",
+      "cascade-context",
+      "cascade-dashboard-code",
+      "cascade-diagnostics-code",
+      "cascade-diagram-review-code",
+      "cascade-epic-code",
+      "cascade-feature-code",
+      "cascade-landscape",
+      "cascade-supervisor-components",
+      "cascade-task-code",
+      "cascade-team-components",
+      "cascade-teams-code",
+      "cascade-war-room-components",
+      "cascade-war-room-http-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-workspace-commands-code"
+    ]
+  },
+  "handoffs": {
+    "feature_6": "Complete current two-Task bounds and fallback acceptance, preserving inherited integration/retry gates.",
+    "architecture_test_owner": "Reconcile the seven baseline closure fixtures under normal ownership; no accepted snapshot rewrite.",
+    "workspace_test_owner": "Investigate missing model_ids only in the combined kickoff run; isolated baseline/current passes do not clear suite interaction.",
+    "epic_architect": "Reconcile final Feature 6 implementation and re-publish exact final integrated references. Replay this request unchanged next turn if publication returns pending.",
+    "epic_manager": "Feature 5 is integrated; Feature 6 delivery and final verification/publication remain Epic completion gates.",
+    "architecture_runtime": "Investigate repeated cold browser readiness timeout with a ready pinned render; preserve renderer limits and durable evidence. Warm retry does not clear cold-load failure."
+  },
+  "limitations": [
+    "No full repository or full Recovery-gate run; historical timeouts are not cleared.",
+    "Scripted forge/provider seams and isolated operational browser panels do not establish live deployment.",
+    "No child/trunk modification, dependency installation, lifecycle completion, accepted-snapshot rewrite or post-approval sign-off retry.",
+    "Approved Epic plan unchanged; no new decision or board-spec mutation required for this review."
+  ],
+  "browser_cold": {
+    "result": "failed",
+    "error": "Locator.wait_for architecture-ready exceeded 210000ms",
+    "receipt": {
+      "paths": [],
+      "http_errors": [],
+      "source_revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1",
+      "total_seconds": 212.16671953117475
+    },
+    "interpretation": "Pinned rendering reached ready while initial browser readiness did not. BrokenPipe diagnostics accompanied abandoned HTTP requests. Cause unclassified; no timeout or resource bound increased."
+  },
+  "browser_warm": {
+    "receipt": "docs/epic_artifacts/epic_051_consumer_gates_architecture_browser.json",
+    "passed_paths": 6,
+    "initial_ready_seconds": 14.546043485868722,
+    "total_seconds": 120.0168371789623,
+    "render_operations": [
+      9,
+      9
+    ],
+    "source_revision": "5a0c5d2c4299089c275017c21af9de2a2452cbc1"
+  },
+  "publication": {
+    "request": "docs/epic_artifacts/epic_051_architecture_review_46af22a9.json",
+    "status": "pending",
+    "receipt": "docs/epic_artifacts/epic_051_architecture_publication_46af22a9.json"
+  }
+}

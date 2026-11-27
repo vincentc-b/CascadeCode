@@ -403,6 +403,85 @@ roles. These are linked requirements, not duplicate ownership declarations.
 
 ## Delivery and review boundaries
 
+`REQ-REVIEW-EVIDENCE-001`: [merge_request_snapshot](tracking.py) preserves the
+original forge review identity while reporting the observed URL and route, exact
+source and target heads, mergeability, human approval or actionable feedback,
+and required-check policy and results. Required checks come only from the target
+branch's authoritative forge policy. An empty check listing is not an empty
+policy; an empty policy is valid only when the policy endpoint or project
+configuration confirms it. Policy, target-head, result and feedback failures
+remain explicit unavailable evidence.
+
+`REQ-REVIEW-EVIDENCE-002`: Check results retain their forge check-run or pipeline
+generation and source head. The newest generation for each required name wins,
+so an older green result cannot mask a newer failure. Classification distinguishes
+failed, pending, missing, stale, green, approval-only wait, actionable human
+feedback, conflicting or moving heads, transient unavailable evidence and terminal
+review disposition. Forge response text is data and is never used as a shell or
+validation command.
+
+`DEC-REVIEW-EVIDENCE-001`: Keep forge normalization at the existing scripted
+Runner boundary in `cascade.tracking`. Fixed `gh api` and `glab api` argument
+vectors make production adapters replaceable by deterministic tests without a
+second forge client, credential store, scheduler or persistence boundary.
+
+```mermaid
+flowchart LR
+    Review[Original review identity] --> Snapshot[merge_request_snapshot]
+    Snapshot --> Heads[Exact source and target heads]
+    Snapshot --> Policy[Authoritative target policy]
+    Snapshot --> Results[Head-bound check generations]
+    Snapshot --> Feedback[Approval and actionable feedback]
+    Heads --> Health[_review_health]
+    Policy --> Health
+    Results --> Health
+    Feedback --> Health
+    Policy -. unavailable .-> Unknown[Typed transient prerequisite]
+    Results -. missing or stale .-> Blocked[Typed non-green evidence]
+```
+
+Normal evidence flow is exercised by the GitHub and GitLab scripted transport
+cases in [tracking adapter tests](../tests/test_tracking_find.py), including a
+confirmed empty target policy and newest-generation selection. The same tests
+cover unavailable policy, a missing required result, stale source evidence and a
+newer failure after an older success. The integrated Watchdog Code view is
+[`cascade-watchdog-code`](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+and its source contract pins both normalization and classification symbols.
+The [Watchdog open-review contract](watchdog/DESIGN.md#open-review-observation)
+owns the next boundary: actionable normalized evidence joins one Feature repair
+generation, while pending, missing, stale, approval-only and unavailable evidence
+remains a non-provider wait. The existing team adapter and Feature action ledger
+own admission and restart deduplication; this package boundary adds no scheduler,
+CI runner, provider launcher or merge authority.
+Watchdog bounds each current normalized observation and persists it in the
+canonical review registry before classification can route work. The
+[War Room projection contract](war_room/DESIGN.md#accountable-open-review-projection)
+defines the lossless check-name, generation and serialized-size limits. Persistence failure remains
+a typed evidence-unavailable wait, so War Room and delivery projections never
+derive repair authority from an observation they cannot inspect after restart.
+The shared [`feature_review_views`](review.py) reader applies the same lossless
+name, generation and normalized-payload bounds to current rows and to legacy,
+repair-request and verification-postcheck fallbacks. It returns at most twenty
+sorted checks plus an omitted count. An invalid fallback cannot retain green,
+verified or fresh presentation and instead names `refresh_review_observation`;
+Board, Feature-room and HTTP consumers receive that same result without a forge,
+provider, lifecycle or ledger write.
+Affected queued Task actions in same-Epic dependent Features retain the upstream
+blocker, exact review route and material evidence generation through the
+[Task delivery fence](task/DESIGN.md#durable-delivery-collaborators).
+Watchdog observes evidence, Task owns retry charging, and the independent repair
+postcheck remains the only release evidence.
+
+After restart the registry and action ledger remain the only inputs to this
+passive path. [`_review_health`](tracking.py) requires the exact review identity,
+head pair and a non-boolean generation-bearing result for every required check;
+[`_route_actionable_review_health`](review_health.py) binds those facts to one
+repair generation. [`_required_checks`](watchdog/incident_postcheck.py) repeats
+the exact-head and generation checks against fresh forge evidence, and
+[`mark_feature_repair_verified`](feature/repair.py) accepts only its matching
+independent receipt. Display row omission never changes those authoritative
+comparisons.
+
 `REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
 relationship before delegating recovery. Durable attempts, acknowledgements and
 verified lifecycle results are distinct evidence.
@@ -413,12 +492,59 @@ compatibility projection. Only a callback matching the current generation,
 URL and source/target route can satisfy closeout; historical acceptance remains
 inspectable but cannot approve later repair code.
 `REQ-REVIEW-REPAIR-002`: Repair publication observes the recorded review at the
-forge before selecting a route. A confirmed open review can be refreshed at the
-same URL; a confirmed merged review requires a linked follow-up from the retained
-Feature branch to its owning Epic branch. Unknown or conflicting state fails
-closed. Reconciliation binds callbacks to their immutable generation and exact
-accepted source/target heads, while independent target integration remains a
-separate closeout obligation.
+forge before selecting a route. A scoped open-review repair can refresh only its
+admitted original URL, forge and source/target route; its observed generation and
+heads must match before the first push, and replay joins the checkpointed action.
+Merged, closed, missing or changed original reviews fail closed without creating
+a follow-up. Legacy accepted-review follow-up remains a distinct route and cannot
+be selected by this scoped action. Reconciliation binds callbacks to their
+immutable generation and exact accepted source/target heads, while independent
+target integration remains a separate closeout obligation.
+Independent repair verification obtains policy and check results from the same
+fresh normalized snapshot as the observed original review. Registry-cached check
+facts and a prior verified phase cannot satisfy Boss closeout; the accepted merge
+remains on the fresh intended Epic target.
+`REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
+derive a Feature's delivery phase from the canonical board row, current immutable
+review generation, admitted repair action, completion event, and local
+intended-target ancestry. The projection retains the accountable Feature team and
+original review URL while evidence is nonterminal. `generation` includes the
+admitted obligation; nullable `published_generation` identifies the independently
+persisted review receipt (including generation zero), so delivery does not mistake
+a pending repair for a published review. Missing, legacy, stale, or
+closed-unmerged evidence cannot create accepted heads or report verified
+integration. Review-disabled delivery uses the same completion-event and local
+ancestry proof. These reads do not poll the forge, publish a review, admit repair,
+or mutate lifecycle stores.
+
+`DEC-REVIEW-DELIVERY-001`: Integration-required execution consumers use
+[`feature_delivery_satisfies_integration`](review.py) over one current projection
+per decision. Watchdog Task dispatch, Feature recovery dispatch, Boss Task
+visibility and serial Feature dispatch wait on every nonterminal delivery phase.
+The separate lifecycle dependency evaluator remains a planning-readiness
+projection. Explicit stacked Feature dispatch may execute from its selected
+predecessor branch while the predecessor is not yet integrated into the Epic;
+no other consumer treats that exception as verified target delivery.
+
+Verification for `REQ-REVIEW-DELIVERY-001` is in the
+[review-generation tests](../tests/feature/test_review_generations.py), including
+missing and closed-unmerged evidence, active versus published generations,
+intended-target ancestry and read-only projection behavior.
+The real-Git [delivery consumer tests](../tests/test_feature_delivery_consumer_gates.py)
+verify Watchdog, recovery, Boss and serial/stacked Feature decisions against the
+same current evidence.
+
+```mermaid
+flowchart TD
+    Read[Read board, review generation, repair, event and Git evidence] --> Current{Exact current generation?}
+    Current -->|open| Pending[review_pending; retain owner and URL]
+    Current -->|accepted| Target{Accepted object on intended Epic target?}
+    Target -->|yes, completion recorded| Verified[verified_integrated]
+    Target -->|no| Verify[merge_verification_pending]
+    Current -->|missing, stale or legacy| Blocked[Nonterminal explicit blocker]
+    Read -->|admitted repair| Repair[repair_requested or repair_in_progress]
+```
+
 If a process stops after pushing and opening a review but before storing its
 generation, recovery may reuse the discovered review only after a fresh forge
 snapshot reports the exact source and target refs and heads for the prepared
@@ -434,11 +560,14 @@ selection display, but its preferred row cannot authorize a write; ambiguity or
 changed registry/branch identity fails closed with a recovery action.
 
 Parent-checkout retirement uses that same owner contract to enumerate terminal
-descendants, verify their existing Task delivery or Feature completion/review
-evidence, persist absent Markdown records to the authorized parent destination,
-and re-read them before removal. Boss remains the lifecycle caller; Workspace
-owns the proof and existing board, execution, review, Git and registry artifacts
-remain the only durable state. Refusal preserves the source branch and checkout.
+descendants. For a Feature it first consumes the shared delivery projection and
+requires verified current-generation intended-Epic integration or an explicit
+supported terminal disposition. Only then may it verify descendant Task delivery
+or Feature completion evidence, persist absent Markdown records to the authorized
+parent destination, and re-read them before removal. Boss remains the lifecycle
+caller; Workspace owns the proof and existing board, execution, review, Git and
+registry artifacts remain the only durable state. Refusal preserves the source
+branch, checkout and registry.
 
 [team_supervision.py::supervise_child](team_supervision.py) delegates Task
 recovery to [Feature recovery](feature/recovery.py). A queued Task merge refused
@@ -454,8 +583,16 @@ refusal and authoritative verification as separate fields.
 Feature-child recovery otherwise inspects incidents and queues a deduplicated
 team wakeup.
 [epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
-adapter. Epic supervision verifies the registered Feature owner and direct Task
-relationship, then invokes the same generation-bound Feature repair adapter;
+adapter. An exact open-review request is routed through
+[request_feature_review_repair](team_supervision.py), which admits the shared
+Feature action before asking Workspace to deliver its stable queue event. Direct
+Epic authority must match the Feature parent; authenticated-human authority must
+be minted by the human boundary. The projection keeps requested, admitted,
+acknowledged, executing/executed, waiting/refused and verification
+pending/verified states distinct and binds the action ID and generation. Queue
+acknowledgement never claims execution or verification. Epic supervision also
+verifies the registered Feature owner and direct Task relationship, then invokes
+the same generation-bound Feature repair adapter;
 other incidents retain the deduplicated handoff path. Audit recovery resolves a
 `feature.feature_repair` capability for the exact Task/Feature pair, reserves and
 accepts one claim, and only then invokes that adapter. Missing capability creates
@@ -482,7 +619,16 @@ Late delivery can carry a superseded completed Feature path back onto the source
 branch. Review preparation restores only the exact active path named by the
 durable repair receipt before pinning the tested publication SHA. After forge
 acceptance, target closeout mutates the Epic checkout directly; an accepted
-stacked-review projection cannot bypass that target postcondition.
+stacked-review projection cannot bypass that target postcondition. Boss consumes
+the same delivery projection before its completed-document fast path: only exact
+current-generation acceptance whose merge is reachable from the intended Epic
+target can emit normal completion or release retirement. Callback flags, green
+checks, closed-unmerged rows and stale source/target heads remain nonterminal.
+For an admitted open-review repair, Watchdog additionally binds the original
+review identity, current corrected source head, authoritative normalized required
+check policy/results and Epic-target integration before Boss may record the
+generation verified or retire its owner checkout. Unavailable policy, check or
+forge evidence remains a typed prerequisite in the existing repair action.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

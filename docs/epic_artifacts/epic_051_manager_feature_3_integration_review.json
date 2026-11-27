@@ -1,0 +1,66 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_manager",
+  "trigger": "FeatureCompleted feat_051_003",
+  "reviewed_plan_revision": "7b5e38818f284add8b9c6aa4523f1478f7d77d48",
+  "reviewed_checkout_revision": "4afac67b",
+  "integrated_feature_merge": "9cba708f",
+  "comparison_revision": "25a2be8d",
+  "scope_result": "Feature 3 normalization, actionable review routing, fresh closeout verification and downstream queued-delivery fencing are integrated. Approved scope, sequencing and acceptance owners are unchanged. This review introduces no requirement or decision, so the canonical plan and decision log remain unchanged. Canonical list_children reports all four Features completed, but Feature 4 implementation and work records are not yet integrated into this checkout; supervisor integration remains necessary before final acceptance.",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md",
+    "cascade/feature/DESIGN.md",
+    "cascade/epic/DESIGN.md",
+    "cascade/boss/DESIGN.md",
+    "cascade/watchdog/DESIGN.md",
+    "cascade/task/DESIGN.md",
+    "cascade/workspace/DESIGN.md"
+  ],
+  "design_result": "The four changed designs describe current normalization, observation, postcheck and queued-action behavior with subsystem requirement owners, real source links and normal/failure flows. Parent and admission/queue consumer boundaries remain consistent. No prose correction was needed in this review. Existing references to previously activated/provisioned runtime states are not delivery attribution. Model visibility and final integration evidence gaps below remain explicit; document presence and source-contract validation are not final architecture acceptance.",
+  "source_traces": {
+    "normal": "tracking.merge_request_snapshot obtains target policy and source-bound check generations through fixed gh/glab argument vectors. review_health._route_actionable_review_health fingerprints original review, heads and actionable evidence, then calls request_feature_review_repair through the existing parent authority and Feature admission boundary. The same observation attaches a blocker/generation to affected queued Task actions. Boss now consumes the fresh reconcile_open_review_repair result, which checks normalized policy/results, original accepted review and exact local intended-target head/ancestry before the locked current-action gate permits closeout.",
+    "failure_resume": "Unknown policy, missing/pending/stale results, approval waits and snapshot outages retain typed waits without provider admission. Identical material evidence rejoins a persisted repair identity. Task retry compares persisted observation and evaluated generation before claiming another attempt; changed evidence permits ordinary gated reevaluation. A matching independent repair receipt releases the fence, while unrelated merge failures keep their ordinary classification. A saved verified phase alone no longer authorizes Boss completion: the postcheck refreshes forge evidence and rechecks current action/registry digest and local target under the lifecycle lock.",
+    "verification_limit": "The integrated downstream scripted-transport test uses production tracking normalization but substitutes repair admission/action enumeration. It is useful boundary evidence, not the complete real-Git, guarded admission-to-retirement journey. Feature 4's existing acceptance remains responsible for that journey and the integration-required dependency consumers. The current queued-action observation selector covers Tasks owned by the observed Feature; cross-Feature dependency behavior must be demonstrated by final integration evidence rather than inferred from these tests."
+  },
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": "No actor or external system changes: GitHub/GitLab remain existing forge dependencies. No structural update required for this integrated diff.",
+    "cascade-containers": "No runtime, persistent store or isolation boundary changes. Additional normalized facts and observation/evaluation metadata use the existing review/action stores and supervisor. No container update required.",
+    "cascade-supervisor-components / cascade-team-components": "Existing Boss-to-Watchdog and Watchdog-to-Feature relationships cover fresh verification and repair receipt ownership. The Task observation boundary needs Architect reconciliation: the existing watchdog_uses_task_budget edge describes budget consumption only, and no component edge describes record_upstream_review_observation. Add or explicitly expose this source-backed collaboration before final publication.",
+    "cascade-watchdog-code": "Adds Function nodes for tracking._review_health, review_health._route_actionable_review_health and incident_postcheck._required_checks; updates snapshot/observer/postcheck descriptions. Normalization, routing and verification source declarations and contract entries resolve. Current-revision pinned rendering and actual browser navigation remain Architect verification work.",
+    "cascade-boss-code": "Adds _current_open_review_postcheck_matches and its relationship from try_complete_feature. The source verifies the fresh result's action and generation before closeout side effects. Source declaration/kind and native Code inclusion verified; rendered navigation remains outstanding.",
+    "cascade-task-code": "Adds record_upstream_review_observation and its relationship to the existing action ledger. Source declaration/kind and native Code inclusion verified. The cross-component code_watchdog_actionable_review_to_task_fence relationship exists in the model/contract, but no current custom view includes both endpoints. Architect must expose this collaboration in a focused view or component relationship and verify the actual UI path; mere relationship presence is insufficient.",
+    "cascade-epic-code / cascade-feature-code / cascade-workspace-code / cascade-teams-code": "Existing parent adapter, guarded Feature admission, retained queue and provider boundaries are reused, with no source changes in those modules in this integrated slice. They remain consumers to trace during the final production-adapter journey; no additional node is justified by this diff alone.",
+    "cascade-war-room-components / cascade-dashboard-code / cascade-war-room-http-code": "No War Room production source changed in Feature 3. The integrated UI test assertion accepts merged review states. Feature 4 integration must supply passive projection, explicit authenticated action and operational browser evidence already required by its Tasks.",
+    "supplementary_behavior": "Shared normalization, Watchdog observation/postcheck and Task observation/evaluation Mermaid flows match the inspected boundaries. Boss documents fresh postcheck consumption. Existing Feature/Epic/Workspace admission and restart flows remain applicable. Complete repair and cross-Feature dependency scenarios remain final acceptance obligations."
+  },
+  "verification": [
+    "Canonical read_doc at start and finish confirms Epic plan 7b5e38818f284add8b9c6aa4523f1478f7d77d48. list_children reports all four Features completed; read_architecture_amendments returns []. Checkout diff includes Feature 3, not Feature 4 implementation.",
+    "/opt/conda/bin/python3.12 -m pytest -q tests/test_tracking_find.py tests/test_review_health.py tests/watchdog/test_parent_lifecycle_postcheck.py tests/task/test_rollup_queue.py tests/boss/test_rollup.py tests/architecture/test_reconstructed_design.py tests/architecture/test_final_reconstruction_validation.py: 78 passed, 5 failed in 26.57s. All failures are historical architecture expectations listed separately below; no lifecycle/normalization test in this selection failed.",
+    "/opt/conda/bin/python3.12 -m pytest -q tests/workspace/test_c4_source.py tests/workspace/test_c4_review.py tests/workspace/test_c4_documentation.py: 34 passed in 4.16s.",
+    "Direct validate_c4_workspace against the integrated model passed: 266 elements, 329 relationships and 24 views. Compared with 25a2be8d, five Code elements and seven relationships were added, with no deleted semantic IDs. AST inspection verified all five new declarations are module-level Functions matching sourcePath/sourceSymbol and native element kind.",
+    "377 local file links across eight reviewed designs resolve. Changed design prose was inspected for delivery IDs and history; no correction identified.",
+    "All six saved publication references match their pinned Git bytes and declared SHA-256 digests. Plan, root design and workspace.dsl remain equal to current content; model.dsl, views.dsl and workspace.contract.json differ after Feature 3 integration. The historical request therefore cannot establish current integrated architecture acceptance.",
+    "All five historical architecture failures reproduce at pre-integration revision 25a2be8d. Four reproduced directly in a temporary archive; the fifth was rerun with read-only access to the existing Git object database because its first archived run stopped at missing Git metadata. That corrected run reproduces the same review-artifact hash assertion. Temporary archives were removed; no accepted snapshot was changed.",
+    "git diff --check and JSON parsing are the final checks for this evidence-only change."
+  ],
+  "baseline_failures": [
+    "tests/architecture/test_reconstructed_design.py::test_leaf_designs_have_unique_owned_ids_and_pinned_evidence: requires historical baseline attribution in current design prose.",
+    "tests/architecture/test_reconstructed_design.py::test_current_c4_contract_retains_required_base_views: requires historical task_034_007_002 contract ownership instead of current epic_051 ownership.",
+    "tests/architecture/test_final_reconstruction_validation.py::test_captured_pinned_exports_match_hashes_views_and_stable_model_ids: compares historical exported view inventory to the current expanded contract.",
+    "tests/architecture/test_final_reconstruction_validation.py::test_design_heading_references_and_declared_leaf_sections_resolve: requires the historical Evidence label in current designs.",
+    "tests/architecture/test_final_reconstruction_validation.py::test_acceptance_summary_pins_artifact_bytes_and_review_units: historical acceptance report expects a different review-artifact hash."
+  ],
+  "handoffs": {
+    "supervisor": "Integrate validated Feature 4 source between parent turns. Its completed board state does not establish checkout integration; no child dispatch, worktree copying or polling is needed from this planning turn.",
+    "epic_architect": "Review this integrated diff, reconcile the Watchdog-to-Task observation visibility gap, obtain pinned rendering and actual context/container/component/Code, Level up, deep-link and pinned-source evidence for the changed views, and reconcile publication with current committed model/design pins. Preserve the saved pending request unchanged if replaying it for its historical receipt; it does not cover the current model. Earlier failed publication recovery remains separate. Do not rewrite accepted snapshots or interpret pending as acceptance.",
+    "final_acceptance_owner": "After Feature 4 integration, assess its existing full real-Git same-review red-to-green repair and retirement journey, passive UI/authenticated action, integration-required dependency consumers and meaningful activation/approval fixtures against the inherited Feature 3 implementation. Existing dec_008/dec_009 and Feature 4 Task acceptance remain authoritative. Do not count the scripted-normalization test with substituted admission as the complete journey.",
+    "architecture_test_owner": "The five reproduced historical architecture expectations need reconciliation with revision-pinned historical fixtures through the existing architecture verification work. Preserve accepted artifacts and current matter-of-fact design prose; do not change current architecture back to historical labels merely to satisfy these assertions. Final acceptance must report these known failures until resolved."
+  },
+  "limitations": [
+    "No new render, browser run, architecture publication/acceptance, full repository suite or complete repair journey is claimed in this Manager review. Feature closeout reports prior Task rendering/navigation, but inspectable current-revision browser evidence was not established here.",
+    "The 17 earlier baseline lifecycle failures were not rerun or cleared by this review. Their existing final-acceptance ownership remains unchanged; the five historical architecture failures above are separately reproduced findings.",
+    "No source/design/model edit, dependency installation, plan amendment, new decision, redundant post-approval sign-off, runtime-ledger mutation or other-worktree change was performed.",
+    "Epic completion is not recommended until Feature 4 integration, final acceptance and current architecture publication/visibility gaps are resolved."
+  ]
+}

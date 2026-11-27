@@ -587,6 +587,27 @@ def prove_terminal_retirement(
             f"terminal source document for {work_id} is missing or noncanonical",
             "restore the completed document in its exact registered owner",
         )
+    if kind == "feature":
+        from cascade.review import feature_delivery_view
+
+        delivery = feature_delivery_view(work_id, root=product)
+        if delivery.get("phase") not in {
+            "verified_integrated",
+            "terminal_cancelled",
+            "terminal_closed",
+        }:
+            blocker = str(
+                delivery.get("blocker") or "feature_delivery_not_terminal"
+            )
+            prerequisite = str(
+                delivery.get("next_prerequisite")
+                or "reconcile_feature_delivery_evidence"
+            )
+            return TerminalRetirementProof(
+                False,
+                f"feature delivery evidence for {work_id} is nonterminal: {blocker}",
+                prerequisite,
+            )
 
     try:
         if parent.parent:

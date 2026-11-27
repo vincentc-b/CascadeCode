@@ -82,6 +82,15 @@ of launcher upgrades are not implemented.
 Durable queues, graph checkpoints, action claims and registered worktrees belong to their existing
 owners; restart does not reset delivery or grant authority. Drain cancellation
 uses the [Agent registry](../agent/DESIGN.md#state-failure-and-isolation).
+[kickoff_graph_queue_event](kickoff.py) compares the durable queue byte cursor
+with the graph checkpoint and schedules only pending delivery.
+[graph_turn_owner_is_live](kickoff.py) detects the process-local serialized owner;
+the Feature review-repair adapter defers to that owner instead of launching a
+competing turn. Admission remains in `executions.json`, the stable event remains
+in the existing queue, and restart delivery reuses the same checkpoint path—no
+repair scheduler or wakeup store is introduced. A scheduled job acknowledges
+delivery intent only; `_run_queue_delivery_locked` advances the cursor and the
+Feature graph owns subsequent execution.
 The operator first obtains a signed deployment receipt and trust key from the
 separate installation authority. `runtime-bootstrap` authenticates that receipt,
 requires exact clean accepted-review and guarded-integration checkouts, proves
@@ -132,6 +141,45 @@ Verification references: [startup recovery](../../tests/workspace/test_worker_st
 and [runtime identity integration](../../tests/workspace/test_runtime_identity.py).
 
 ## Graph invocation and transcript handoff
+
+### Queue eligibility and restart
+
+[deliver_queue_kickoffs](kickoff.py) selects active teams and teams named by
+pending durable recovery actions when their queue is ahead of its saved cursor.
+It also retains a completed Feature whose shared delivery projection is
+nonterminal, preserving its original review and graph identity.
+[resume_inflight_graphs](kickoff.py) applies the same eligibility boundary to
+interrupted turns, unread events and unanswered staged input. A completed-path
+Feature with an open, missing, stale or otherwise nonterminal review remains in
+this boundary. A generic queued message advances its checkpoint cursor but does
+not admit repair or start a role turn; an interrupted checkpoint or current
+admitted repair resumes the same graph.
+
+[_schedule_queue_delivery](kickoff.py) coalesces process-local jobs.
+[_run_queue_delivery_locked](kickoff.py) rechecks eligibility under the graph
+lock before resuming checkpointed work or staging new input. Queue offsets and
+staged messages persist in the graph checkpoint; scheduling entries and locks
+are process-local. Restart reconstructs eligible jobs from durable inputs.
+
+```mermaid
+flowchart LR
+    Scan[Queue scan or startup resume] --> Eligible{Active, pending recovery or retained Feature?}
+    Eligible -->|no| Retain[Leave queue without a role turn]
+    Eligible -->|yes and actionable input| Schedule[Coalesced graph worker]
+    Eligible -->|retained Feature with unread input| Schedule
+    Schedule --> Recheck[Recheck eligibility under graph lock]
+    Recheck -->|idle retained Feature| Cursor[Advance cursor without a role turn]
+    Recheck -->|active input, admitted repair or interrupted turn| Resume[Resume checkpoint or persist classified queue input]
+    Resume --> Invoke[Invoke owning graph and advance durable cursor]
+```
+
+These entry points appear in `cascade-workspace-code`, reached through the
+[supervisor component view](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+The [completed-recovery kickoff tests](../../tests/workspace/test_completed_recovery_kickoff.py)
+exercise eligible recovery and completed-team refusal. Shared authority remains
+owned by [the package recovery contract](../DESIGN.md#delivery-and-review-boundaries).
+
+### Invocation evidence
 
 `REQ-WORKSPACE-TURN-EVIDENCE-001`: Process-local graph ownership and persisted
 graph state have different lifetimes. Neither a saved next node nor pending
@@ -282,14 +330,17 @@ generic worktree-path bonuses.
 `REQ-WORKSPACE-RETIRE-001`: Retirement preserves a branch and refuses a
 noncanonical, dirty, locked or currently occupied checkout. Merge ancestry or an
 explicit forge merge confirmation gates removal. Before removal, Workspace walks
-the registered parent's declared and reverse-linked descendant closure. Every
-required descendant must be canonically terminal and have Task merge or Feature
-completion/review provenance. The exact parent owner is the only persistence
-destination: absent terminal descendants are committed there and re-read before
-removal, while nonterminal, conflicting, ambiguous, unmerged, or unresolved-review
-state returns a reason and owner action without changing the branch, checkout, or
-registry. Repeated proof after an interrupted commit reuses the terminal rows
-already present and never creates a second registry or ledger.
+the registered parent's declared and reverse-linked descendant closure. Feature
+retirement first requires the shared delivery phase to be `verified_integrated`,
+`terminal_cancelled`, or `terminal_closed`; open, unknown, closed-unmerged, stale,
+or locally unsynchronized review evidence refuses before descendant persistence.
+Every required descendant must then be canonically terminal and have Task merge
+or Feature completion/review provenance. The exact parent owner is the only
+persistence destination: absent terminal descendants are committed there and
+re-read before removal, while nonterminal, conflicting, ambiguous, unmerged, or
+unresolved-review state returns a reason and owner action without changing the
+branch, checkout, or registry. Repeated proof after an interrupted commit reuses
+the terminal rows already present and never creates a second registry or ledger.
 
 The integrated `cascade-workspace-code` view belongs to
 `element.component.workspace` in the [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl).
@@ -309,7 +360,7 @@ their own design artifact and owner rather than inheriting the package document.
 | [resolve_mutation_owner / doc_filesystem_root](integration_worktree.py) | Work identity, parent lineage, repository role, registry path and branch → one writable owner or actionable `MutationOwnerError`. |
 | [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
 | [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
-| [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |
+| [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, shared Feature delivery phase, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |
 | [terminal_doc_persisted_outside_worktree](integration_worktree.py) | Compatibility Boolean backed by the same descendant-aware proof. |
 | [retire_integration_worktree](integration_worktree.py) | Registered identity and merge evidence → removal Boolean; refusal preserves registry and checkout. |
 
@@ -318,8 +369,10 @@ flowchart TD
     ID[Work ID + tier + parent] --> Owner[Exact mutation-owner resolver]
     Owner --> Registry[Canonical tracking role + registered path and branch]
     ID --> Projection[Merged board read projection]
-    Registry --> Terminal[Enumerate terminal descendant closure]
-    Terminal --> Evidence{Delivery, completion and review evidence current?}
+    Registry --> Delivery{Shared Feature delivery terminal?}
+    Delivery -->|no| Retain
+    Delivery -->|yes or non-Feature| Terminal[Enumerate terminal descendant closure]
+    Terminal --> Evidence{Descendant delivery and completion evidence current?}
     Evidence -->|no| Retain
     Evidence -->|yes| Persist[Commit absent records to exact parent owner]
     Persist --> Readback{Canonical readback complete?}

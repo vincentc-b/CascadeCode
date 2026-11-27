@@ -876,6 +876,7 @@ def _backlog_open_feature(meta: WorkMeta) -> bool:
 def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
     ctx = review.context
     return {
+        **review.details,
         "id": review.id,
         "url": review.url,
         "state": review.state,
@@ -913,7 +914,11 @@ def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]
 def board_view_from_index(board, *, root: Path) -> dict:
     """Build feat_003 BoardView from a BoardIndex scan."""
 
-    from cascade.review import feature_review_views
+    from cascade.review import (
+        feature_delivery_satisfies_integration,
+        feature_delivery_views,
+        feature_review_views,
+    )
     from cascade.task.execution import execution_views
     from cascade.war_room.branch_sync import branch_sync_views
     from cascade.war_room.recovery_progress import (
@@ -926,13 +931,22 @@ def board_view_from_index(board, *, root: Path) -> dict:
         {meta.id for meta in metas if meta.tier == "task"}, root=root
     )
     reviews = feature_review_views(
+        {meta.id for meta in metas if meta.tier == "feature"},
+        root=root,
+        board_snapshot=board,
+    )
+    deliveries = feature_delivery_views(
         {meta.id for meta in metas if meta.tier == "feature"}, root=root
     )
     pending_review_ids = frozenset(
-        feature_id
-        for feature_id, review in reviews.items()
-        if review is not None
-        and review.get("state") in {"preparing_review", "awaiting_review", "awaiting_integration", "awaiting_closeout"}
+        meta.id
+        for meta in metas
+        if meta.tier == "feature"
+        and not feature_delivery_satisfies_integration(deliveries[meta.id])
+        and (
+            meta.status in {"completed", "cancelled"}
+            or deliveries[meta.id].get("phase") != "implementation_ready"
+        )
     )
     backlog_feature_ids = {meta.id for meta in metas if _backlog_open_feature(meta)}
     from cascade.comments.gate import blocking_threads_for_many, gate_refusal_reason

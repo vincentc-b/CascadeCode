@@ -6,6 +6,130 @@ Purpose: expose the loopback operator UI/API for status, approvals, chat attachm
 Known gaps: unavailable forge descriptions limit historical attribution. Local
 audit fixtures do not establish post-deployment live acceptance.
 
+## Accountable open-review projection
+
+`REQ-WARROOM-REVIEW-001`: Board rows, Feature room metadata, and
+`GET /api/open-reviews` expose one consistent read-only projection of an original
+Feature review. The projection identifies the review URL and number, accountable
+Feature and Epic, source implementation status, delivery phase, bounded CI and
+feedback evidence with freshness, latest repair request and generation, typed
+admission/execution/verification flags, and the next prerequisite. A completed
+Feature with an open review remains `review_pending` and visible as awaiting
+review; a review without generation metadata is represented as generation zero.
+
+`REQ-WARROOM-REVIEW-002`: Missing policy, check, feedback, occurrence-time, or
+Feature metadata remains explicit `unknown` or `unavailable`. Presentation does
+not infer green checks from an empty set or infer freshness without a persisted
+observation time. Check detail is limited to twenty sorted, single-line rows and
+reports the omitted count. Check names and string generations retain exact
+identity through 256 UTF-8 bytes; integer generations retain at most 64 decimal
+digits, including zero. A normalized persisted observation is at most 32 KiB.
+Oversized or malformed authoritative identity is projected as unavailable, not
+truncated into another identity or inferred green. The open-review endpoint
+returns at most one hundred rows and marks an omitted tail as `truncated`.
+
+`REQ-WARROOM-REVIEW-003`: `POST /api/open-reviews/repair` accepts only a
+request-scoped authenticated local human and one complete, bounded repair
+envelope. The envelope binds a stable request ID, reason and JSON evidence to
+the exact original review URL, forge, source/target refs and observed heads and
+generation. Its response keeps admission, acknowledgement, live-owner join,
+execution, refusal, verification and next-prerequisite fields distinct; HTTP
+success is not completion. Identical content rejoins its durable action while
+changed content, stale evidence, another writer, policy/approval waits and
+closed-unmerged reviews retain the adapter's typed refusal or prerequisite.
+
+`DEC-WARROOM-REVIEW-001`: [`feature_review_views`](../review.py) joins the durable
+review registry and Feature delivery projection with
+[`latest_feature_repair_records`](../feature/repair.py). The latter performs one
+canonical action-ledger read for a request and retains the latest waiting,
+active, refused, or verified open-review generation for explanation without
+granting execution authority. [`handle_get_open_reviews`](review_routes.py),
+board serialization, and Feature document serialization consume that shared
+projection. They do not call tracking transport, refresh forge evidence, start a
+provider, enqueue work, or publish recovery progress. Product-root review
+identity and tracking-root plans/actions remain joined through the configured
+project context. The authorized Watchdog health pass persists a bounded
+observation through [`record_feature_review_evidence`](../review.py) after its
+forge query; unavailable publication remains a typed health wait rather than
+allowing an action to proceed with evidence that readers cannot inspect.
+
+`DEC-WARROOM-REVIEW-002`: [`handle_post_review_repair`](review_routes.py)
+authenticates through the request verifier, validates the closed HTTP envelope,
+and delegates once to
+[`request_feature_review_repair`](../team_supervision.py). The route does not
+create a launcher, ledger, replacement review or browser authority. Board and
+room rendering and [`createOpenReviewsPane`](static/open_reviews_pane.js) show
+the accountable Feature, original review, implementation/delivery distinction,
+CI/feedback freshness, repair generation and typed next prerequisite. Only the
+explicit form submits POST. Refresh and background reconciliation use the
+read-only open-review GET, and response tokens prevent an older GET or action
+response from replacing newer browser state.
+
+The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+represent this path in `cascade-war-room-components` and
+`cascade-dashboard-code` as router → open-review handler → shared review
+projection → canonical repair projection. `cascade-war-room-http-code` connects
+the authenticated repair handler to the existing operator verifier and durable
+team-supervision adapter.
+
+```mermaid
+sequenceDiagram
+    participant UI as Board, room, or open-review GET
+    participant R as Shared review projection
+    participant V as Durable review registry
+    participant A as Canonical repair action ledger
+    UI->>R: Read requested Feature rows
+    R->>V: Load persisted review identities and generations
+    R->>A: Load latest open-review repairs once
+    R-->>UI: Accountable state and typed prerequisite
+    alt Missing or stale health evidence
+        R-->>UI: Explicit unknown/unavailable or stale evidence
+    else Oversized or malformed current, legacy, request, or postcheck evidence
+        R-->>UI: Unavailable, not fresh or verified; refresh_review_observation
+    end
+    Note over UI,A: No forge query, provider start, queue write, or lifecycle mutation
+```
+
+The same flow applies after process restart: the reader reloads the registry and
+action ledger, validates the complete selected evidence payload before projecting
+it, and never repairs either file. A valid normalized observation retains exact
+names and generations while displaying only its sorted row window. An oversized
+legacy row or fallback postcheck produces no green rows, no verified repair flag,
+unknown freshness and the safe refresh prerequisite until an authorized Watchdog
+observation replaces it.
+
+```mermaid
+sequenceDiagram
+    participant H as Local human
+    participant UI as Open-review pane
+    participant G as Read-only open-review GET
+    participant P as Authenticated repair POST
+    participant V as Request verifier
+    participant A as Durable repair adapter
+    H->>UI: Submit stable ID and reason
+    UI->>P: Exact review identity and bounded evidence
+    P->>V: Verify this request
+    alt Unauthenticated or malformed
+        P-->>UI: Typed HTTP refusal; no adapter call
+    else Authenticated
+        P->>A: AuthenticatedHuman and complete request
+        A-->>P: Admission, acknowledgement, execution, refusal, verification, next prerequisite
+        P-->>UI: Preserve typed result
+        UI->>UI: Ignore stale response tokens
+        UI->>G: Subsequent refresh
+    end
+```
+
+Verification: [open-review API tests](../../tests/war_room/test_open_reviews_api.py)
+cover current repair evidence, missing evidence, completed/open legacy rows,
+split product/tracking roots, shared board/room shapes, and read-only lifecycle
+files, authenticated delegation, malformed and unauthenticated refusal.
+[Board UI coverage](../../tests/war_room/test_ui_render.py) preserves the active
+awaiting-review lane for a completed Feature and drives a real Chromium action
+through pending, failed, admitted, executing, approval-wait and verified
+presentation while refreshes remain GET-only.
+
 ## Recovery summaries and planning transcripts
 
 `REQ-WARROOM-PROGRESS-001`: A safe current recovery entry distinguishes

@@ -1,0 +1,175 @@
+{
+  "paths": [
+    {
+      "component": "dashboard",
+      "view": "cascade-dashboard-code",
+      "node": "element.code.dashboard.review-projection",
+      "symbol": "feature_review_views",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 15.700998368207365
+    },
+    {
+      "component": "war-room-http",
+      "view": "cascade-war-room-http-code",
+      "node": "element.code.http.review-repair",
+      "symbol": "handle_post_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 19.43046430707909
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.open-review-repair",
+      "symbol": "admit_open_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 20.269824323011562
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.latest-open-review-repair",
+      "symbol": "latest_feature_repair_records",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 18.75044621597044
+    },
+    {
+      "component": "task-team",
+      "view": "cascade-task-code",
+      "node": "element.code.task.upstream-review-fence",
+      "symbol": "record_upstream_review_observation",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 23.962313777999952
+    },
+    {
+      "component": "epic-team",
+      "view": "cascade-epic-code",
+      "node": "element.code.epic.review-repair-request",
+      "symbol": "request_feature_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 18.754168818006292
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.actionable-review-health",
+      "symbol": "_route_actionable_review_health",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.593031283002347
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.review-evidence-record",
+      "symbol": "record_feature_review_evidence",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 16.508477426832542
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.repair-postcheck-gate",
+      "symbol": "_current_open_review_postcheck_matches",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 17.736284337937832
+    },
+    {
+      "component": "workspace",
+      "view": "cascade-workspace-code",
+      "node": "element.code.workspace.retained-feature-delivery",
+      "symbol": "_retained_feature_delivery",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.955606880132109
+    },
+    {
+      "component": "dashboard",
+      "view": "cascade-dashboard-code",
+      "node": "element.code.dashboard.open-reviews",
+      "symbol": "handle_get_open_reviews",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 8.97905505914241
+    },
+    {
+      "component": "dashboard",
+      "view": "cascade-dashboard-code",
+      "node": "element.code.dashboard.review-ui",
+      "symbol": "createOpenReviewsPane",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 13.82436885102652
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.feature",
+      "symbol": "try_complete_feature",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 13.828466657083482
+    }
+  ],
+  "http_errors": [],
+  "source_revision": "1e23d79d64b6f939aa828a529f50b0c316d27ef6",
+  "initial_ready_seconds": 8.7962584591005,
+  "render_operations_before": 8,
+  "visible_component_relationships": [
+    {
+      "view": "cascade-supervisor-components",
+      "relationship": "relationship.watchdog-records-task-review-evidence"
+    },
+    {
+      "view": "cascade-supervisor-components",
+      "relationship": "relationship.epic-uses-workspace-queue"
+    },
+    {
+      "view": "cascade-supervisor-components",
+      "relationship": "relationship.boss-uses-watchdog-postcheck"
+    },
+    {
+      "view": "cascade-supervisor-components",
+      "relationship": "relationship.watchdog-verifies-feature-repair"
+    },
+    {
+      "view": "cascade-team-components",
+      "relationship": "relationship.watchdog-records-task-review-evidence"
+    },
+    {
+      "view": "cascade-team-components",
+      "relationship": "relationship.epic-uses-workspace-queue"
+    },
+    {
+      "view": "cascade-team-components",
+      "relationship": "relationship.boss-uses-watchdog-postcheck"
+    },
+    {
+      "view": "cascade-team-components",
+      "relationship": "relationship.watchdog-verifies-feature-repair"
+    }
+  ],
+  "render_operations_after": 8,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_051\nCode revision\n1e23d79d64b6f939aa828a529f50b0c316d27ef6\nWorking tree\nDirty (uncommitted edits excluded)\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n1e23d79d64b6f939aa828a529f50b0c316d27ef6\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 229.48184782103635
+}

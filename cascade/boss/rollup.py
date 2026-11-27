@@ -65,6 +65,11 @@ def try_complete_feature(
     """Complete the feature when all rollup gates pass; otherwise return False with no side effects."""
 
     repo = resolve_root(root)
+    # Fresh forge/check evidence is collected outside the lifecycle critical
+    # section. The Watchdog helper fences the exact receipt before mutation.
+    from cascade.watchdog.incident_postcheck import reconcile_open_review_repair
+
+    repair_postcheck = reconcile_open_review_repair(feature_id, root=repo)
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
@@ -73,6 +78,7 @@ def try_complete_feature(
             root=repo,
             review_merged=review_merged,
             review_generation=review_generation,
+            repair_postcheck=repair_postcheck,
         )
 
 
@@ -82,6 +88,7 @@ def _try_complete_feature(
     root: Path,
     review_merged: bool = False,
     review_generation: int | None = None,
+    repair_postcheck: dict[str, object] | None = None,
 ) -> bool:
     """Locked Feature closeout implementation."""
 
@@ -93,6 +100,10 @@ def _try_complete_feature(
         return False
     feature_meta = board.by_id[feature_id]
     if feature_meta.tier != "feature":
+        return False
+    if not _current_open_review_postcheck_matches(
+        feature_id, repair_postcheck, root=repo
+    ):
         return False
     from cascade.lifecycle_review_gate import require_lifecycle_review_gate
     from cascade.workspace.architecture_review import ArchitectureProposalError
@@ -111,11 +122,8 @@ def _try_complete_feature(
         feature_meta.status == "completed"
         and feature_meta.path.parent.name == "3_completed"
     ):
-        if obligation.generation and not obligation.satisfied:
-            if (
-                not review_merged
-                and obligation.reason == "current review is not published"
-            ):
+        if not obligation.satisfied:
+            if not review_merged and obligation.reason == "review_not_published":
                 from cascade.review import ensure_feature_review, review_enabled
 
                 if review_enabled(repo):
@@ -181,6 +189,12 @@ def _try_complete_feature(
     if not _rollup_gates_pass(feature_id, doc.body, board, repo):
         return False
 
+    # A forge callback only selects the reconciliation path.  It is not proof
+    # that the callback names the current generation or that the accepted merge
+    # is reachable from the intended Epic target.
+    if review_merged and not obligation.satisfied:
+        return False
+
     if not review_merged:
         from cascade.review import ensure_feature_review, review_enabled
         from cascade.stacked_dispatch import feature_pull_request_linked
@@ -195,10 +209,13 @@ def _try_complete_feature(
 
     if review_merged:
         # The forge merge already landed the source tree, including the completed
-        # feature plan, on the epic branch. Polling records the terminal event but
-        # must not create another source commit after review.
+        # feature plan, on the epic branch. A generation-bound repair is the one
+        # exception on the retained source checkout: publication deliberately
+        # keeps its Feature document active, so verified acceptance must persist
+        # that document as terminal before the checkout can pass retirement proof.
         if doc.meta.parent:
             _record_satisfied_repair(feature_id, obligation, repo)
+            _complete_verified_repair_source(feature_id, repo)
             _emit_feature_completed(feature_id, doc.meta.parent, repo)
             _retire_feature_worktree(
                 feature_id,
@@ -259,6 +276,58 @@ def _try_complete_feature(
         current_obligation=obligation,
     )
     return True
+
+
+def _complete_verified_repair_source(feature_id: str, repo: Path) -> None:
+    """Close the retained repair owner only after independent verification."""
+
+    from cascade.feature.repair import feature_repair_actions
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    repairs = [
+        action
+        for action in feature_repair_actions(feature_id, root=repo)
+        if action.get("repair_route") == "open_review"
+    ]
+    if not repairs:
+        return
+    current = max(repairs, key=lambda action: int(action.get("generation") or 0))
+    if current.get("phase") != "verified":
+        return
+    entry = get_integration_worktree(repo, "feature", feature_id)
+    if entry is None or not entry.path.is_dir():
+        return
+    source = list_board(entry.path).by_id.get(feature_id)
+    if source is None or source.status != "active":
+        return
+    move_doc(feature_id, "completed", root=entry.path)
+
+
+def _current_open_review_postcheck_matches(
+    feature_id: str,
+    postcheck: dict[str, object] | None,
+    *,
+    root: Path,
+) -> bool:
+    """Require Boss to consume the fresh receipt for any scoped review repair."""
+
+    from cascade.feature.repair import feature_repair_actions
+
+    candidates = [
+        action
+        for action in feature_repair_actions(feature_id, root=root)
+        if action.get("repair_route") == "open_review"
+        and action.get("phase") not in {"blocked", "refused", "superseded"}
+    ]
+    if not candidates:
+        return True
+    current = max(candidates, key=lambda row: int(row.get("generation") or 0))
+    return bool(
+        isinstance(postcheck, dict)
+        and postcheck.get("verified") is True
+        and postcheck.get("repair_action_id") == current.get("action_id")
+        and postcheck.get("repair_generation") == current.get("generation")
+    )
 
 
 def feature_completed_recorded(
@@ -348,15 +417,21 @@ def current_feature_obligation(
     board=None,
     review_generation: int | None = None,
 ) -> CurrentFeatureObligation:
-    """Evaluate the one repair generation that may authorize closeout.
+    """Evaluate the current delivery generation that may authorize closeout.
 
     This projection is called only while ``task_lifecycle_lock`` is held.  It
-    does not poll the forge or acquire the review registry write lock.
+    does not poll the forge or acquire the review registry write lock.  The
+    ``review_generation`` argument remains for API compatibility; a callback
+    generation is never accepted in place of persisted review and target proof.
     """
 
     from cascade.feature.repair import feature_repair_actions
+    from cascade.review import feature_delivery_view, review_enabled
     from cascade.workspace.integration_worktree import merged_board
 
+    repo = resolve_root(root)
+    delivery = feature_delivery_view(feature_id, root=repo)
+    delivery_generation = int(delivery.get("generation") or 0)
     actions = feature_repair_actions(feature_id, root=root)
     live = [
         action
@@ -365,15 +440,45 @@ def current_feature_obligation(
         and not str(action.get("phase") or "").startswith(("blocked", "superseded"))
     ]
     if not live:
-        return CurrentFeatureObligation(True)
+        if delivery.get("phase") in {
+            "verified_integrated",
+            "terminal_cancelled",
+            "terminal_closed",
+        }:
+            return CurrentFeatureObligation(True, delivery_generation)
+        if (
+            delivery.get("phase") == "merge_verification_pending"
+            and delivery.get("evidence_status") == "accepted_current_generation"
+            and delivery.get("blocker") == "completion_event_missing"
+        ):
+            return CurrentFeatureObligation(True, delivery_generation)
+        # Review-disabled delivery keeps the existing supervised local merge
+        # path.  That path supplies its own ancestry/event evidence before
+        # retirement; the shared projection cannot require the event that Boss
+        # is responsible for emitting.
+        if not review_enabled(repo):
+            return CurrentFeatureObligation(True, delivery_generation)
+        return CurrentFeatureObligation(
+            False,
+            delivery_generation,
+            str(delivery.get("blocker") or "delivery_evidence_missing"),
+        )
     current = max(live, key=lambda row: int(row.get("generation") or 0))
     generation = int(current.get("generation") or 0)
+    if current.get("repair_route") == "open_review":
+        return CurrentFeatureObligation(
+            False,
+            generation,
+            str(
+                current.get("next_action")
+                or "independent_review_repair_postcheck_pending"
+            ),
+        )
     if any(
         action.get("phase") in {"prepared", "authority_recorded", "parent_enabled"}
         for action in live
     ):
         return CurrentFeatureObligation(False, generation, "admission is not persisted")
-    repo = resolve_root(root)
     board = board or merged_board(repo)
     child_ids = _child_task_ids(feature_id, board)
     if not child_ids or any(
@@ -418,27 +523,29 @@ def current_feature_obligation(
             return CurrentFeatureObligation(
                 False, generation, "dependency is not current"
             )
-    from cascade.review import review_enabled, review_record_for_feature
-
-    record = review_record_for_feature(feature_id, root=root)
-    if review_enabled(resolve_root(root)):
-        if record is None or int(record.get("current_generation") or 0) != generation:
+    if review_enabled(repo):
+        if delivery_generation != generation:
             return CurrentFeatureObligation(
-                False, generation, "current review is not published"
+                False, generation, "current_review_generation_mismatch"
             )
-        if review_generation == generation:
-            return CurrentFeatureObligation(True, generation)
-        if not (
-            record.get("closed") is True
-            and record.get("reconciliation_status") == "accepted"
-            and record.get("accepted_source_head") == record.get("source_head")
-            and record.get("accepted_target_head") == record.get("target_head")
-            and record.get("accepted_merge_sha")
+        # The shared delivery generation includes the admitted repair even
+        # before the forge receipt has been persisted. After all child and
+        # approval gates above pass, an absent/older publication must select
+        # the existing idempotent publication path, not terminal closeout.
+        published_generation = delivery.get("published_generation")
+        if published_generation is None or int(published_generation) < generation:
+            return CurrentFeatureObligation(False, generation, "review_not_published")
+        if delivery.get("phase") == "verified_integrated" or (
+            delivery.get("phase") == "merge_verification_pending"
+            and delivery.get("evidence_status") == "accepted_current_generation"
+            and delivery.get("blocker") == "completion_event_missing"
         ):
-            return CurrentFeatureObligation(
-                False, generation, "current review is not accepted"
-            )
-        return CurrentFeatureObligation(True, generation)
+            return CurrentFeatureObligation(True, generation)
+        return CurrentFeatureObligation(
+            False,
+            generation,
+            str(delivery.get("blocker") or "delivery_evidence_missing"),
+        )
     if feature.parent:
         parent_id = feature.parent
         source = f"feat/{feature_id}"
@@ -463,9 +570,9 @@ def _record_satisfied_repair(
 ) -> None:
     if not obligation.satisfied or not obligation.generation:
         return
-    from cascade.feature.repair import mark_feature_repair_verified
+    from cascade.feature.repair import mark_legacy_feature_repair_verified
 
-    mark_feature_repair_verified(feature_id, obligation.generation, root=root)
+    mark_legacy_feature_repair_verified(feature_id, obligation.generation, root=root)
 
 
 def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:
