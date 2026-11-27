@@ -2,7 +2,7 @@
 id: feat_051_004
 title: Expose accountable review state and prove the complete repair journey
 tier: feature
-status: active
+status: completed
 parent: epic_051
 children:
 - task_051_004_001
