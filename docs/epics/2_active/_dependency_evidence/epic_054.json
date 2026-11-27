@@ -579,6 +579,27 @@
       "bootstrap_revision": null,
       "policy_revision": null,
       "authority_current": true
+    },
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_321b54d957716d95e9a41aa8e30eeb8afef70123f0a56a60d6201e965861cf0a",
+      "dependency_id": "dep_python",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:381df32170b5e5960802afce03c9d6f7071687955053c5ef9e5b987c5f0fcd75",
+      "recipe_revision": "sha256:2752706fd91f45cf1895cf38cbe2f273b2ac98904ec43a970c76f068adadd290",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/opt/conda/bin/python3.12\").read_bytes()).hexdigest()==\"0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612\"; print(\"python 3.12.8 verified\")'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T19:23:30.585887+00:00",
+      "selected_version": "3.12.8",
+      "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+      "lock_references": [
+        "pyproject.toml",
+        "README.md"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
     }
   ],
   "snapshots": []
