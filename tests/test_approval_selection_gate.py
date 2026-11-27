@@ -236,6 +236,9 @@ def test_accepted_approval_survives_drift_and_reports_reconciliation_preflight(
 
     assert result["newly_approved"] is False
     assert result["dispatch_pending"] is True
+    assert result["approval_result"] == "approved"
+    assert result["approval_state"] == "approved"
+    assert result["execution_state"] == "waiting"
     assert result["preflight"]["reason_code"] == "model_not_offered"  # type: ignore[index]
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
 
@@ -260,6 +263,9 @@ def test_approval_reports_dispatch_refusal_returned_by_reconciliation(
 
     assert result["newly_approved"] is False
     assert result["dispatch_pending"] is True
+    assert result["approval_result"] == "approved"
+    assert result["approval_state"] == "approved"
+    assert result["execution_state"] == "waiting"
     assert result["approval_committed"] is True
     assert result["message"].startswith("Approval saved; dispatch pending:")
     assert result["dispatch_outcome"] == {
@@ -332,6 +338,41 @@ def test_feature_approval_route_preserves_structured_failure(
 
     status, payload = handler.responses[0]
     assert status == HTTPStatus.CONFLICT
+    assert payload["approval_result"] == "refused"
+    assert payload["approval_state"] == "unapproved"
+    assert payload["affected_work_ids"] == ["feat_001"]
     assert payload["preflight"]["reason_code"] == "model_not_offered"  # type: ignore[index]
     assert payload["preflight"]["checks"][1]["role"] == "feature_architect"  # type: ignore[index]
     assert payload["selections"]["work_id"] == "feat_001"  # type: ignore[index]
+
+
+def test_feature_approval_route_types_dependency_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.planning_action_dependencies import DependencyActionRefused
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    handler = _Handler(root)
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise DependencyActionRefused(
+            "dependency_status_unavailable",
+            reasons=("dependency_not_found",),
+            affected_work_ids=("feat_001", "feat_missing"),
+        )
+
+    monkeypatch.setattr("cascade.approvals.approve_feature", refuse)
+    WarRoomRequestHandler._handle_approve_feature(  # type: ignore[arg-type]
+        handler, {"id": "feat_001"}
+    )
+
+    status, payload = handler.responses[0]
+    assert status == HTTPStatus.CONFLICT
+    assert payload["code"] == "dependency_status_unavailable"
+    assert payload["reasons"] == ["dependency_not_found"]
+    assert payload["explanation"]
+    assert payload["approval_result"] == "refused"
+    assert payload["approval_state"] == "unapproved"
+    assert payload["affected_work_ids"] == ["feat_001", "feat_missing"]

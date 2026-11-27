@@ -163,6 +163,40 @@ if TYPE_CHECKING:
     from cascade.epic.dependency_runner import BoundedOperationExecutor
 
 
+def _feature_approval_refusal(
+    feature_id: str,
+    *,
+    code: str,
+    message: str,
+    approval_state: str,
+    affected_work_ids: tuple[str, ...] = (),
+) -> dict[str, object]:
+    """Build the additive typed refusal contract without changing HTTP policy."""
+
+    return {
+        "approval_result": "refused",
+        "approval_state": approval_state,
+        "approval_explanation": {"code": code, "message": message},
+        "affected_work_ids": list(affected_work_ids or (feature_id,)),
+        "execution_state": "unknown",
+    }
+
+
+def _feature_approval_refusal_code(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code:
+        return code
+    if type(exc).__name__ == "ImpactDispositionError":
+        return "corrective_plan_refused"
+    if isinstance(exc, OSError):
+        return "approval_persistence_failed"
+    if isinstance(exc, WorkspaceError):
+        return "review_context_refused"
+    if isinstance(exc, BoardError):
+        return "board_refused"
+    return "approval_invalid"
+
+
 def _boss_view_to_dict(view: BossView) -> dict[str, object]:
     return {
         "dispatchable_features": list(view.dispatchable_features),
@@ -902,7 +936,11 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
         feature_id = self._require_work_id(body)
         if feature_id is None:
             return
-        from cascade.approvals import ApprovalSelectionError, approve_feature
+        from cascade.approvals import (
+            ApprovalSelectionError,
+            approve_feature,
+            canonical_feature_approval_state,
+        )
         from cascade.workspace.architecture_review import ReviewApprovalContext
         from cascade.planning_action_dependencies import DependencyActionRefused
 
@@ -913,7 +951,18 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 feature_id, root=self.server.root, review_context=context
             )
         except ApprovalSelectionError as exc:
-            self._json_response(HTTPStatus.CONFLICT, exc.to_dict())
+            payload = exc.to_dict()
+            payload.update(
+                _feature_approval_refusal(
+                    feature_id,
+                    code=str(payload.get("code") or "provider_preflight_refused"),
+                    message=str(payload.get("message") or exc),
+                    approval_state=canonical_feature_approval_state(
+                        feature_id, root=self.server.root
+                    ),
+                )
+            )
+            self._json_response(HTTPStatus.CONFLICT, payload)
             return
         except DependencyActionRefused as exc:
             self._json_response(
@@ -924,11 +973,37 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                     "reasons": list(exc.reasons),
                     "error": str(exc),
                     "explanation": exc.explanation,
+                    **_feature_approval_refusal(
+                        feature_id,
+                        code=exc.outcome,
+                        message=exc.explanation,
+                        affected_work_ids=exc.affected_work_ids,
+                        approval_state=canonical_feature_approval_state(
+                            feature_id, root=self.server.root
+                        ),
+                    ),
                 },
             )
             return
         except (ValueError, BoardError, WorkspaceError, OSError) as exc:
-            self._json_error(HTTPStatus.CONFLICT, str(exc))
+            code = _feature_approval_refusal_code(exc)
+            self._json_response(
+                HTTPStatus.CONFLICT,
+                {
+                    "error": str(exc),
+                    **_feature_approval_refusal(
+                        feature_id,
+                        code=code,
+                        message=str(exc),
+                        affected_work_ids=tuple(
+                            getattr(exc, "affected_work_ids", ())
+                        ),
+                        approval_state=canonical_feature_approval_state(
+                            feature_id, root=self.server.root
+                        ),
+                    ),
+                },
+            )
             return
         self._json_response(HTTPStatus.OK, payload)
 
@@ -1628,6 +1703,26 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
             readiness = compute_epic_plan_readiness(meta.id, root=self.server.root)
             if readiness is not None:
                 payload["plan_readiness"] = epic_plan_readiness_to_dict(readiness)
+        elif meta.tier == "feature" and meta.path.parent.name == "1_backlog":
+            # Keep the plan page on the exact projection used by GET /api/board.
+            # This preserves receipt-backed approval and typed prerequisite
+            # evidence without introducing a second readiness interpretation.
+            board_view = board_view_from_index(
+                merged_board(self.server.root), root=self.server.root
+            )
+            for column in ("1_backlog", "2_active", "3_completed"):
+                row = next(
+                    (
+                        item
+                        for item in board_view["features"][column]
+                        if item.get("id") == meta.id
+                    ),
+                    None,
+                )
+                if row is not None:
+                    if isinstance(row.get("readiness"), dict):
+                        payload["feature_readiness"] = row["readiness"]
+                    break
         self._json_response(HTTPStatus.OK, payload)
 
     def _handle_architecture_get(self, path: str) -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal, Mapping
 
 from cascade.board.types import BoardIndex, WorkMeta
-from cascade.dependency_evaluation import evaluate_dependencies
+from cascade.dependency_evaluation import DependencyEvaluation, evaluate_dependencies
 from cascade.workspace.integration_worktree import merged_board
 
 _OPEN = {"backlog", "ready_to_plan"}
@@ -17,8 +17,19 @@ _OPEN = {"backlog", "ready_to_plan"}
 class FeatureReadiness:
     approved: bool
     blockers: list[str]
+    approval_state: Literal["approved", "unapproved", "stale", "unknown"]
+    approval_eligibility: ApprovalEligibility
     review_refusal: str | None = None
     explanation: ReadinessExplanation | None = None
+
+
+@dataclass(frozen=True)
+class ApprovalEligibility:
+    eligible: bool
+    result: Literal["approved", "approval_required", "unknown"]
+    eligibility: Literal["eligible", "eligible_waiting", "refused", "unavailable"]
+    explanation: str
+    affected_work_ids: tuple[str, ...] = ()
 
 
 ReasonKind = Literal["human_action", "work_wait", "system_wait", "unknown"]
@@ -110,12 +121,29 @@ def compute_feature_readiness(
         return None
 
     approved = meta.approved_at is not None and approval_state in (None, "current")
+    canonical_approval_state: Literal["approved", "unapproved", "stale", "unknown"]
+    if approved:
+        canonical_approval_state = "approved"
+    elif approval_state == "stale":
+        canonical_approval_state = "stale"
+    elif meta.approved_at is not None or approval_state == "unknown":
+        canonical_approval_state = "unknown"
+    else:
+        canonical_approval_state = "unapproved"
+    dependency_evaluation = evaluate_dependencies(meta, root=root, board=board)
+    approval_eligibility = _approval_eligibility(
+        feature_id,
+        dependency_evaluation,
+        approval_state=canonical_approval_state,
+    )
     blockers: list[str] = []
 
     if meta.status not in _OPEN:
         return FeatureReadiness(
             approved=approved,
             blockers=blockers,
+            approval_state=canonical_approval_state,
+            approval_eligibility=approval_eligibility,
             explanation=_explanation([], []),
         )
 
@@ -129,6 +157,8 @@ def compute_feature_readiness(
         return FeatureReadiness(
             approved=approved,
             blockers=["epic_inactive"],
+            approval_state=canonical_approval_state,
+            approval_eligibility=approval_eligibility,
             explanation=_explanation(reasons, satisfied),
         )
 
@@ -139,7 +169,6 @@ def compute_feature_readiness(
         blockers.append("not_in_backlog")
         reasons.append(_reason("not_in_backlog", affected_work_ids=(feature_id,)))
 
-    dependency_evaluation = evaluate_dependencies(meta, root=root, board=board)
     unmet = dependency_evaluation.unsatisfied_ids
     if unmet:
         blockers.append(_unmet_deps_code(unmet))
@@ -294,8 +323,62 @@ def compute_feature_readiness(
     return FeatureReadiness(
         approved=approved,
         blockers=blockers,
+        approval_state=canonical_approval_state,
+        approval_eligibility=approval_eligibility,
         review_refusal=review_refusal,
         explanation=_explanation(reasons, satisfied),
+    )
+
+
+def _approval_eligibility(
+    feature_id: str,
+    evaluation: DependencyEvaluation,
+    *,
+    approval_state: Literal["approved", "unapproved", "stale", "unknown"],
+) -> ApprovalEligibility:
+    from cascade.planning_action_dependencies import (
+        feature_approval_dependencies_permitted,
+    )
+
+    affected = tuple(
+        row.work_id for row in evaluation.dependencies if not row.complete
+    )
+    permitted = feature_approval_dependencies_permitted(evaluation)
+    result: Literal["approved", "approval_required", "unknown"] = (
+        "approved"
+        if approval_state == "approved"
+        else "unknown"
+        if approval_state == "unknown"
+        else "approval_required"
+    )
+    if permitted:
+        waiting = bool(affected)
+        return ApprovalEligibility(
+            eligible=True,
+            result=result,
+            eligibility="eligible_waiting" if waiting else "eligible",
+            explanation=(
+                "Approval is current; known predecessors keep execution waiting."
+                if approval_state == "approved" and waiting
+                else "The current reviewed Feature scope is approved."
+                if approval_state == "approved"
+                else "Approval is allowed while known predecessors remain incomplete; execution will wait."
+                if waiting
+                else "Current predecessor evidence permits approval."
+            ),
+            affected_work_ids=affected or (feature_id,),
+        )
+    unavailable = evaluation.outcome == "dependency_status_unavailable"
+    return ApprovalEligibility(
+        eligible=False,
+        result=result,
+        eligibility="unavailable" if unavailable else "refused",
+        explanation=(
+            "Approval eligibility is unavailable from current dependency evidence."
+            if unavailable
+            else "Current dependency evidence refuses approval."
+        ),
+        affected_work_ids=affected or (feature_id,),
     )
 
 

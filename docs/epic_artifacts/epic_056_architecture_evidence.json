@@ -1,0 +1,128 @@
+{
+  "paths": [
+    {
+      "component": "approval",
+      "view": "cascade-approval-code",
+      "node": "element.code.approval.feature",
+      "symbol": "approve_feature",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 11.453654160024598
+    },
+    {
+      "component": "approval",
+      "view": "cascade-approval-code",
+      "node": "element.code.approval.dependencies",
+      "symbol": "evaluate_action_dependencies",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 10.27758825616911
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.receipt-write",
+      "symbol": "write_approval_evidence",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 15.632946875877678
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.receipt-read",
+      "symbol": "approval_evidence",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.324037265963852
+    },
+    {
+      "component": "war-room-http",
+      "view": "cascade-war-room-http-code",
+      "node": "element.code.http.approve-feature",
+      "symbol": "_handle_approve_feature",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 13.806006674887612
+    },
+    {
+      "component": "dashboard",
+      "view": "cascade-dashboard-code",
+      "node": "element.code.dashboard.feature-approve",
+      "symbol": "featureApproveActionButton",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 13.243778520962223
+    }
+  ],
+  "http_errors": [],
+  "source_revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028",
+  "initial_ready_seconds": 72.78621226595715,
+  "render_operations_before": 1,
+  "render_operations_after": 1,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_056\nCode revision\n9d0ba60ae79d1c3319aa6fa277202846fa225028\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n9d0ba60ae79d1c3319aa6fa277202846fa225028\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 152.02765215700492,
+  "render": {
+    "status": "ready",
+    "revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028",
+    "closure_digest": "d823d507909f161d8e5e2bed23f84dbfee9eb9f820498b68d86c25773f13efef",
+    "semantic_workspace_sha256": "43684307e287bd22d0cfcc91eae2539ba5a3c6d1e1b06a0ef87d4050a5924f88",
+    "image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "view_keys": [
+      "cascade-agent-code",
+      "cascade-approval-code",
+      "cascade-architecture-browser-code",
+      "cascade-board-code",
+      "cascade-boss-code",
+      "cascade-cli-components",
+      "cascade-collaboration-code",
+      "cascade-comparison-render-code",
+      "cascade-containers",
+      "cascade-context",
+      "cascade-dashboard-code",
+      "cascade-diagnostics-code",
+      "cascade-diagram-review-code",
+      "cascade-epic-code",
+      "cascade-feature-code",
+      "cascade-landscape",
+      "cascade-supervisor-components",
+      "cascade-task-code",
+      "cascade-team-components",
+      "cascade-teams-code",
+      "cascade-war-room-components",
+      "cascade-war-room-http-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-workspace-commands-code"
+    ],
+    "operation_id": "c4-render-f6c53ae67ce4ae5817bf31cc6f23a1b04139fffc9355efd107deefb4f5301228",
+    "settings": {
+      "cpus": "2",
+      "memory": "1536m",
+      "pids_limit": 256,
+      "timeout_seconds": 180.0,
+      "tmpfs_size": "512m"
+    },
+    "elapsed_seconds": 58.570387840270996
+  },
+  "verification": {
+    "command": "/opt/conda/bin/python3.12 -m pytest -q tests/workspace/test_c4_source.py tests/workspace/test_c4_review.py tests/war_room/test_architecture_http.py",
+    "result": "40 passed in 21.29s",
+    "native_declarations": 265,
+    "resolved_design_paths": 186,
+    "renamed_deleted_symbols": "Both rejected by existing tests/workspace/test_c4_render.py:_declaration_kind with temporary source files",
+    "parent_scope_negative": "test_code_source_metadata_is_confined_and_scoped passed",
+    "limitations": [
+      "Operational API requests were stubbed; architecture HTTP and renderer were real.",
+      "This is architecture navigation evidence; proposed approval policy is not implemented or behaviorally verified.",
+      "Page reloads abandoned some in-flight requests, producing server BrokenPipeError logs; all six navigation paths passed and observed architecture HTTP errors were empty.",
+      "Symbol checks are explicit source validation; the C4 source parser alone validates syntax and component existence, not declaration existence."
+    ]
+  }
+}

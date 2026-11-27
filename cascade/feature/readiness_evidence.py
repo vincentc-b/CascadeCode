@@ -65,6 +65,7 @@ def _revision(doc: WorkDoc, *, scope: bool = False) -> str:
     value = {
         "body": _scope_body(doc.body) if scope else doc.body,
         "parent": meta.parent,
+        "depends_on": sorted(meta.depends_on),
         "provider": meta.provider,
         "model": meta.model,
         "models": meta.models,
