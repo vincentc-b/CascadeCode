@@ -2,7 +2,7 @@
 id: epic_051
 title: Keep feature teams accountable through review merge and repair
 tier: epic
-status: active
+status: completed
 parent: null
 children:
 - feat_051_001
