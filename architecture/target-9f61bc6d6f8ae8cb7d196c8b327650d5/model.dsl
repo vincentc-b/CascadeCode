@@ -4333,7 +4333,7 @@ code_workspace_delivery = element "deliver_queue_kickoffs" "Function" "Select ac
     }
 }
 
-code_workspace_resume = element "resume_inflight_graphs" "Function" "Rejoin eligible active, recovery, or retained Feature graphs after restart without waking an idle poll." {
+code_workspace_resume = element "resume_inflight_graphs" "Function" "Batch retained Feature discovery and rejoin eligible active or recovery graphs after restart without waking an idle poll." {
     properties {
         "cascade.semanticId" "element.code.workspace.resume"
         "cascade.parent" "element.component.workspace"

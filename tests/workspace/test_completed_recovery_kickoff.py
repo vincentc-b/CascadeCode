@@ -248,3 +248,22 @@ def test_completed_feature_current_admitted_repair_wakes_once_after_restart(
 
     assert started == [feature_id]
     assert not _queue_is_ahead(feature_id, "feature", root=root, feature_id=None)
+
+
+def test_completed_feature_discovery_batches_delivery_projection(tmp_path, monkeypatch):
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    for i in range(1, 5):
+        add_doc(root, id=f"feat_{i:03d}", title=f"Feature {i}", tier="feature", status="completed", parent="epic_001")
+    calls = []
+    def project(ids, *, root):
+        calls.append(set(ids))
+        return {work_id: {"phase": "verified_integrated"} for work_id in ids}
+    monkeypatch.setattr("cascade.review.feature_delivery_views", project)
+    monkeypatch.setattr("cascade.workspace.kickoff._queue_is_ahead", lambda *_a, **_k: False)
+    monkeypatch.setattr("cascade.workspace.kickoff._graph_has_inflight_turn", lambda *_a, **_k: False)
+    monkeypatch.setattr("cascade.workspace.kickoff._unanswered_staged_input", lambda *_a, **_k: False)
+    resume_inflight_graphs(root)
+    deliver_queue_kickoffs(root)
+    expected = {f"feat_{i:03d}" for i in range(1, 5)}
+    assert calls == [expected, expected]

@@ -300,9 +300,10 @@ def resume_inflight_graphs(root: Path) -> None:
     from cascade.epic.return_graph import recover_returns
     recover_returns(root=repo)
     pending_recovery = pending_recovery_team_ids(root=repo)
+    retained_deliveries = _retained_feature_deliveries(board, root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        retained_delivery = _retained_feature_delivery(meta, root=repo)
+        retained_delivery = retained_deliveries.get(work_id)
         if not _team_accepts_queue_delivery(
             meta,
             pending_recovery=pending_recovery,
@@ -377,9 +378,10 @@ def deliver_queue_kickoffs(root: Path) -> None:
     from cascade.epic.return_graph import recover_returns
     recover_returns(root=repo)
     pending_recovery = pending_recovery_team_ids(root=repo)
+    retained_deliveries = _retained_feature_deliveries(board, root=repo)
     for work_id in sorted(board.by_id):
         meta = board.by_id[work_id]
-        retained_delivery = _retained_feature_delivery(meta, root=repo)
+        retained_delivery = retained_deliveries.get(work_id)
         if not _team_accepts_queue_delivery(
             meta,
             pending_recovery=pending_recovery,
@@ -700,6 +702,23 @@ def _run_queue_delivery_locked(
                 )
             )
             _service_child_deliveries_between_turns(work_id, tier, repo)
+
+
+def _retained_feature_deliveries(board, *, root: Path) -> dict[str, dict]:
+    """Batch discovery; locked delivery still rechecks the individual owner."""
+    from cascade.review import feature_delivery_views
+
+    ids = {
+        meta.id for meta in board.by_id.values()
+        if meta.tier == "feature" and meta.status == "completed"
+        and meta.path.parent.name == "3_completed"
+    }
+    if not ids:
+        return {}
+    return {
+        work_id: delivery for work_id, delivery in feature_delivery_views(ids, root=root).items()
+        if delivery.get("phase") not in {"verified_integrated", "terminal_cancelled", "terminal_closed"}
+    }
 
 
 def _retained_feature_delivery(meta: WorkMeta | None, *, root: Path) -> dict | None:

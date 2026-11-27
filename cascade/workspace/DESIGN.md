@@ -469,3 +469,10 @@ replay without holding the lifecycle lock across rendering. Terminal success,
 failure and supersession are persisted before the matching hold is released;
 a restart repairs an interrupted release, without clearing a successor's hold
 or authorizing an unreviewed architecture tuple. Board polling remains read-only.
+
+### Retained Feature queue discovery cost
+
+Startup and ordinary queue discovery batch completed-Feature delivery projections
+through one read-only board/registry scan per pass rather than rescanning every
+registered checkout for each completed Feature. This is advisory selection only;
+the locked delivery path independently rechecks the exact owner before any turn.
