@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "epic_id": "epic_056",
+  "events": [
+    {
+      "type": "admitted",
+      "attempt_id": "attempt_resume_4b5a26e55951cdac2fd69f2bc357c8d93df913b0727517267a5799be381b54a4",
+      "dependency_id": "dep_pyyaml",
+      "manifest_revision": 2,
+      "entry_revision": "sha256:6591720e1b374d76b187e694f66216683ad25cef9939fe4b40f7d8e62ddd95c5",
+      "recipe_revision": "sha256:a9c4b65a1a612cf2806617a6439b8331c22d2c1fc075fbdee3471ed00d36b836",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, hashlib, pathlib; assert m.version('\"'\"'PyYAML'\"'\"') == '\"'\"'6.0.3'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/RECORD'\"'\"').read_bytes()).hexdigest() == '\"'\"'sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3'\"'\"'; importlib.import_module('\"'\"'yaml'\"'\"'); print('\"'\"'PyYAML'\"'\"',m.version('\"'\"'PyYAML'\"'\"'))'",
+      "operation_kind": "read_only",
+      "target_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T08:20:30.356872+00:00",
+      "selected_version": "6.0.3",
+      "integrity_reference": "sha256:a9c0ccbc49ef1a683ce5d972601d050cc0ebcc4ce6b4163fa574b7acdf8479a3",
+      "lock_references": [
+        "pyproject.toml"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null
+    }
+  ],
+  "snapshots": []
+}
