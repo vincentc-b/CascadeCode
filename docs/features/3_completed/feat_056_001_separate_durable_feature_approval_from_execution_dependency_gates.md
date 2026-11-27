@@ -2,7 +2,7 @@
 id: feat_056_001
 title: Separate durable Feature approval from execution dependency gates
 tier: feature
-status: active
+status: completed
 parent: epic_056
 children:
 - task_056_001_001
