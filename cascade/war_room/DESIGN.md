@@ -6,6 +6,68 @@ Purpose: expose the loopback operator UI/API for status, approvals, chat attachm
 Known gaps: unavailable forge descriptions limit historical attribution. Local
 audit fixtures do not establish post-deployment live acceptance.
 
+## Accountable open-review projection
+
+`REQ-WARROOM-REVIEW-001`: Board rows, Feature room metadata, and
+`GET /api/open-reviews` expose one consistent read-only projection of an original
+Feature review. The projection identifies the review URL and number, accountable
+Feature and Epic, source implementation status, delivery phase, bounded CI and
+feedback evidence with freshness, latest repair request and generation, typed
+admission/execution/verification flags, and the next prerequisite. A completed
+Feature with an open review remains `review_pending` and visible as awaiting
+review; a review without generation metadata is represented as generation zero.
+
+`REQ-WARROOM-REVIEW-002`: Missing policy, check, feedback, occurrence-time, or
+Feature metadata remains explicit `unknown` or `unavailable`. Presentation does
+not infer green checks from an empty set or infer freshness without a persisted
+observation time. Check detail is limited to twenty sorted, single-line rows and
+bounded scalar fields so persisted forge payloads cannot expand a response
+without limit. The open-review endpoint returns at most one hundred rows and
+marks an omitted tail as `truncated`.
+
+`DEC-WARROOM-REVIEW-001`: [`feature_review_views`](../review.py) joins the durable
+review registry and Feature delivery projection with
+[`latest_feature_repair_records`](../feature/repair.py). The latter performs one
+canonical action-ledger read for a request and retains the latest waiting,
+active, refused, or verified open-review generation for explanation without
+granting execution authority. [`handle_get_open_reviews`](review_routes.py),
+board serialization, and Feature document serialization consume that shared
+projection. They do not call tracking transport, refresh forge evidence, start a
+provider, enqueue work, or publish recovery progress. Product-root review
+identity and tracking-root plans/actions remain joined through the configured
+project context. The authorized Watchdog health pass persists a bounded
+observation through [`record_feature_review_evidence`](../review.py) after its
+forge query; unavailable publication remains a typed health wait rather than
+allowing an action to proceed with evidence that readers cannot inspect.
+
+The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+represent this path in `cascade-war-room-components` and
+`cascade-dashboard-code` as router → open-review handler → shared review
+projection → canonical repair projection.
+
+```mermaid
+sequenceDiagram
+    participant UI as Board, room, or open-review GET
+    participant R as Shared review projection
+    participant V as Durable review registry
+    participant A as Canonical repair action ledger
+    UI->>R: Read requested Feature rows
+    R->>V: Load persisted review identities and generations
+    R->>A: Load latest open-review repairs once
+    R-->>UI: Accountable state and typed prerequisite
+    alt Missing or stale health evidence
+        R-->>UI: Explicit unknown/unavailable or stale evidence
+    end
+    Note over UI,A: No forge query, provider start, queue write, or lifecycle mutation
+```
+
+Verification: [open-review API tests](../../tests/war_room/test_open_reviews_api.py)
+cover current repair evidence, missing evidence, completed/open legacy rows,
+split product/tracking roots, shared board/room shapes, and read-only lifecycle
+files. [Board UI coverage](../../tests/war_room/test_ui_render.py) preserves the
+active awaiting-review lane for a completed Feature.
+
 ## Recovery summaries and planning transcripts
 
 `REQ-WARROOM-PROGRESS-001`: A safe current recovery entry distinguishes

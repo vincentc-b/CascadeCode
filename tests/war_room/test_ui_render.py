@@ -124,12 +124,16 @@ def test_completed_feature_awaiting_review_remains_in_active_lane(ui_server):
 
     active = {item["id"]: item for item in board["features"]["2_active"]}
     completed = {item["id"] for item in board["features"]["3_completed"]}
-    assert active["feat_001"]["review"] == {
+    review = active["feat_001"]["review"]
+    assert {key: review[key] for key in ("state", "url", "number", "draft")} == {
         "state": "awaiting_review",
         "url": "https://github.example/pull/4",
         "number": "4",
         "draft": False,
     }
+    assert review["implementation_complete"] is True
+    assert review["delivery_status"] == "review_pending"
+    assert review["repair"]["generation"] == 0
     assert "feat_001" not in completed
 
 
@@ -189,7 +193,7 @@ def test_war_room_js_renders_toast_body():
     assert "appendPlanEntryStatusToRow" in source
     assert "approvePlanDisabledReason" in source
     assert '"Awaiting review"' in source
-    assert 'actionLink("Open review", item.review.url)' in source
+    assert '"Open review", item.review.url' in source
     assert "EPIC_CLOSE_DEADLINE_MS = 60000" in source
     assert 'setStatus("Closing epic " + epicId + "…", false)' in source
     assert '"Epic close timed out after 60s"' in source

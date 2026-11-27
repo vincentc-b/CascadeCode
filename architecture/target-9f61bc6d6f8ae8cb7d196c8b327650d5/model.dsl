@@ -1667,6 +1667,33 @@ code_dashboard_reader = element "read_audit_projection" "Function" "Reads a boun
     }
 }
 
+code_dashboard_open_reviews = element "handle_get_open_reviews" "Function" "Returns accountable open-review rows from persisted registry, delivery, and repair evidence without consulting forge or provider authority." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.open-reviews"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/review_routes.py"
+        "cascade.sourceSymbol" "handle_get_open_reviews"
+    }
+}
+
+code_dashboard_review_projection = element "feature_review_views" "Function" "Builds shared board, room, and open-review projections with original identity, accountable owners, delivery phase, bounded CI/feedback evidence, and typed prerequisites." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.review-projection"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_review_views"
+    }
+}
+
+code_feature_latest_open_review_repair = element "latest_feature_repair_records" "Function" "Reads the canonical action ledger once and retains the latest waiting, active, refused, or verified open-review repair generation for presentation." {
+    properties {
+        "cascade.semanticId" "element.code.feature.latest-open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "latest_feature_repair_records"
+    }
+}
+
 code_dashboard_progress_contract = element "_derive_entry" "Function" "Defines the versioned safe recovery states, ordering priority, freshness and sanitized presentation fields materialized for Dashboard consumers." {
     properties {
         "cascade.semanticId" "element.code.dashboard.progress-contract"
@@ -1727,6 +1754,24 @@ code_dashboard_post = element "WarRoomRequestHandler.do_POST" "Method" "Routes o
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/server.py"
         "cascade.sourceSymbol" "WarRoomRequestHandler.do_POST"
+    }
+}
+
+dashboard_router_to_open_reviews = code_dashboard_router -> code_dashboard_open_reviews "Dispatches the open-review read route" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-router-to-open-reviews"
+    }
+}
+
+dashboard_open_reviews_to_review_projection = code_dashboard_open_reviews -> code_dashboard_review_projection "Requests the shared accountable review projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-open-reviews-to-review-projection"
+    }
+}
+
+dashboard_review_projection_to_repair_projection = code_dashboard_review_projection -> code_feature_latest_open_review_repair "Joins canonical repair generations without creating lifecycle state" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-projection-to-repair-projection"
     }
 }
 
@@ -4157,7 +4202,7 @@ code_workspace_retained_feature = element "_retained_feature_delivery" "Function
     }
 }
 
-code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify normalized open-review evidence, return non-provider typed waits, and route actionable evidence through one Feature repair owner." {
+code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify normalized open-review evidence, persist its bounded current presentation in the review registry, return non-provider typed waits, and route actionable evidence through one Feature repair owner." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-health"
         "cascade.parent" "element.component.watchdog"
@@ -4190,6 +4235,15 @@ code_watchdog_review_evidence_health = element "_review_health" "Function" "Clas
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/tracking.py"
         "cascade.sourceSymbol" "_review_health"
+    }
+}
+
+code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Persist a bounded normalized health observation in the canonical review registry for later read-only presentation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-evidence-record"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "record_feature_review_evidence"
     }
 }
 
@@ -4259,6 +4313,12 @@ code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_works
 code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads authoritative review identity, head, policy, check-generation and feedback facts before routing" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_watchdog_health_to_evidence_record = code_watchdog_review_health -> code_watchdog_review_evidence_record "Persists the bounded current observation before classification can route work" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-evidence-record"
     }
 }
 

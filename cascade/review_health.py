@@ -13,6 +13,7 @@ from cascade.resolution_actions import (
     admit_resolution_action,
     normalize_epic_031_recovery_request,
 )
+from cascade.review import record_feature_review_evidence
 from cascade.task.action_recovery import capture_and_route_action_failure
 from cascade.team_review_recovery import (
     local_review_resolution_ready,
@@ -142,6 +143,19 @@ def reconcile_open_review_health(
         except (GitError, OSError, ValueError):
             results.append(
                 _health_wait(owner_id, "transient_outage", "review_snapshot_failed")
+            )
+            continue
+        try:
+            persisted = record_feature_review_evidence(owner_id, snapshot, root=trunk)
+        except OSError:
+            persisted = False
+        if not persisted:
+            results.append(
+                _health_wait(
+                    owner_id,
+                    "evidence_unavailable",
+                    "review_evidence_persistence_failed",
+                )
             )
             continue
         if snapshot.get("state") == "merged":
