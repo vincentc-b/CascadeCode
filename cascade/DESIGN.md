@@ -419,6 +419,30 @@ Feature branch to its owning Epic branch. Unknown or conflicting state fails
 closed. Reconciliation binds callbacks to their immutable generation and exact
 accepted source/target heads, while independent target integration remains a
 separate closeout obligation.
+`REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
+derive a Feature's delivery phase from the canonical board row, current immutable
+review generation, admitted repair action, completion event, and local
+intended-target ancestry. The projection retains the accountable Feature team and
+original review URL while evidence is nonterminal. `generation` includes the
+admitted obligation; nullable `published_generation` identifies the independently
+persisted review receipt (including generation zero), so delivery does not mistake
+a pending repair for a published review. Missing, legacy, stale, or
+closed-unmerged evidence cannot create accepted heads or report verified
+integration. Review-disabled delivery uses the same completion-event and local
+ancestry proof. These reads do not poll the forge, publish a review, admit repair,
+or mutate lifecycle stores.
+
+```mermaid
+flowchart TD
+    Read[Read board, review generation, repair, event and Git evidence] --> Current{Exact current generation?}
+    Current -->|open| Pending[review_pending; retain owner and URL]
+    Current -->|accepted| Target{Accepted object on intended Epic target?}
+    Target -->|yes, completion recorded| Verified[verified_integrated]
+    Target -->|no| Verify[merge_verification_pending]
+    Current -->|missing, stale or legacy| Blocked[Nonterminal explicit blocker]
+    Read -->|admitted repair| Repair[repair_requested or repair_in_progress]
+```
+
 If a process stops after pushing and opening a review but before storing its
 generation, recovery may reuse the discovered review only after a fresh forge
 snapshot reports the exact source and target refs and heads for the prepared
@@ -434,11 +458,14 @@ selection display, but its preferred row cannot authorize a write; ambiguity or
 changed registry/branch identity fails closed with a recovery action.
 
 Parent-checkout retirement uses that same owner contract to enumerate terminal
-descendants, verify their existing Task delivery or Feature completion/review
-evidence, persist absent Markdown records to the authorized parent destination,
-and re-read them before removal. Boss remains the lifecycle caller; Workspace
-owns the proof and existing board, execution, review, Git and registry artifacts
-remain the only durable state. Refusal preserves the source branch and checkout.
+descendants. For a Feature it first consumes the shared delivery projection and
+requires verified current-generation intended-Epic integration or an explicit
+supported terminal disposition. Only then may it verify descendant Task delivery
+or Feature completion evidence, persist absent Markdown records to the authorized
+parent destination, and re-read them before removal. Boss remains the lifecycle
+caller; Workspace owns the proof and existing board, execution, review, Git and
+registry artifacts remain the only durable state. Refusal preserves the source
+branch, checkout and registry.
 
 [team_supervision.py::supervise_child](team_supervision.py) delegates Task
 recovery to [Feature recovery](feature/recovery.py). A queued Task merge refused
@@ -482,7 +509,11 @@ Late delivery can carry a superseded completed Feature path back onto the source
 branch. Review preparation restores only the exact active path named by the
 durable repair receipt before pinning the tested publication SHA. After forge
 acceptance, target closeout mutates the Epic checkout directly; an accepted
-stacked-review projection cannot bypass that target postcondition.
+stacked-review projection cannot bypass that target postcondition. Boss consumes
+the same delivery projection before its completed-document fast path: only exact
+current-generation acceptance whose merge is reachable from the intended Epic
+target can emit normal completion or release retirement. Callback flags, green
+checks, closed-unmerged rows and stale source/target heads remain nonterminal.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

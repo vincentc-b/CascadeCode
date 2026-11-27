@@ -38,7 +38,7 @@ from cascade.tracking import (
     push_branch,
     reply_to_merge_request,
 )
-from cascade.watchdog.events import append_event
+from cascade.watchdog.events import append_event, read_events
 from cascade.watchdog.lock import process_lock
 from cascade.watchdog.types import Event
 from cascade.workspace.integration_worktree import (
@@ -581,10 +581,14 @@ def _accept_current_review_generation(
             ),
             "accepted_target_head": record.get("target_head"),
             "reconciliation_status": "accepted",
-            **({
-                "integration_target_branch": integration_target,
-                "stack_integration_sha": integration_sha,
-            } if integration_target else {}),
+            **(
+                {
+                    "integration_target_branch": integration_target,
+                    "stack_integration_sha": integration_sha,
+                }
+                if integration_target
+                else {}
+            ),
         },
     )
     return True
@@ -717,7 +721,12 @@ def _store_review_generation(
         )
         generations[str(generation)] = generation_row
         updated.update(generation_row)
-        for field in ("forge_acceptance", "stacked_acceptance", "integration_target_branch", "stack_integration_sha"):
+        for field in (
+            "forge_acceptance",
+            "stacked_acceptance",
+            "integration_target_branch",
+            "stack_integration_sha",
+        ):
             if field not in generation_row:
                 updated.pop(field, None)
         updated["generations"] = generations
@@ -768,19 +777,29 @@ def _forge_acceptance(record: dict[str, object]) -> dict[str, object] | None:
 
 
 def _record_forge_acceptance(
-    feature_id: str, record: dict[str, object], snapshot: dict[str, object], *, root: Path,
+    feature_id: str,
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    *,
+    root: Path,
 ) -> None:
     merge_sha = snapshot.get("merge_sha")
     source = snapshot.get("source_revision")
-    if (not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)
-            or not isinstance(source, str) or not re.fullmatch(r"[0-9a-f]{40}", source)):
+    if (
+        not isinstance(merge_sha, str)
+        or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)
+        or not isinstance(source, str)
+        or not re.fullmatch(r"[0-9a-f]{40}", source)
+    ):
         return
     if not review_callback_is_current(feature_id, record, root=root, snapshot=snapshot):
         return
     receipt = {
-        "url": record.get("url"), "target_branch": record.get("target_branch"),
+        "url": record.get("url"),
+        "target_branch": record.get("target_branch"),
         "generation": int(record.get("current_generation") or 0),
-        "merge_sha": merge_sha, "source_revision": source,
+        "merge_sha": merge_sha,
+        "source_revision": source,
     }
     if _forge_acceptance(record) != receipt:
         _update_record(root, feature_id, {"forge_acceptance": receipt})
@@ -805,9 +824,13 @@ def _feature_review_projection(
 ) -> dict[str, object]:
     receipt = _stacked_acceptance(record)
     result = {
-        "state": "merged" if record.get("closed") else
-        "awaiting_integration" if receipt else
-        "awaiting_closeout" if _forge_acceptance(record) else "awaiting_review",
+        "state": "merged"
+        if record.get("closed")
+        else "awaiting_integration"
+        if receipt
+        else "awaiting_closeout"
+        if _forge_acceptance(record)
+        else "awaiting_review",
         "url": str(record.get("url") or ""),
         "number": record.get("number"),
         "draft": bool(record.get("draft", False)),
@@ -817,9 +840,357 @@ def _feature_review_projection(
         result["integration_feature_id"] = predecessor
         upstream = state.get(predecessor, {})
         result["integration_review_url"] = str(upstream.get("url") or "")
-    if result["state"] == "awaiting_closeout" and isinstance(record.get("closeout_blocker"), dict):
+    if result["state"] == "awaiting_closeout" and isinstance(
+        record.get("closeout_blocker"), dict
+    ):
         result["closeout_blocker"] = record["closeout_blocker"]
     return result
+
+
+FeatureDeliveryPhase = Literal[
+    "implementation_ready",
+    "review_pending",
+    "repair_requested",
+    "repair_in_progress",
+    "merge_verification_pending",
+    "verified_integrated",
+    "terminal_cancelled",
+    "terminal_closed",
+]
+
+
+def _accepted_current_generation(record: dict[str, object]) -> bool:
+    """Require the exact accepted heads of the current compatibility row."""
+
+    accepted = bool(
+        record.get("closed") is True
+        and record.get("reconciliation_status") == "accepted"
+        and record.get("accepted_merge_sha")
+        and record.get("accepted_source_head") == record.get("source_head")
+        and record.get("accepted_target_head") == record.get("target_head")
+    )
+    if not accepted:
+        return False
+    generations = record.get("generations")
+    if not isinstance(generations, dict):
+        return int(record.get("current_generation") or 0) == 0
+    current = generations.get(str(int(record.get("current_generation") or 0)))
+    if not isinstance(current, dict):
+        return False
+    fenced_fields = (
+        "url",
+        "source_branch",
+        "target_branch",
+        "source_head",
+        "target_head",
+        "accepted_merge_sha",
+        "accepted_source_head",
+        "accepted_target_head",
+        "reconciliation_status",
+    )
+    return all(current.get(field) == record.get(field) for field in fenced_fields)
+
+
+def _feature_completion_recorded(
+    feature_id: str, parent_id: str | None, root: Path
+) -> bool:
+    if not parent_id:
+        return False
+    events, _ = read_events(parent_id, 0, root=root)
+    return any(
+        event.type == "FeatureCompleted"
+        and event.payload.get("feature_id") == feature_id
+        for event in events
+    )
+
+
+def _git_ref_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+    """Read local Git ancestry without fetching or changing refs."""
+
+    try:
+        return (
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                cwd=root,
+                capture_output=True,
+                timeout=5,
+                check=False,
+            ).returncode
+            == 0
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _supported_terminal_phase(
+    meta, record: dict[str, object] | None, board
+) -> FeatureDeliveryPhase | None:
+    """Recognize only existing, explicit terminal evidence."""
+
+    if (
+        meta is not None
+        and meta.status == "cancelled"
+        and meta.path.parent.name == "3_completed"
+        and meta.cancellation_step == "complete"
+        and meta.cancellation_error is None
+        and meta.cancelled_at is not None
+        and meta.cancellation_reason
+    ):
+        parent = board.by_id.get(meta.parent) if meta.parent else None
+        feedback = (
+            [item for item in parent.cancellation_feedback if item.child_id == meta.id]
+            if parent is not None
+            else []
+        )
+        if len(feedback) == 1:
+            disposition = feedback[0]
+            if (
+                disposition.child_tier == "feature"
+                and disposition.parent_id == parent.id
+                and disposition.cancelled_at == meta.cancelled_at
+                and disposition.reason == meta.cancellation_reason
+                and disposition.disposition == "continue_reduced_scope"
+                and disposition.resolved_at is not None
+            ):
+                return "terminal_cancelled"
+    disposition = record.get("terminal_disposition") if record else None
+    generations = record.get("generations") if record else None
+    if isinstance(generations, dict):
+        current = generations.get(str(int(record.get("current_generation") or 0)))
+        if (
+            not isinstance(current, dict)
+            or current.get("terminal_disposition") != disposition
+        ):
+            disposition = None
+    if disposition in {"closed", "terminal_closed"}:
+        return "terminal_closed"
+    if disposition in {"cancelled", "terminal_cancelled"}:
+        return "terminal_cancelled"
+    return None
+
+
+def _delivery_projection(
+    feature_id: str,
+    *,
+    trunk: Path,
+    board,
+    record: dict[str, object] | None,
+    repair: dict[str, object] | None,
+    reviews_enabled: bool,
+) -> dict[str, object]:
+    """Derive one Feature delivery row from already-persisted local evidence."""
+
+    meta = board.by_id.get(feature_id)
+    parent_id = (
+        str(meta.parent) if meta is not None and meta.parent is not None else None
+    )
+    record_generation = int(record.get("current_generation") or 0) if record else 0
+    repair_generation = int(repair.get("generation") or 0) if repair else 0
+    generation = max(record_generation, repair_generation)
+    review_url = str(record.get("url") or "") if record else ""
+    completed_event = _feature_completion_recorded(feature_id, parent_id, trunk)
+    terminal = _supported_terminal_phase(meta, record, board)
+
+    phase: FeatureDeliveryPhase
+    evidence_status: str
+    blocker: str | None
+    next_prerequisite: str | None
+
+    if terminal is not None:
+        phase = terminal
+        evidence_status = "explicit_terminal_disposition"
+        blocker = None
+        next_prerequisite = None
+    else:
+        repair_phase = str(repair.get("phase") or "") if repair else ""
+        exact_generation = bool(
+            record
+            and record_generation == generation
+            and _accepted_current_generation(record)
+        )
+        target_branch = f"epic/{parent_id}" if parent_id else ""
+        integration_anchor = (
+            str(
+                record.get("stack_integration_sha")
+                or record.get("accepted_merge_sha")
+                or ""
+            )
+            if record
+            else ""
+        )
+        target_integrated = bool(
+            exact_generation
+            and target_branch
+            and integration_anchor
+            and _git_ref_ancestor(trunk, integration_anchor, target_branch)
+        )
+        local_integrated = bool(
+            parent_id
+            and _git_ref_ancestor(
+                trunk, integration_branch("feature", feature_id), target_branch
+            )
+        )
+
+        if (
+            target_integrated
+            or (record is None and not reviews_enabled and local_integrated)
+        ) and completed_event:
+            phase = "verified_integrated"
+            evidence_status = (
+                "accepted_current_generation"
+                if target_integrated
+                else "local_integration"
+            )
+            blocker = None
+            next_prerequisite = None
+        elif target_integrated:
+            # The accepted repair has left the publication phase even when its
+            # repair receipt is still awaiting Boss's terminal acknowledgement.
+            # Boss owns the missing completion event, so expose that exact last
+            # prerequisite instead of projecting the older delivery phase.
+            phase = "merge_verification_pending"
+            evidence_status = "accepted_current_generation"
+            blocker = "completion_event_missing"
+            next_prerequisite = "record_feature_completion"
+        elif repair and repair_phase in {"prepared", "authority_recorded"}:
+            phase = "repair_requested"
+            evidence_status = "repair_admitted"
+            blocker = "repair_not_started"
+            next_prerequisite = str(
+                repair.get("next_action") or "resume_admitted_repair"
+            )
+        elif repair and (
+            record is None
+            or record_generation != repair_generation
+            or repair_phase in {"parent_enabled", "delivery_pending"}
+        ):
+            phase = "repair_in_progress"
+            evidence_status = "repair_generation_active"
+            blocker = "repair_delivery_incomplete"
+            next_prerequisite = str(
+                repair.get("next_action") or "publish_repair_review"
+            )
+        elif (
+            exact_generation
+            or _forge_acceptance(record or {})
+            or _stacked_acceptance(record or {})
+        ):
+            phase = "merge_verification_pending"
+            evidence_status = (
+                "accepted_current_generation"
+                if exact_generation
+                else "forge_acceptance_observed"
+            )
+            blocker = (
+                "completion_event_missing"
+                if target_integrated
+                else "intended_target_not_verified"
+            )
+            next_prerequisite = (
+                "record_feature_completion"
+                if target_integrated
+                else "verify_intended_target_integration"
+            )
+        elif record is not None and (
+            record.get("closed") is True
+            or str(record.get("state") or "").lower() in {"closed", "merged"}
+        ):
+            phase = "merge_verification_pending"
+            if record_generation == 0 and not record.get("accepted_merge_sha"):
+                evidence_status = "legacy_unverified"
+            else:
+                evidence_status = "closed_unmerged"
+            blocker = "accepted_current_generation_missing"
+            next_prerequisite = "restore_review_evidence_or_record_terminal_disposition"
+        elif record is not None:
+            phase = "review_pending"
+            evidence_status = "open" if review_url else "unknown_review_evidence"
+            blocker = (
+                "review_acceptance_pending" if review_url else "review_evidence_missing"
+            )
+            next_prerequisite = (
+                "await_current_review_acceptance" if review_url else "publish_review"
+            )
+        else:
+            children_complete = bool(meta is not None) and all(
+                child_id in board.by_id
+                and board.by_id[child_id].status == "completed"
+                and board.by_id[child_id].path.parent.name == "3_completed"
+                for child_id in meta.children
+            )
+            source_completed = bool(
+                meta is not None
+                and meta.status == "completed"
+                and meta.path.parent.name == "3_completed"
+            )
+            phase = "implementation_ready"
+            if source_completed and children_complete:
+                evidence_status = "review_evidence_missing"
+                blocker = (
+                    "review_not_published"
+                    if reviews_enabled
+                    else "local_integration_pending"
+                )
+                next_prerequisite = (
+                    "publish_review" if reviews_enabled else "integrate_locally"
+                )
+            else:
+                evidence_status = "implementation_incomplete"
+                blocker = "implementation_not_ready"
+                next_prerequisite = "complete_child_delivery"
+
+    actionable = bool(
+        repair
+        and str(repair.get("phase") or "")
+        in {"prepared", "authority_recorded", "parent_enabled", "delivery_pending"}
+    )
+    return {
+        "feature_id": feature_id,
+        "accountable_owner": f"feature_team:{feature_id}",
+        "phase": phase,
+        "review_url": review_url,
+        "generation": generation,
+        # The active repair generation can advance before its review receipt.
+        # Keep publication evidence separate from the projected obligation.
+        "published_generation": record_generation if record is not None else None,
+        "evidence_status": evidence_status,
+        "blocker": blocker,
+        "next_prerequisite": next_prerequisite,
+        "actionable": actionable,
+    }
+
+
+def feature_delivery_view(feature_id: str, *, root: Path) -> dict[str, object]:
+    """Return the read-only delivery lifecycle for one Feature."""
+
+    return feature_delivery_views([feature_id], root=root)[feature_id]
+
+
+def feature_delivery_views(
+    feature_ids: list[str] | tuple[str, ...] | set[str],
+    *,
+    root: Path,
+) -> dict[str, dict[str, object]]:
+    """Project delivery rows while sharing one review and board snapshot."""
+
+    trunk = locate_trunk(root)
+    state = _load(trunk)
+    from cascade.feature.repair import current_feature_repair_record
+    from cascade.workspace.integration_worktree import merged_board_readonly
+
+    board = merged_board_readonly(trunk)
+    reviews_enabled = review_enabled(trunk)
+    return {
+        feature_id: _delivery_projection(
+            feature_id,
+            trunk=trunk,
+            board=board,
+            record=state.get(feature_id),
+            repair=current_feature_repair_record(feature_id, root=trunk),
+            reviews_enabled=reviews_enabled,
+        )
+        for feature_id in feature_ids
+    }
 
 
 def feature_review_view(feature_id: str, *, root: Path) -> dict[str, object] | None:
@@ -1270,15 +1641,20 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             # and must run before stacked-review recovery can short-circuit the
             # sweep for an already accepted generation.
             try:
-                effective_record = {**record, "target_branch": integration_branch("epic", epic_id)} if epic_id else record
+                effective_record = (
+                    {**record, "target_branch": integration_branch("epic", epic_id)}
+                    if epic_id
+                    else record
+                )
                 mr = _record_to_mr(effective_record)
             except (GitError, ValueError, KeyError):
                 continue
             before = bool(
-                epic_id
-                and feature_completed_recorded(feature_id, epic_id, root=trunk)
+                epic_id and feature_completed_recorded(feature_id, epic_id, root=trunk)
             )
-            if _finalize_merged_review_record(feature_id, effective_record, mr, trunk=trunk):
+            if _finalize_merged_review_record(
+                feature_id, effective_record, mr, trunk=trunk
+            ):
                 if (
                     epic_id
                     and not before
@@ -1286,7 +1662,9 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
                 ):
                     finalized.append(feature_id)
             continue
-        if _stacked_acceptance(record) is None and persist_if_stacked_review_integration_gap(
+        if _stacked_acceptance(
+            record
+        ) is None and persist_if_stacked_review_integration_gap(
             feature_id, record, root=trunk, accepted=bool(record.get("closed"))
         ):
             continue
@@ -1341,9 +1719,16 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
         if str(record.get("target_branch") or "").startswith("feat/"):
             feature = merged_board(trunk).by_id.get(feature_id)
             parent_id = feature.parent if feature else None
-            before_stack = bool(parent_id and feature_completed_recorded(feature_id, parent_id, root=trunk))
+            before_stack = bool(
+                parent_id
+                and feature_completed_recorded(feature_id, parent_id, root=trunk)
+            )
             if _reconcile_stacked_acceptance(feature_id, record, snapshot, trunk=trunk):
-                if parent_id and not before_stack and feature_completed_recorded(feature_id, parent_id, root=trunk):
+                if (
+                    parent_id
+                    and not before_stack
+                    and feature_completed_recorded(feature_id, parent_id, root=trunk)
+                ):
                     finalized.append(feature_id)
                 continue
         mr = _record_to_mr(record)
@@ -1353,8 +1738,9 @@ def reconcile_feature_review_completions(root: Path) -> list[str]:
             if epic_id
             else True
         )
-        if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-            _accept_current_review_generation(feature_id, record, snapshot, root=trunk)
+        if _finalize_merged_review_record(
+            feature_id, record, mr, trunk=trunk, snapshot=snapshot
+        ):
             if (
                 epic_id
                 and not before
@@ -1384,8 +1770,9 @@ def _closed_review_has_incomplete_target(
 
 def _review_target_epic(record: dict[str, object]) -> str | None:
     target = str(
-        record.get("integration_target_branch") if record.get("closed")
-        and record.get("integration_target_branch") else record.get("target_branch") or ""
+        record.get("integration_target_branch")
+        if record.get("closed") and record.get("integration_target_branch")
+        else record.get("target_branch") or ""
     )
     prefix = "epic/"
     if target.startswith(prefix):
@@ -1424,16 +1811,25 @@ def _git_ancestor(root: Path, ancestor: object, descendant: object) -> bool:
     if not all(re.fullmatch(r"[0-9a-f]{40}", item) for item in (ancestor, descendant)):
         return False
     try:
-        return subprocess.run(
-            ["git", "merge-base", "--is-ancestor", ancestor, descendant],
-            cwd=root, capture_output=True, timeout=5,
-        ).returncode == 0
+        return (
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+                cwd=root,
+                capture_output=True,
+                timeout=5,
+            ).returncode
+            == 0
+        )
     except (OSError, subprocess.SubprocessError):
         return False
 
 
 def _reconcile_stacked_acceptance(
-    feature_id: str, record: dict[str, object], snapshot: dict[str, object], *, trunk: Path
+    feature_id: str,
+    record: dict[str, object],
+    snapshot: dict[str, object],
+    *,
+    trunk: Path,
 ) -> bool:
     """Acknowledge a merged child review without confusing it with Epic delivery."""
     target = str(record.get("target_branch") or "")
@@ -1452,7 +1848,9 @@ def _reconcile_stacked_acceptance(
     feature = merged_board(trunk).by_id.get(feature_id)
     predecessor_id = target.removeprefix("feat/")
     if (
-        not feature or feature.tier != "feature" or not feature.parent
+        not feature
+        or feature.tier != "feature"
+        or not feature.parent
         or predecessor_id not in feature.depends_on
     ):
         return False
@@ -1460,18 +1858,24 @@ def _reconcile_stacked_acceptance(
     if not predecessor:
         return False
     receipt = {
-        "url": record.get("url"), "target_branch": target,
+        "url": record.get("url"),
+        "target_branch": target,
         "generation": int(record.get("current_generation") or 0),
-        "merge_sha": merge_sha, "source_revision": source,
+        "merge_sha": merge_sha,
+        "source_revision": source,
     }
     if _stacked_acceptance(record) != receipt:
         # Capture the accepted object while the predecessor branch is still
         # reachable; fetch only refs/objects, never mutate its working tree.
-        if not _git_ancestor(trunk, merge_sha, merge_sha) and not predecessor.get("closed"):
+        if not _git_ancestor(trunk, merge_sha, merge_sha) and not predecessor.get(
+            "closed"
+        ):
             try:
                 subprocess.run(
                     ["git", "fetch", "--no-tags", "origin", target],
-                    cwd=trunk, capture_output=True, timeout=20,
+                    cwd=trunk,
+                    capture_output=True,
+                    timeout=20,
                 )
             except (OSError, subprocess.SubprocessError):
                 pass
@@ -1489,23 +1893,32 @@ def _reconcile_stacked_acceptance(
         # Squash of the parent may omit the child's commit from Epic ancestry.
         # Its exact accepted source must contain the child merge, and the
         # parent's accepted integration commit must be on the Epic line.
-        anchor = predecessor.get("stack_integration_sha") or predecessor.get("accepted_merge_sha")
-        if (
-            not _git_ancestor(trunk, merge_sha, predecessor.get("accepted_source_head"))
-            or not _git_ancestor(trunk, anchor, epic_head)
-        ):
+        anchor = predecessor.get("stack_integration_sha") or predecessor.get(
+            "accepted_merge_sha"
+        )
+        if not _git_ancestor(
+            trunk, merge_sha, predecessor.get("accepted_source_head")
+        ) or not _git_ancestor(trunk, anchor, epic_head):
             return False
     # Keep the original review URL/base immutable; only the local completion
     # operation targets the Epic. No second PR or unreviewed merge is created.
+    if not _accept_current_review_generation(
+        feature_id,
+        record,
+        snapshot,
+        root=trunk,
+        integration_target=epic_branch,
+        integration_sha=anchor,
+    ):
+        return False
     integrated = {**record, "target_branch": epic_branch}
     if not _finalize_merged_review_record(
-        feature_id, integrated, _record_to_mr(integrated), trunk=trunk,
+        feature_id,
+        integrated,
+        _record_to_mr(integrated),
+        trunk=trunk,
     ):
         return True
-    _accept_current_review_generation(
-        feature_id, record, snapshot, root=trunk,
-        integration_target=epic_branch, integration_sha=anchor,
-    )
     return True
 
 
@@ -1515,6 +1928,7 @@ def _finalize_merged_review_record(
     mr: MergeRequest,
     *,
     trunk: Path,
+    snapshot: dict[str, object] | None = None,
 ) -> bool:
     from cascade.boss.rollup import try_complete_feature
 
@@ -1524,6 +1938,10 @@ def _finalize_merged_review_record(
         # The accepted source tree may still have an active feature document.
         # Publish its terminal lifecycle commit before acknowledging closure.
         push_branch(epic_root, mr.target_branch)
+        if snapshot is not None and not _accept_current_review_generation(
+            feature_id, record, snapshot, root=trunk
+        ):
+            return False
         complete = try_complete_feature(
             feature_id,
             root=trunk,
@@ -1533,7 +1951,11 @@ def _finalize_merged_review_record(
         if not complete:
             from cascade.lifecycle_review_gate import require_lifecycle_review_gate
             from cascade.workspace.architecture_review import ArchitectureProposalError
-            blocker = {"code": "closeout_pending", "message": "Merged; lifecycle closeout is pending"}
+
+            blocker = {
+                "code": "closeout_pending",
+                "message": "Merged; lifecycle closeout is pending",
+            }
             try:
                 require_lifecycle_review_gate(feature_id, "closeout", root=trunk)
             except ArchitectureProposalError as exc:
@@ -1649,11 +2071,9 @@ def poll_feature_reviews(root: Path) -> None:
                 feature_id, record, root=trunk, accepted=True
             ):
                 continue
-            if _finalize_merged_review_record(feature_id, record, mr, trunk=trunk):
-                _accept_current_review_generation(
-                    feature_id, record, snapshot, root=trunk
-                )
-            else:
+            if not _finalize_merged_review_record(
+                feature_id, record, mr, trunk=trunk, snapshot=snapshot
+            ):
                 # Do not acknowledge completion until the local epic worktree
                 # contains the exact tree accepted by the forge.
                 continue

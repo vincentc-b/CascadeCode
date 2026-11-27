@@ -2046,7 +2046,7 @@ code_workspace_persist = element "terminal_doc_persisted_outside_worktree" "Func
     }
 }
 
-code_workspace_descendant_proof = element "prove_terminal_retirement" "Function" "Enumerates required terminal descendants, persists absent records to the exact parent owner, and requires canonical readback plus delivery provenance." {
+code_workspace_descendant_proof = element "prove_terminal_retirement" "Function" "Requires terminal shared Feature delivery evidence before enumerating descendants, persisting absent records, and accepting canonical readback." {
     properties {
         "cascade.semanticId" "element.code.workspace.descendant-proof"
         "cascade.parent" "element.component.workspace"
@@ -2127,7 +2127,7 @@ code_boss_lock = element "task_lifecycle_lock" "Function" "Tracking-root cross-p
     }
 }
 
-code_boss_obligation = element "current_feature_obligation" "Function" "Fence closeout and retirement on the current repair, child delivery, review, and integration evidence." {
+code_boss_obligation = element "current_feature_obligation" "Function" "Separate unpublished repair obligations from accepted delivery; admit idempotent publication after child gates and fence completion and retirement on exact accepted target evidence." {
     properties {
         "cascade.semanticId" "element.code.boss.current-obligation"
         "cascade.parent" "element.component.boss"
@@ -2142,6 +2142,15 @@ code_boss_review_generation = element "feature_review_generation" "Function" "Re
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/review.py"
         "cascade.sourceSymbol" "feature_review_generation"
+    }
+}
+
+code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive read-only Feature delivery phase, retained owner, active and published generations, review identity and next prerequisite from canonical local evidence." {
+    properties {
+        "cascade.semanticId" "element.code.boss.feature-delivery-view"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_delivery_view"
     }
 }
 
@@ -2595,9 +2604,9 @@ code_boss_rollup_to_obligation = code_boss_feature -> code_boss_obligation "Chec
     }
 }
 
-code_boss_obligation_to_review_generation = code_boss_obligation -> code_boss_review_generation "Reads immutable current evidence" {
+code_boss_obligation_to_delivery_view = code_boss_obligation -> code_boss_delivery_view "Consumes current delivery and intended-target evidence" {
     properties {
-        "cascade.semanticId" "relationship.code-boss-obligation-to-review-generation"
+        "cascade.semanticId" "relationship.code-boss-obligation-to-feature-delivery-view"
     }
 }
 
@@ -2847,6 +2856,12 @@ code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_rep
 boss_uses_workspace = boss_component -> workspace_component "Checks merge targets and retires worktrees" {
     properties {
         "cascade.semanticId" "relationship.boss-uses-workspace"
+    }
+}
+
+workspace_uses_boss_delivery = workspace_component -> boss_component "Consumes shared Feature delivery eligibility for wakeup and retirement" {
+    properties {
+        "cascade.semanticId" "relationship.workspace-uses-boss-delivery"
     }
 }
 
@@ -3935,7 +3950,7 @@ watchdog_result_to_transition_notify = code_watchdog_result -> code_watchdog_tra
 
 // Review observation and graph queue eligibility.
 
-code_workspace_delivery = element "deliver_queue_kickoffs" "Function" "Select active teams or pending durable recovery owners whose queue is ahead of its cursor." {
+code_workspace_delivery = element "deliver_queue_kickoffs" "Function" "Select active, recovery, or retained nonterminal Feature owners whose queue is ahead of its cursor." {
     properties {
         "cascade.semanticId" "element.code.workspace.delivery"
         "cascade.parent" "element.component.workspace"
@@ -3944,7 +3959,7 @@ code_workspace_delivery = element "deliver_queue_kickoffs" "Function" "Select ac
     }
 }
 
-code_workspace_resume = element "resume_inflight_graphs" "Function" "Rejoin eligible interrupted graph turns, staged inputs and unread queues after restart." {
+code_workspace_resume = element "resume_inflight_graphs" "Function" "Rejoin eligible active, recovery, or retained Feature graphs after restart without waking an idle poll." {
     properties {
         "cascade.semanticId" "element.code.workspace.resume"
         "cascade.parent" "element.component.workspace"
@@ -3962,12 +3977,21 @@ code_workspace_schedule = element "_schedule_queue_delivery" "Function" "Coalesc
     }
 }
 
-code_workspace_delivery_locked = element "_run_queue_delivery_locked" "Function" "Recheck team eligibility, resume checkpoints and persist classified queue input before a role turn." {
+code_workspace_delivery_locked = element "_run_queue_delivery_locked" "Function" "Recheck retained-owner eligibility under the graph lock, resume interruptions, and advance idle cursors without a role turn." {
     properties {
         "cascade.semanticId" "element.code.workspace.delivery-locked"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/kickoff.py"
         "cascade.sourceSymbol" "_run_queue_delivery_locked"
+    }
+}
+
+code_workspace_retained_feature = element "_retained_feature_delivery" "Function" "Read the shared nonterminal delivery phase that retains a completed Feature graph without granting repair authority." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.retained-feature-delivery"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "_retained_feature_delivery"
     }
 }
 
@@ -4001,6 +4025,36 @@ code_boss_review_pending = element "feature_review_pending" "Function" "Read ope
 code_workspace_delivery_to_schedule = code_workspace_delivery -> code_workspace_schedule "Schedules unread queue delivery" {
     properties {
         "cascade.semanticId" "relationship.code-workspace-delivery-to-schedule"
+    }
+}
+
+code_workspace_delivery_to_retained_feature = code_workspace_delivery -> code_workspace_retained_feature "Includes retained completed Feature owners" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-delivery-to-retained-feature"
+    }
+}
+
+code_workspace_resume_to_retained_feature = code_workspace_resume -> code_workspace_retained_feature "Rechecks retained ownership during restart" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-resume-to-retained-feature"
+    }
+}
+
+code_workspace_locked_to_retained_feature = code_workspace_delivery_locked -> code_workspace_retained_feature "Rechecks the same eligibility under the graph lock" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-locked-to-retained-feature"
+    }
+}
+
+code_workspace_retained_feature_to_delivery_view = code_workspace_retained_feature -> code_boss_delivery_view "Consumes the shared read-only Feature delivery projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-retained-feature-to-delivery-view"
+    }
+}
+
+code_workspace_descendant_proof_to_delivery_view = code_workspace_descendant_proof -> code_boss_delivery_view "Requires terminal current-generation delivery before persistence or removal" {
+    properties {
+        "cascade.semanticId" "relationship.code-workspace-descendant-proof-to-delivery-view"
     }
 }
 

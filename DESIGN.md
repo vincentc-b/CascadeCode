@@ -80,13 +80,16 @@ Feature plan, mints fixer Tasks when code must change, and can answer through
 `reply_merge_request_comment`. A merged MR releases the feature closeout gate
 and informs the Epic Team.
 
-A completed-path Feature can still have an open review. Ordinary queue delivery
-for a completed team is limited to pending durable recovery actions; generic
-messages alone do not guarantee a new repair turn. Current review health checks
-route conflict recovery, but a green source check and a merged review do not
-establish the later target integration's CI or the operator checkout's sync
-state. Without a recognized/authenticated forge CLI, Cascade retains the local
-merge path for offline workspaces.
+A completed-path Feature can still have an open review, so its Feature ID,
+original review, checkout, branch, queue and checkpoint remain registered.
+Ordinary and startup queue delivery use the same read-only delivery projection:
+idle polls and generic messages advance the durable cursor without a role turn,
+while an admitted repair or interrupted checkpoint resumes the same graph under
+its existing writer lock. Current review health checks route conflict recovery,
+but a green source check and a merged review do not establish the later target
+integration's CI or the operator checkout's sync state. Without a
+recognized/authenticated forge CLI, Cascade retains the local merge path for
+offline workspaces.
 
 Configuration:
 
