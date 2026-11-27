@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-27T03:56:12.580901+00:00'
 ---
 # Close delivery-consumer and cross-Feature recovery acceptance gaps
 
