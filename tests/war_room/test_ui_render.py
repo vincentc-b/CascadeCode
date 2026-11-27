@@ -523,6 +523,16 @@ def test_epic_plan_readiness_integration():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_feature_plan_approval_integration():
+    """Feature plan approval preserves reviewed scope and canonical outcomes."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not on PATH")
+    cases = Path(__file__).with_name("feature_plan_approval_integration.mjs")
+    result = subprocess.run([node, str(cases)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_plan_page_includes_epic_readiness_host(ui_server):
     base, _root = ui_server
     status, html, _headers = _get_html(f"{base}/plan/epic_001")

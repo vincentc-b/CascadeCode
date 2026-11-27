@@ -45,6 +45,12 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
             "cascade.semanticId" "element.container.supervisor"
         }
 
+        approval_component = component "Approval authority" "Checks explicit plan authorization, commits approval timestamps and delegates receipt persistence and dispatch reconciliation." "cascade.approvals" {
+            properties {
+                "cascade.semanticId" "element.component.approval"
+                "cascade.designPath" "cascade/DESIGN.md"
+            }
+        }
         board_component = component "Board" "Parses and validates Markdown work state." "cascade.board" {
             properties {
                 "cascade.semanticId" "element.component.board"
@@ -70,6 +76,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
         feature_team = component "Feature team" "Persistent lead and architect turns for Task planning and integration." "cascade.feature.graph" {
             properties {
                 "cascade.semanticId" "element.component.feature-team"
+                "cascade.designPath" "cascade/feature/DESIGN.md"
             }
         }
         task_team = component "Task team" "Bounded SWE turns with scoped tools, retained action-transition receipts, and exact executor live identity." "cascade.task.graph" {
@@ -1795,6 +1802,15 @@ code_dashboard_plan_approval = element "initEpicPlanReadinessChrome" "Function" 
     }
 }
 
+code_dashboard_feature_plan_approval = element "initFeaturePlanApprovalChrome" "Function" "Shows the exact reviewed Feature tuple, submits one bounded approval action, and reconciles saved, refused or transport-uncertain outcomes with canonical document readiness." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-plan-approval"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/plan_viewer.js"
+        "cascade.sourceSymbol" "initFeaturePlanApprovalChrome"
+    }
+}
+
 code_dashboard_post = element "WarRoomRequestHandler.do_POST" "Method" "Routes operator lifecycle writes to canonical services with extended connection deadlines for activation and approval." {
     properties {
         "cascade.semanticId" "element.code.dashboard.post"
@@ -1861,6 +1877,18 @@ dashboard_plan_approval_to_post = code_dashboard_plan_approval -> code_dashboard
 dashboard_plan_approval_to_router = code_dashboard_plan_approval -> code_dashboard_router "Checks canonical approval and readiness after a refused or ambiguous write" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-plan-approval-to-router"
+    }
+}
+
+dashboard_feature_plan_approval_to_post = code_dashboard_feature_plan_approval -> code_dashboard_post "Submits the exact displayed Feature review tuple" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-feature-plan-approval-to-post"
+    }
+}
+
+dashboard_feature_plan_approval_to_router = code_dashboard_feature_plan_approval -> code_dashboard_router "Reconciles transport uncertainty and durable waiting state through the canonical document projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-feature-plan-approval-to-router"
     }
 }
 
@@ -4516,5 +4544,368 @@ code_watchdog_snapshot_to_evidence_health = code_watchdog_review_snapshot -> cod
 code_boss_feature_to_pending = code_boss_feature -> code_boss_review_pending "Retains pending publication and review obligations" {
     properties {
         "cascade.semanticId" "relationship.code-boss-feature-to-pending"
+    }
+}
+
+code_approval_feature = element "approve_feature" "Function" "Checks current authorization and saves individual Feature approval under the process lock." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "approve_feature"
+    }
+}
+
+code_approval_epic = element "approve_epic_plan" "Function" "Checks Epic plan readiness and authorizes the current reviewed child set before the Epic timestamp." {
+    properties {
+        "cascade.semanticId" "element.code.approval.epic"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "approve_epic_plan"
+    }
+}
+
+code_approval_dependencies = element "evaluate_action_dependencies" "Function" "Refreshes the owning declaration and canonical dependency lifecycle evidence without trusting cached snapshots." {
+    properties {
+        "cascade.semanticId" "element.code.approval.dependencies"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "evaluate_action_dependencies"
+    }
+}
+
+code_approval_eligibility = element "require_feature_approval_dependencies" "Function" "Allows only satisfied or legally incomplete predecessors and fences owner and declaration changes before individual approval writes." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-dependency-eligibility"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "require_feature_approval_dependencies"
+    }
+}
+
+code_approval_policy = element "feature_approval_dependencies_permitted" "Function" "Pure approval-only allowlist shared by the mutation boundary and read-only eligibility projection." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-dependency-policy"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "feature_approval_dependencies_permitted"
+    }
+}
+
+code_approval_strict = element "require_action_dependencies" "Function" "Refuses every unsatisfied or unknown dependency at strict planning boundaries." {
+    properties {
+        "cascade.semanticId" "element.code.approval.strict-dependencies"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "require_action_dependencies"
+    }
+}
+
+code_approval_review = element "require_lifecycle_review_gate" "Function" "Checks exact architecture context and blocking comments at the lifecycle boundary." {
+    properties {
+        "cascade.semanticId" "element.code.approval.review"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/lifecycle_review_gate.py"
+        "cascade.sourceSymbol" "require_lifecycle_review_gate"
+    }
+}
+
+code_approval_save = element "_set_feature_approved" "Function" "Writes approved_at to the owning document before requesting its matching receipt." {
+    properties {
+        "cascade.semanticId" "element.code.approval.save"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "_set_feature_approved"
+    }
+}
+
+code_approval_reconcile = element "reconcile_approval_dispatch" "Function" "Uses existing Boss ordering and canonical Watchdog dispatch; does not own a second scheduler." {
+    properties {
+        "cascade.semanticId" "element.code.approval.reconcile"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/automation.py"
+        "cascade.sourceSymbol" "reconcile_approval_dispatch"
+    }
+}
+
+code_approval_result = element "_add_feature_approval_contract" "Function" "Reads matching receipt and current board lane after persistence, separating typed approval outcome from waiting or lifecycle admission without claiming provider execution." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-result"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "_add_feature_approval_contract"
+    }
+}
+
+code_approval_state = element "canonical_feature_approval_state" "Function" "Returns unapproved, approved, stale or unknown only after resolving the canonical Feature and matching receipt evidence." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-state"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "canonical_feature_approval_state"
+    }
+}
+
+code_feature_receipt_write = element "write_approval_evidence" "Function" "Atomically persists scope or exact receipt in tracking-root feature_approvals.json under a file lock." {
+    properties {
+        "cascade.semanticId" "element.code.feature.receipt-write"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness_evidence.py"
+        "cascade.sourceSymbol" "write_approval_evidence"
+    }
+}
+
+code_feature_receipt_read = element "approval_evidence" "Function" "Returns current, stale or unknown approval evidence against the owning document." {
+    properties {
+        "cascade.semanticId" "element.code.feature.receipt-read"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness_evidence.py"
+        "cascade.sourceSymbol" "approval_evidence"
+    }
+}
+
+code_feature_revision = element "_revision" "Function" "Hashes exact or delegated scope body, sorted dependency declarations and selection metadata without mutable predecessor state." {
+    properties {
+        "cascade.semanticId" "element.code.feature.approval-revision"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness_evidence.py"
+        "cascade.sourceSymbol" "_revision"
+    }
+}
+
+code_feature_readiness = element "compute_feature_readiness" "Function" "Projects receipt-backed approval state, approval-only predecessor eligibility and typed execution blockers without dispatching." {
+    properties {
+        "cascade.semanticId" "element.code.feature.readiness"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness.py"
+        "cascade.sourceSymbol" "compute_feature_readiness"
+    }
+}
+
+code_feature_approval_eligibility = element "ApprovalEligibility" "Dataclass" "Carries approval-only eligibility, typed result, explanation and affected work IDs independently of execution blockers." {
+    properties {
+        "cascade.semanticId" "element.code.feature.approval-eligibility"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/readiness.py"
+        "cascade.sourceSymbol" "ApprovalEligibility"
+    }
+}
+
+code_http_approve_feature = element "WarRoomRequestHandler._handle_approve_feature" "Method" "Preserves the operator route boundary while serializing typed approval success, refusal and independent execution evidence." {
+    properties {
+        "cascade.semanticId" "element.code.http.approve-feature"
+        "cascade.parent" "element.component.war-room-http"
+        "cascade.sourcePath" "cascade/war_room/server.py"
+        "cascade.sourceSymbol" "WarRoomRequestHandler._handle_approve_feature"
+    }
+}
+
+code_dashboard_feature_approve = element "featureApproveActionButton" "Function" "Loads and visibly presents the exact review tuple, submits it once through the bounded approval write, and renders typed outcomes with keyboard focus continuity." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-approve"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "featureApproveActionButton"
+    }
+}
+
+code_dashboard_feature_readiness_ui = element "appendFeatureReadinessUi" "Function" "Combines canonical readiness with the retained row-local Feature approval action across board row replacement." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-readiness-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "appendFeatureReadinessUi"
+    }
+}
+
+code_dashboard_feature_action_state = element "featureApprovalActionState" "Function" "Keeps one in-memory per-Feature pending, saved-awaiting-prerequisite, refused or transport-unconfirmed presentation while canonical board approval remains authoritative." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-approval-state"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "featureApprovalActionState"
+    }
+}
+
+code_dashboard_feature_readiness = element "feature_readiness_to_dict" "Function" "Serializes compatible execution readiness plus canonical approval state and approval-only eligibility without mutation." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-readiness"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/serialize.py"
+        "cascade.sourceSymbol" "feature_readiness_to_dict"
+    }
+}
+
+rel_http_approval = war_room_http -> approval_component "Requests explicit approval" {
+    properties {
+        "cascade.semanticId" "relationship.http-approval"
+    }
+}
+
+rel_approval_board = approval_component -> board_component "Commits owning timestamps" {
+    properties {
+        "cascade.semanticId" "relationship.approval-board"
+    }
+}
+
+rel_approval_feature = approval_component -> feature_team "Writes and reads approval receipts" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature"
+    }
+}
+
+rel_approval_watchdog = approval_component -> watchdog_component "Requests existing gated reconciliation" {
+    properties {
+        "cascade.semanticId" "relationship.approval-watchdog"
+    }
+}
+
+rel_approval_agent = approval_component -> agent_component "Requires provider selection preflight" {
+    properties {
+        "cascade.semanticId" "relationship.approval-agent"
+    }
+}
+
+rel_approval_workspace = approval_component -> workspace_component "Requires revision-pinned review context" {
+    properties {
+        "cascade.semanticId" "relationship.approval-workspace"
+    }
+}
+
+rel_approval_feature_dependencies = code_approval_feature -> code_approval_eligibility "Requires approval-specific dependency eligibility and a pre-write declaration fence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-dependencies"
+    }
+}
+
+rel_approval_eligibility_evaluation = code_approval_eligibility -> code_approval_dependencies "Refreshes canonical owner and dependency facts" {
+    properties {
+        "cascade.semanticId" "relationship.approval-eligibility-evaluation"
+    }
+}
+
+rel_approval_eligibility_policy = code_approval_eligibility -> code_approval_policy "Applies the shared allowlist after refresh and fencing" {
+    properties {
+        "cascade.semanticId" "relationship.approval-eligibility-policy"
+    }
+}
+
+rel_approval_epic_dependencies = code_approval_epic -> code_approval_strict "Keeps Epic plan approval on the satisfied-only dependency policy" {
+    properties {
+        "cascade.semanticId" "relationship.approval-epic-dependencies"
+    }
+}
+
+rel_approval_strict_evaluation = code_approval_strict -> code_approval_dependencies "Refreshes canonical facts" {
+    properties {
+        "cascade.semanticId" "relationship.approval-strict-evaluation"
+    }
+}
+
+rel_approval_feature_review = code_approval_feature -> code_approval_review "Checks review before persistence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-review"
+    }
+}
+
+rel_approval_feature_save = code_approval_feature -> code_approval_save "Saves authorized scope" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-save"
+    }
+}
+
+rel_approval_epic_save = code_approval_epic -> code_approval_save "Saves reviewed children before Epic timestamp" {
+    properties {
+        "cascade.semanticId" "relationship.approval-epic-save"
+    }
+}
+
+rel_approval_feature_reconcile = code_approval_feature -> code_approval_reconcile "Requests dispatch after persistence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-reconcile"
+    }
+}
+
+rel_approval_feature_result = code_approval_feature -> code_approval_result "Returns receipt-backed approval separately from execution" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-result"
+    }
+}
+
+rel_approval_state_receipt = code_approval_state -> code_feature_receipt_read "Reads matching receipt evidence" {
+    properties {
+        "cascade.semanticId" "relationship.approval-state-receipt"
+    }
+}
+
+rel_approval_result_readiness = code_approval_result -> code_feature_readiness "Reads independent execution blockers" {
+    properties {
+        "cascade.semanticId" "relationship.approval-result-readiness"
+    }
+}
+
+rel_feature_readiness_approval_policy = code_feature_readiness -> code_approval_policy "Uses the same approval-only predecessor allowlist for read projection" {
+    properties {
+        "cascade.semanticId" "relationship.feature-readiness-approval-policy"
+    }
+}
+
+rel_feature_readiness_approval_eligibility = code_feature_readiness -> code_feature_approval_eligibility "Returns typed approval-only eligibility beside execution readiness" {
+    properties {
+        "cascade.semanticId" "relationship.feature-readiness-approval-eligibility"
+    }
+}
+
+rel_feature_write_revision = code_feature_receipt_write -> code_feature_revision "Binds approved document" {
+    properties {
+        "cascade.semanticId" "relationship.feature-write-revision"
+    }
+}
+
+rel_feature_read_revision = code_feature_receipt_read -> code_feature_revision "Compares current document" {
+    properties {
+        "cascade.semanticId" "relationship.feature-read-revision"
+    }
+}
+
+rel_http_approve_handler = code_http_handler -> code_http_approve_feature "Routes approval POST" {
+    properties {
+        "cascade.semanticId" "relationship.http-approve-handler"
+    }
+}
+
+rel_http_approve_state = code_http_approve_feature -> code_approval_state "Serializes canonical approval state on refusals" {
+    properties {
+        "cascade.semanticId" "relationship.http-approve-state"
+    }
+}
+
+rel_dashboard_readiness_ui_approve = code_dashboard_feature_readiness_ui -> code_dashboard_feature_approve "Adds the scoped action and retained outcome to eligible Feature rows" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-readiness-ui-approve"
+    }
+}
+
+rel_dashboard_approve_state = code_dashboard_feature_approve -> code_dashboard_feature_action_state "Reads and advances per-Feature action presentation" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-approve-state"
+    }
+}
+
+rel_dashboard_feature_approve_post = code_dashboard_feature_approve -> code_dashboard_post "Submits the visibly displayed review context through the bounded approval write" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-feature-approve-post"
+    }
+}
+
+rel_dashboard_feature_approve_refresh = code_dashboard_feature_approve -> code_dashboard_board_refresh "Reconciles ambiguous transport and canonical approval after the write" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-feature-approve-refresh"
+    }
+}
+
+rel_dashboard_feature_readiness = code_dashboard_feature_readiness -> code_feature_readiness "Serializes the server-owned projection" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-feature-readiness"
     }
 }

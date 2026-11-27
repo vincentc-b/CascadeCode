@@ -21,7 +21,7 @@ component supervisor "cascade-supervisor-components" {
 // Focused implementation boundary; lifecycle and code diagrams are in the
 // owning cascade/{epic,feature,task}/DESIGN.md documents.
 component supervisor "cascade-team-components" {
-    include team_component epic_team feature_team task_team agent_component watchdog_component boss_component workspace_component repository
+    include approval_component team_component epic_team feature_team task_team agent_component watchdog_component boss_component workspace_component repository
     autoLayout lr
 }
 
@@ -40,6 +40,7 @@ custom "cascade-feature-code" {
     properties {
         "cascade.codeComponent" "element.component.feature-team"
     }
+    include code_feature_receipt_write code_feature_receipt_read code_feature_revision code_feature_readiness code_feature_approval_eligibility
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
     include code_feature_mint code_feature_recover code_feature_retry code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_latest_open_review_repair code_feature_reserve code_feature_repair_verify
     autoLayout lr
@@ -152,7 +153,7 @@ custom "cascade-war-room-http-code" {
     properties {
         "cascade.codeComponent" "element.component.war-room-http"
     }
-    include code_http_serve code_http_handler code_http_identity code_http_local code_http_review_repair
+    include code_http_approve_feature code_http_serve code_http_handler code_http_identity code_http_local code_http_review_repair
     autoLayout lr
 }
 
@@ -170,8 +171,8 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
-    include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_post
+    include code_dashboard_feature_approve code_dashboard_feature_readiness code_dashboard_feature_readiness_ui code_dashboard_feature_action_state code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_feature_plan_approval code_dashboard_post
     include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
 }
@@ -205,5 +206,14 @@ custom "cascade-workspace-code" {
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
     include code_workspace_invoke code_workspace_owner_live code_workspace_queue_kickoff code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked code_workspace_retained_feature
+    autoLayout lr
+}
+
+custom "cascade-approval-code" {
+    title "Approval authority — Code"
+    properties {
+        "cascade.codeComponent" "element.component.approval"
+    }
+    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_policy code_approval_strict code_approval_review code_approval_save code_approval_reconcile code_approval_result code_approval_state
     autoLayout lr
 }

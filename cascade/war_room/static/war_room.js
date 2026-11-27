@@ -30,6 +30,8 @@
   let branchSyncRowHelpers = null;
   let backlogPriorityUi = null;
   let backlogEpicPriorityUi = null;
+  const featureApprovalActions = Object.create(null);
+  let focusedFeatureApprovalId = null;
   const RECOVERY_TOASTS_STORAGE_KEY = "cascade-war-room-recovery-transitions";
   let recoveryIncidentTransitions = readRecoveryIncidentTransitions();
 
@@ -1096,7 +1098,9 @@
     if (FeatureReadinessUi && readiness.explanation) {
       const readinessUi = FeatureReadinessUi.render(document, readiness, item.id);
       if (readinessUi) row.appendChild(readinessUi);
-      if (!readiness.approved) actions.appendChild(featureApproveActionButton(item));
+      if (!readiness.approved || featureApprovalActions[item.id]) {
+        actions.appendChild(featureApproveActionButton(item));
+      }
       return;
     }
 
@@ -1125,32 +1129,222 @@
     row.appendChild(blockersEl);
   }
 
+  function featureApprovalActionState(item) {
+    let state = featureApprovalActions[item.id];
+    if (!state) {
+      state = featureApprovalActions[item.id] = {
+        phase: "idle",
+        sequence: 0,
+        reviewContext: null,
+        result: null,
+        retryAllowed: false,
+      };
+    }
+    const approval = item.readiness && item.readiness.approval;
+    if (approval && approval.state === "approved" && state.phase.indexOf("saved") !== 0) {
+      state.phase = (item.readiness.blockers || []).length ? "saved_waiting" : "saved";
+      state.retryAllowed = false;
+      state.result = {
+        approval_result: approval.result || "approved",
+        approval_state: "approved",
+        approval_explanation: {
+          code: "canonical_approval_current",
+          message: approval.explanation || "Canonical approval evidence is current.",
+        },
+        affected_work_ids: approval.affected_work_ids || [item.id],
+        execution_state: (item.readiness.blockers || []).length ? "waiting" : "ready",
+      };
+    }
+    return state;
+  }
+
   function featureApproveActionButton(item) {
+    const state = featureApprovalActionState(item);
+    const wrap = document.createElement("section");
+    wrap.className = "feature-approval-action feature-approval-" + state.phase;
+    wrap.setAttribute("aria-label", "Feature approval action for " + item.id);
+
+    const scope = document.createElement("p");
+    scope.className = "feature-approval-scope";
+    if (state.reviewContext) {
+      scope.textContent = "Reviewed scope: plan " + state.reviewContext.plan_revision +
+        " · review " + state.reviewContext.review_unit_id +
+        " · tuple " + state.reviewContext.reviewed_tuple_digest +
+        " · repository " + state.reviewContext.target_repository_key + ".";
+      wrap.appendChild(scope);
+    }
+
+    const feedback = document.createElement("p");
+    feedback.className = "feature-approval-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    if (state.phase === "loading_context") {
+      feedback.textContent = "Loading the current reviewed scope…";
+    } else if (state.phase === "pending") {
+      feedback.textContent = "Approval pending for the displayed review tuple.";
+    } else if (state.result) {
+      const explanation = state.result.approval_explanation || {};
+      const affected = Array.isArray(state.result.affected_work_ids) && state.result.affected_work_ids.length
+        ? " Affected: " + state.result.affected_work_ids.join(", ") + "."
+        : "";
+      feedback.textContent = "Approval " + (state.result.approval_result || "unknown") +
+        " · state " + (state.result.approval_state || "unknown") +
+        " · execution " + (state.result.execution_state || "unknown") + ". " +
+        (explanation.message || "No explanation was returned.") + affected;
+      if (state.phase === "refused" || state.phase === "unconfirmed") {
+        feedback.classList.add("error");
+      }
+    } else if (state.reviewContext) {
+      feedback.textContent = "Review the tuple above before approving this Feature.";
+    } else {
+      feedback.textContent = "Load the exact reviewed scope before approval is enabled.";
+    }
+    wrap.appendChild(feedback);
+
+    if (state.phase.indexOf("saved") === 0) return wrap;
+
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = "Approve feature";
+    btn.dataset.featureApprovalAction = item.id;
+    btn.disabled = state.phase === "loading_context" || state.phase === "pending" ||
+      (state.phase === "unconfirmed" && !state.retryAllowed);
+    btn.setAttribute("aria-busy", state.phase === "loading_context" || state.phase === "pending" ? "true" : "false");
+    btn.textContent = state.phase === "loading_context" ? "Loading scope…" :
+      state.phase === "pending" ? "Approving…" :
+      !state.reviewContext ? "Load approval scope" :
+      state.phase === "unconfirmed" && !state.retryAllowed ? "Checking approval state…" :
+      state.phase === "refused" || state.phase === "unconfirmed" ? "Retry approval" :
+      "Approve feature";
+    btn.addEventListener("focus", function () {
+      focusedFeatureApprovalId = item.id;
+    });
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
-      if (btn.disabled) return;
-      btn.disabled = true;
-      btn.textContent = "Approving…";
-      dispatch("/api/approve_feature", { id: item.id })
-        .then(function (body) {
-          if (body && body.ok && !body.dispatch_pending) {
-            setStatus("Feature " + item.id + " approved.", false);
-          }
+      if (btn.disabled || state.phase === "pending" || state.phase === "loading_context") return;
+      const sequence = ++state.sequence;
+      if (!state.reviewContext) {
+        state.phase = "loading_context";
+        renderBoard(lastBoardView);
+        apiGet("/api/architecture/reviews/" + encodeURIComponent(item.id) + "?limit=1")
+          .then(function (envelope) {
+            if (state.sequence !== sequence) return;
+            if (!envelope || !envelope.approval_context) {
+              const reason = envelope && (envelope.message || envelope.reason);
+              throw new Error(reason || "No current reviewed scope is available. Open the Feature plan and complete review first.");
+            }
+            state.reviewContext = envelope.approval_context;
+            state.phase = "idle";
+            state.result = null;
+          })
+          .catch(function (err) {
+            if (state.sequence !== sequence) return;
+            state.phase = "refused";
+            state.result = {
+              approval_result: "refused",
+              approval_state: "unapproved",
+              approval_explanation: {
+                code: "review_context_unavailable",
+                message: err.message || String(err),
+              },
+              affected_work_ids: [item.id],
+              execution_state: "unknown",
+            };
+          })
+          .finally(function () {
+            if (state.sequence === sequence && lastBoardView) renderBoard(lastBoardView);
+          });
+        return;
+      }
+
+      state.phase = "pending";
+      state.retryAllowed = false;
+      state.result = null;
+      renderBoard(lastBoardView);
+      apiPost("/api/approve_feature", {
+        id: item.id,
+        review_context: state.reviewContext,
+      }, LIFECYCLE_ACTION_DEADLINE_MS)
+        .then(function (response) {
+          if (state.sequence !== sequence) return;
+          state.result = response.body;
+          state.phase = response.body && response.body.approval_result === "approved"
+            ? (response.body.execution_state === "waiting" ? "saved_waiting" : "saved")
+            : "refused";
+          setStatus(
+            state.phase.indexOf("saved") === 0
+              ? "Feature " + item.id + " approval saved."
+              : ((response.body && response.body.error) || "Feature approval refused."),
+            state.phase.indexOf("saved") !== 0
+          );
         })
         .catch(function (err) {
-          setStatus(err.message || String(err), true);
+          if (state.sequence !== sequence) return;
+          if (err.status && err.body) {
+            state.phase = "refused";
+            state.result = err.body;
+            state.retryAllowed = true;
+            const explanation = err.body.approval_explanation || {};
+            if (explanation.code === "review_context_refused") {
+              state.reviewContext = null;
+            }
+            return;
+          }
+          state.phase = "unconfirmed";
+          state.result = {
+            approval_result: "unknown",
+            approval_state: "unknown",
+            approval_explanation: {
+              code: "transport_unconfirmed",
+              message: "Approval outcome was not confirmed; reconciling canonical board evidence before retry.",
+            },
+            affected_work_ids: [item.id],
+            execution_state: "unknown",
+          };
         })
         .finally(function () {
-          if (btn.isConnected) {
-            btn.disabled = false;
-            btn.textContent = "Approve feature";
-          }
+          if (state.sequence !== sequence) return;
+          refreshBoard({ refreshRelated: false })
+            .then(function (refreshed) {
+              if (state.sequence !== sequence || state.phase !== "unconfirmed") return;
+              const current = refreshed && findBoardItem(item.id);
+              const approval = current && current.readiness && current.readiness.approval;
+              if (approval && approval.state === "approved") {
+                featureApprovalActionState(current);
+              } else if (current && !current.readiness && current.status !== "backlog") {
+                state.phase = "saved";
+                state.retryAllowed = false;
+                state.result = {
+                  approval_result: "approved",
+                  approval_state: "approved",
+                  approval_explanation: {
+                    code: "canonical_lifecycle_advanced",
+                    message: "Canonical board state advanced beyond the approval wait.",
+                  },
+                  affected_work_ids: [item.id],
+                  execution_state: "started",
+                };
+              } else {
+                state.retryAllowed = !!refreshed;
+                if (state.result && state.result.approval_explanation) {
+                  state.result.approval_explanation.message = refreshed
+                    ? "Canonical board evidence remains unapproved; retry is now available."
+                    : "Canonical approval evidence could not be refreshed; retry remains disabled.";
+                }
+              }
+            })
+            .finally(function () {
+              if (state.sequence === sequence && lastBoardView) renderBoard(lastBoardView);
+              refreshRelatedPanels().catch(function () {});
+            });
         });
     });
-    return btn;
+    wrap.appendChild(btn);
+    if (focusedFeatureApprovalId === item.id) {
+      setTimeout(function () {
+        if (btn.isConnected) btn.focus();
+      }, 0);
+    }
+    return wrap;
   }
 
   function returnRefusalMessages(eligibility) {

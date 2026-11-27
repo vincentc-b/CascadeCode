@@ -416,23 +416,30 @@ legacy provenance, and `detail_truncated` without opening a recovery ledger.
 ## Refresh latency and coherent read projections
 
 `REQ-WARROOM-LIFECYCLE-FEEDBACK-001`: Activating an Epic team and approving
-its plan acknowledge the first operator click immediately, with a disabled
+Epic plans or individual Features acknowledge the first operator click immediately, with a disabled
 pending control that survives board redraws. A successful write shows an
 acknowledgement before the follow-up board GET completes. The actual column,
 readiness, and approval state still come from the canonical board; the UI must
 not fabricate lifecycle state or require a full page reload. A refused write
-shows its reason directly on the affected Epic row across polling; a lost response
+shows its reason directly on the affected work row across polling; a lost response
 is an unconfirmed outcome, not proof of failure. The activation route returns a
 JSON conflict for known board/workspace errors rather than dropping its connection.
-The plan viewer likewise shows pending and confirmed approval and retains the
-exact review tuple and dispatch-pending warning.
+The Epic plan viewer shows pending and confirmed plan approval independently
+from the Feature plan viewer's individual approval control. The Feature control
+retains the exact review tuple, submits those displayed bytes, and shows typed
+waiting, refusal, and unconfirmed outcomes beside the plan. A board Feature action first
+loads and visibly presents its scoped review tuple, then submits that same tuple.
+Its row-local status renders the typed approval result, canonical approval state,
+explanation, affected work IDs, execution state, and readiness reasons. A timeout
+or disconnect requires a fresh canonical board read before retry becomes available.
 
 `DEC-WARROOM-LIFECYCLE-FEEDBACK-001`: The 10-second read deadline is not a
 suitable mutation deadline: recorded activation and approval requests lasted
 10.3 and 25.3 seconds respectively. The HTTP server gives activation the same 60-second connection deadline as
-approval, rather than closing after the generic 10 seconds. Board activation
-and plan approval use a 120-second client write deadline, keyed by operation and Epic ID to suppress duplicate
-clicks across renders. A durable `ok` acknowledgement remains disabled until
+approval, rather than closing after the generic 10 seconds. Board activation,
+Epic plan approval, and individual Feature approval use a 120-second client write
+deadline. The corresponding action identity is keyed by operation and work ID to
+suppress duplicate clicks across renders. A durable `ok` acknowledgement remains disabled until
 canonical board state confirms the transition, including when a refresh fails.
 An action response triggers a fresh single-flight board read; flight and Boss
 panels refresh independently. Polling can also observe the durable transition
@@ -440,16 +447,36 @@ while the POST is still running. Background board reads defer their DOM update
 across a pressed button's pointer gesture so a poll cannot remove the click
 recipient between pointerdown and click. Only the latest deferred snapshot is
 applied. The plan page protects its approval control from concurrent readiness
-updates and checks `meta.plan_approved` after a lost response. No retry POST is
-issued automatically, no authorization or dispatch gates change, and no client
-state is persisted as board truth.
+updates and checks `meta.plan_approved` after a lost response. The board keeps only
+an in-memory Feature action presentation; canonical approval and readiness replace
+or confirm it, while an older poll cannot erase a newer pending, saved, refused,
+or unconfirmed result. No retry POST is issued automatically, no authorization or
+dispatch gates change, and no client state is persisted as board truth.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Pending: displayed review tuple submitted
+  Pending --> SavedWaiting: durable approval, prerequisites remain
+  Pending --> Refused: typed refusal
+  Pending --> Unconfirmed: timeout or disconnect
+  Unconfirmed --> SavedWaiting: canonical GET finds approval
+  Unconfirmed --> Pending: explicit retry after canonical GET
+  Refused --> Pending: operator retries displayed tuple
+```
 
 Regression coverage: `tests/war_room/war_room_refresh_races.mjs` exercises
 slow writes, rerenders, acknowledgement before a slow or failed GET, duplicate
 clicks, explicit refusal, ambiguous responses, and pointer gestures;
+`tests/war_room/test_board_feature_readiness.py` drives the API-backed Feature
+action through Chromium with exact tuple display, delayed and repeated clicks,
+row replacement, typed refusal, ambiguous transport reconciliation and ARIA focus;
 `tests/war_room/epic_plan_readiness_integration.mjs` exercises pending approval,
 concurrent readiness updates, reviewed context, dispatch warnings and durable
-readback after a lost response. The real Chromium test in
+readback after a lost response;
+`tests/war_room/feature_plan_approval_integration.mjs` covers the corresponding
+Feature plan state machine, and `tests/war_room/test_board_feature_readiness.py`
+drives its loopback document and approval APIs through Chromium. The real Chromium test in
 `tests/war_room/test_ui_render.py` drives both buttons through a held pointer
 gesture, delayed POSTs, intervening polls and canonical lane/approval updates
 without navigating away. The HTTP deadline regression in
@@ -538,11 +565,44 @@ readiness awaiting dispatch. Passing gates never claims execution; historical
 refusals remain separate from a newer evaluation. The browser renders these
 projections without implementing eligibility rules.
 
+Each Feature readiness object also exposes `approval.result`, `approval.state`,
+`approval.eligibility`, `approval.eligible`, `approval.explanation`, and
+`approval.affected_work_ids`. This approval-only projection is independent of
+the compatible execution `blockers`: a current receipt remains `approved` while
+ordinary predecessor, sibling, required integration, review, provider,
+software, parent, or dispatch-base facts keep execution waiting. Missing or
+stale receipt evidence never projects an approved state. Board GETs use the
+request-scoped board and cached provider facts and do not write receipts,
+dispatch work, or refresh external authority.
+
+This presentation consumes
+[`REQ-CASCADE-APPROVAL-001`](../DESIGN.md#feature-approval-authority). The board
+action first reads and displays the Feature's revision-pinned review context,
+then sends the Feature ID and those exact displayed context bytes to
+`POST /api/approve_feature`. The response separates `approval_result`,
+`approval_state`, `approval_explanation`, and `affected_work_ids` from
+`execution_state` and `dispatch_pending`. The browser holds only a per-Feature
+observation token, displayed context, in-flight request, and latest typed or
+transport-uncertain outcome. That transient state neither grants approval nor
+survives a browser or service restart. Durable state is the owning document's
+`approved_at` plus the matching receipt in the tracking repository; after a
+restart, only a current receipt-backed GET can reconstruct approved presentation.
+An explicit refusal remains visible until newer canonical evidence or an
+operator retry supersedes it. A timeout or disconnect remains unconfirmed until
+a canonical GET establishes a current receipt or a safe unapproved retry state;
+the client never converts transport uncertainty into success or an automatic
+second POST.
+
 `DEC-WARROOM-READINESS-001`: Board responses reuse request-scoped facts. Missing
 cached evidence remains unknown; polling does not discover providers, perform
 expensive per-feature Git probes, dispatch, or mutate lifecycle state. Action
 boundaries re-evaluate their gates. This preserves truthful explanations without
-turning browser refreshes into execution or repeated discovery.
+turning browser refreshes into execution or repeated discovery. The API/client
+split keeps the action state ephemeral and receipt ownership server-side: the
+client may suppress duplicate gestures and order observations, while only the
+approval service may write authorization and only canonical reconciliation may
+report admission. Refusal and unconfirmed transport are therefore explicit
+fail-closed gates, not alternate authorization paths.
 
 `REQ-WARROOM-ATTENTION-001`: New-feature markers and collapsed-epic counts remain
 separate from lifecycle and activation summaries. Viewing or rendering a feature

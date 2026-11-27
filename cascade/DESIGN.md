@@ -19,6 +19,86 @@ owner review.
 Verification references live with each owning design; unavailable evidence does
 not establish a successful lifecycle transition.
 
+## Feature approval authority
+
+`REQ-CASCADE-APPROVAL-001`: Human authorization is durable independently of an
+execution attempt. A saved approval does not establish dispatch readiness, and
+an execution refusal cannot erase a saved approval. The approval service owns
+mutation; [Feature evidence](feature/DESIGN.md#approval-evidence-and-readiness)
+owns receipt interpretation; [Watchdog](watchdog/DESIGN.md) owns admission; and
+the [War Room readiness contract](war_room/DESIGN.md#feature-activation-explanations-and-new-work-attention)
+owns operator presentation without acquiring approval authority.
+
+`DEC-CASCADE-APPROVAL-001`: Keep approval orchestration in the existing local
+service and reuse board timestamps and Feature receipts. A separate scheduler or
+approval ledger would split authority. The process lock serializes approval
+checks and writes; it is not a transaction across Git and JSON or an OS sandbox.
+
+| Entry point | Responsibility and failure boundary |
+|---|---|
+| [`approve_feature`, `approve_epic_plan`](approvals.py) | Resolve the canonical owning document, refresh dependency evidence, preflight selected providers, and require corrective-plan and lifecycle review checks before new approval writes. Individual approval accepts only satisfied predecessors or known `dependency_incomplete` waits in legal noncancelled lifecycle state, then refreshes the owner and declaration again before writing. Epic approval checks the Epic dependency declaration and its current child set with the strict policy. |
+| [`evaluate_action_dependencies`, `require_action_dependencies`, `require_feature_approval_dependencies`](planning_action_dependencies.py) | Refresh the merged board and evaluate canonical dependency status/column evidence. The strict adapter refuses every unsatisfied dependency for minting, sign-off, Epic approval and dispatch-related planning boundaries. The individual-approval adapter permits only legal incompleteness; unknown sources, missing work, cancellation, illegal status/column evidence, or a changed owner/declaration refuse with stable reasons and affected IDs. |
+| [`require_lifecycle_review_gate`](lifecycle_review_gate.py) | Apply comment and architecture gates; enforce the displayed exact review context when rollout policy requires it. |
+| [`_set_feature_approved`](approvals.py) | Commit the owning Feature timestamp, then write its revision receipt through the Feature evidence owner. |
+| [`reconcile_approval_dispatch`](automation.py) | Use Boss ordering and canonical Watchdog dispatch after approval when automation is enabled; later reconciliation can retry a wait. |
+| [`WarRoomRequestHandler._handle_approve_feature`](war_room/server.py) | Decode the submitted review context and serialize approval/refusal. Provider and dependency failures have typed payloads; other exceptions use the generic conflict response. |
+
+The individual HTTP result preserves `ok`, `feature_id`, `newly_approved`,
+`dispatch_pending`, `dispatch_outcome`, and existing refusal fields. Additive
+fields separate the authorization result from execution: `approval_result` is
+`approved`, `refused`, or `unknown`; `approval_state` is the receipt-backed
+`approved`, `unapproved`, `stale`, or `unknown` state; `approval_explanation`
+contains a stable code and message; and `affected_work_ids` names the current
+scope or wait. `execution_state` reports `waiting`, `admitted`, `completed`, or
+`unknown`; `admitted` describes the canonical active board lane rather than a
+claim about provider execution. A current receipt can therefore return HTTP
+success with `execution_state: waiting` and `dispatch_pending: true` without
+claiming that Feature execution started.
+
+Epic plan approval additionally uses
+[`require_epic_plan_ready_for_approval`](epic/plan_readiness.py), including
+software prerequisite readiness and revision-bound role sign-offs. The individual
+Feature handler is a local operator action but does not call the request-scoped
+human identity verifier. A receipt is not proof of request authentication.
+
+```mermaid
+sequenceDiagram
+    participant HTTP as Approval HTTP handler
+    participant Approval as Approval service
+    participant Board as Owning board document
+    participant Receipt as Feature evidence
+    participant Dispatch as Boss / Watchdog
+    HTTP->>Approval: Feature ID and displayed review context
+    Approval->>Board: Lock, refresh owner and dependency rows
+    alt dependency or authorization refusal
+        Approval-->>HTTP: Typed refusal before approval writes
+    else satisfied or known legal predecessor wait and authorization checks pass
+        Approval->>Board: Recheck unchanged owner and declaration
+        Approval->>Board: Commit approved_at
+        Approval->>Receipt: Persist matching revision receipt
+        Approval->>Dispatch: Existing reconciliation when enabled
+        Dispatch->>Receipt: Require current approval evidence
+        Dispatch-->>HTTP: Admission or dispatch wait; saved approval remains
+    end
+    Note over Board,Receipt: Interrupted writes can leave unknown evidence; restart must not infer approval from the timestamp alone
+```
+
+Navigate `cascade-context` → `cascade-containers` →
+`cascade-supervisor-components` → `cascade-approval-code` in the
+[authoritative C4 views](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+The component `element.component.approval` owns approval orchestration and the
+shared planning dependency/review adapters. Its collaborators remain distinct
+components, not independently deployed processes. Feature receipt and readiness
+nodes belong to `element.component.feature-team` in `cascade-feature-code`;
+Watchdog admission stays in `cascade-watchdog-code`. HTTP and dashboard nodes
+remain under their War Room owners.
+
+Verification references: [approval tests](../tests/test_approvals.py),
+[dependency action tests](../tests/test_planning_action_dependencies.py),
+[dispatch integration](../tests/test_approval_dispatch_integration.py), and
+[provider refusal tests](../tests/test_approval_selection_gate.py). These are
+inspectable test locations, not a claim that an unimplemented policy is verified.
+
 ## Health-audit read boundary
 
 `REQ-CASCADE-002`: Dashboard audit reads consume a bounded, immutable projection
@@ -244,6 +324,7 @@ behavior and verification behind each Code view.
 | War Room | Architecture browser | `cascade-architecture-browser-code` | [Source inspection](war_room/DESIGN.md#integrated-c4-exploration-and-source-inspection) |
 | War Room | Diagram comparison | `cascade-diagram-review-code` | [Plan preview](war_room/DESIGN.md#committed-planning-comparisons-and-project-previews) |
 | War Room | Dashboard and audit reads | `cascade-dashboard-code` | [Audit HTTP](war_room/DESIGN.md#health-audit-http-consumer), [recovery and transcripts](war_room/DESIGN.md#recovery-summaries-and-planning-transcripts) |
+| Service | Approval authority | `cascade-approval-code` | [Approval authority](#feature-approval-authority) |
 | Service | Board | `cascade-board-code` | [Board](board/DESIGN.md) |
 | Service | Agent runtime | `cascade-agent-code` | [Agent](agent/DESIGN.md) |
 | Service | Tier teams | `cascade-teams-code` | [Team execution](#team-execution) |

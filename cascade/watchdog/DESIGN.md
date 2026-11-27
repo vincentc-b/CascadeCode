@@ -87,9 +87,18 @@ intended-target evidence releases an eligible consumer through the normal
 approval, capacity, provider and lifecycle gates, which admit only one active
 execution.
 
+Individual approval is not an admission shortcut. A legally incomplete
+predecessor may coexist with a current approval receipt while the Feature stays
+in backlog. Every later Watchdog or Boss reconciliation still requires that
+receipt, completed lifecycle dependencies, applicable intended-target delivery,
+sibling serialization, provider/software readiness, review gates, and a valid
+dispatch base. Restart reuses those canonical facts and cannot infer approval
+from a document timestamp whose matching receipt is absent or stale.
+
 ```mermaid
 flowchart TD
-    Ready[Lifecycle dependencies complete] --> Delivery[Read current Feature delivery]
+    Approval[Current timestamp and matching receipt] --> Ready[Lifecycle dependencies complete]
+    Ready --> Delivery[Read current Feature delivery]
     Delivery -->|missing, closed-unverified, stale, wrong target| Wait[feature_awaiting_merge]
     Delivery -->|verified intended target| Gates[Ordinary execution gates]
     Ready -->|stacking explicitly enabled| Stack[Select supported predecessor base]

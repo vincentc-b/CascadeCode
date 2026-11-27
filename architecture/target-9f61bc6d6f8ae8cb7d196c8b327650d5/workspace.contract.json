@@ -1,5 +1,28 @@
 {
   "elements": [
+    {"dsl_identifier": "approval_component", "semantic_id": "element.component.approval", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_feature", "semantic_id": "element.code.approval.feature", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_epic", "semantic_id": "element.code.approval.epic", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_dependencies", "semantic_id": "element.code.approval.dependencies", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_eligibility", "semantic_id": "element.code.approval.feature-dependency-eligibility", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_policy", "semantic_id": "element.code.approval.feature-dependency-policy", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_strict", "semantic_id": "element.code.approval.strict-dependencies", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_review", "semantic_id": "element.code.approval.review", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_save", "semantic_id": "element.code.approval.save", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_reconcile", "semantic_id": "element.code.approval.reconcile", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_result", "semantic_id": "element.code.approval.feature-result", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_approval_state", "semantic_id": "element.code.approval.feature-state", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_feature_receipt_write", "semantic_id": "element.code.feature.receipt-write", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_feature_receipt_read", "semantic_id": "element.code.feature.receipt-read", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_feature_revision", "semantic_id": "element.code.feature.approval-revision", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_feature_readiness", "semantic_id": "element.code.feature.readiness", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_feature_approval_eligibility", "semantic_id": "element.code.feature.approval-eligibility", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_http_approve_feature", "semantic_id": "element.code.http.approve-feature", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_approve", "semantic_id": "element.code.dashboard.feature-approve", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_readiness", "semantic_id": "element.code.dashboard.feature-readiness", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_readiness_ui", "semantic_id": "element.code.dashboard.feature-readiness-ui", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_action_state", "semantic_id": "element.code.dashboard.feature-approval-state", "fragment": "model.dsl"},
+
     {"dsl_identifier": "code_workspace_delivery", "semantic_id": "element.code.workspace.delivery", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_resume", "semantic_id": "element.code.workspace.resume", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_schedule", "semantic_id": "element.code.workspace.schedule", "fragment": "model.dsl"},
@@ -19,6 +42,7 @@
     {"dsl_identifier": "code_dashboard_lifecycle_ui", "semantic_id": "element.code.dashboard.lifecycle-ui", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_board_refresh", "semantic_id": "element.code.dashboard.board-refresh", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_plan_approval", "semantic_id": "element.code.dashboard.plan-approval", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_plan_approval", "semantic_id": "element.code.dashboard.feature-plan-approval", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_post", "semantic_id": "element.code.dashboard.post", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_recovery", "semantic_id": "element.code.dashboard.recovery", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_progress_contract", "semantic_id": "element.code.dashboard.progress-contract", "fragment": "model.dsl"},
@@ -280,10 +304,40 @@
     {"dsl_identifier": "code_task_validation", "semantic_id": "element.code.task.validation", "fragment": "model.dsl"}
   ],
   "fragments": [
-    {"path": "model.dsl", "owner": "epic_051"},
-    {"path": "views.dsl", "owner": "epic_051"}
+    {"path": "model.dsl", "owner": "epic_056"},
+    {"path": "views.dsl", "owner": "epic_056"}
   ],
   "relationships": [
+    {"dsl_identifier": "rel_http_approval", "semantic_id": "relationship.http-approval", "fragment": "model.dsl", "source": "war_room_http", "destination": "approval_component"},
+    {"dsl_identifier": "rel_approval_board", "semantic_id": "relationship.approval-board", "fragment": "model.dsl", "source": "approval_component", "destination": "board_component"},
+    {"dsl_identifier": "rel_approval_feature", "semantic_id": "relationship.approval-feature", "fragment": "model.dsl", "source": "approval_component", "destination": "feature_team"},
+    {"dsl_identifier": "rel_approval_watchdog", "semantic_id": "relationship.approval-watchdog", "fragment": "model.dsl", "source": "approval_component", "destination": "watchdog_component"},
+    {"dsl_identifier": "rel_approval_agent", "semantic_id": "relationship.approval-agent", "fragment": "model.dsl", "source": "approval_component", "destination": "agent_component"},
+    {"dsl_identifier": "rel_approval_workspace", "semantic_id": "relationship.approval-workspace", "fragment": "model.dsl", "source": "approval_component", "destination": "workspace_component"},
+    {"dsl_identifier": "rel_approval_feature_dependencies", "semantic_id": "relationship.approval-feature-dependencies", "fragment": "model.dsl", "source": "code_approval_feature", "destination": "code_approval_eligibility"},
+    {"dsl_identifier": "rel_approval_eligibility_evaluation", "semantic_id": "relationship.approval-eligibility-evaluation", "fragment": "model.dsl", "source": "code_approval_eligibility", "destination": "code_approval_dependencies"},
+    {"dsl_identifier": "rel_approval_eligibility_policy", "semantic_id": "relationship.approval-eligibility-policy", "fragment": "model.dsl", "source": "code_approval_eligibility", "destination": "code_approval_policy"},
+    {"dsl_identifier": "rel_approval_epic_dependencies", "semantic_id": "relationship.approval-epic-dependencies", "fragment": "model.dsl", "source": "code_approval_epic", "destination": "code_approval_strict"},
+    {"dsl_identifier": "rel_approval_strict_evaluation", "semantic_id": "relationship.approval-strict-evaluation", "fragment": "model.dsl", "source": "code_approval_strict", "destination": "code_approval_dependencies"},
+    {"dsl_identifier": "rel_approval_feature_review", "semantic_id": "relationship.approval-feature-review", "fragment": "model.dsl", "source": "code_approval_feature", "destination": "code_approval_review"},
+    {"dsl_identifier": "rel_approval_feature_save", "semantic_id": "relationship.approval-feature-save", "fragment": "model.dsl", "source": "code_approval_feature", "destination": "code_approval_save"},
+    {"dsl_identifier": "rel_approval_epic_save", "semantic_id": "relationship.approval-epic-save", "fragment": "model.dsl", "source": "code_approval_epic", "destination": "code_approval_save"},
+    {"dsl_identifier": "rel_approval_feature_reconcile", "semantic_id": "relationship.approval-feature-reconcile", "fragment": "model.dsl", "source": "code_approval_feature", "destination": "code_approval_reconcile"},
+    {"dsl_identifier": "rel_approval_feature_result", "semantic_id": "relationship.approval-feature-result", "fragment": "model.dsl", "source": "code_approval_feature", "destination": "code_approval_result"},
+    {"dsl_identifier": "rel_approval_state_receipt", "semantic_id": "relationship.approval-state-receipt", "fragment": "model.dsl", "source": "code_approval_state", "destination": "code_feature_receipt_read"},
+    {"dsl_identifier": "rel_approval_result_readiness", "semantic_id": "relationship.approval-result-readiness", "fragment": "model.dsl", "source": "code_approval_result", "destination": "code_feature_readiness"},
+    {"dsl_identifier": "rel_feature_readiness_approval_policy", "semantic_id": "relationship.feature-readiness-approval-policy", "fragment": "model.dsl", "source": "code_feature_readiness", "destination": "code_approval_policy"},
+    {"dsl_identifier": "rel_feature_readiness_approval_eligibility", "semantic_id": "relationship.feature-readiness-approval-eligibility", "fragment": "model.dsl", "source": "code_feature_readiness", "destination": "code_feature_approval_eligibility"},
+    {"dsl_identifier": "rel_feature_write_revision", "semantic_id": "relationship.feature-write-revision", "fragment": "model.dsl", "source": "code_feature_receipt_write", "destination": "code_feature_revision"},
+    {"dsl_identifier": "rel_feature_read_revision", "semantic_id": "relationship.feature-read-revision", "fragment": "model.dsl", "source": "code_feature_receipt_read", "destination": "code_feature_revision"},
+    {"dsl_identifier": "rel_http_approve_handler", "semantic_id": "relationship.http-approve-handler", "fragment": "model.dsl", "source": "code_http_handler", "destination": "code_http_approve_feature"},
+    {"dsl_identifier": "rel_http_approve_state", "semantic_id": "relationship.http-approve-state", "fragment": "model.dsl", "source": "code_http_approve_feature", "destination": "code_approval_state"},
+    {"dsl_identifier": "rel_dashboard_readiness_ui_approve", "semantic_id": "relationship.dashboard-readiness-ui-approve", "fragment": "model.dsl", "source": "code_dashboard_feature_readiness_ui", "destination": "code_dashboard_feature_approve"},
+    {"dsl_identifier": "rel_dashboard_approve_state", "semantic_id": "relationship.dashboard-approve-state", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_feature_action_state"},
+    {"dsl_identifier": "rel_dashboard_feature_approve_post", "semantic_id": "relationship.dashboard-feature-approve-post", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_post"},
+    {"dsl_identifier": "rel_dashboard_feature_approve_refresh", "semantic_id": "relationship.dashboard-feature-approve-refresh", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_board_refresh"},
+    {"dsl_identifier": "rel_dashboard_feature_readiness", "semantic_id": "relationship.dashboard-feature-readiness", "fragment": "model.dsl", "source": "code_dashboard_feature_readiness", "destination": "code_feature_readiness"},
+
     {"dsl_identifier": "code_workspace_delivery_to_schedule", "semantic_id": "relationship.code-workspace-delivery-to-schedule", "fragment": "model.dsl", "source": "code_workspace_delivery", "destination": "code_workspace_schedule"},
     {"dsl_identifier": "code_workspace_delivery_to_retained_feature", "semantic_id": "relationship.code-workspace-delivery-to-retained-feature", "fragment": "model.dsl", "source": "code_workspace_delivery", "destination": "code_workspace_retained_feature"},
     {"dsl_identifier": "code_workspace_resume_to_retained_feature", "semantic_id": "relationship.code-workspace-resume-to-retained-feature", "fragment": "model.dsl", "source": "code_workspace_resume", "destination": "code_workspace_retained_feature"},
@@ -317,6 +371,8 @@
     {"dsl_identifier": "http_review_repair_to_adapter", "semantic_id": "relationship.code-http-review-repair-to-adapter", "source": "code_http_review_repair", "destination": "code_epic_review_repair_request", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_plan_approval_to_post", "semantic_id": "relationship.code-dashboard-plan-approval-to-post", "source": "code_dashboard_plan_approval", "destination": "code_dashboard_post", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_plan_approval_to_router", "semantic_id": "relationship.code-dashboard-plan-approval-to-router", "source": "code_dashboard_plan_approval", "destination": "code_dashboard_router", "fragment": "model.dsl"},
+    {"dsl_identifier": "dashboard_feature_plan_approval_to_post", "semantic_id": "relationship.code-dashboard-feature-plan-approval-to-post", "source": "code_dashboard_feature_plan_approval", "destination": "code_dashboard_post", "fragment": "model.dsl"},
+    {"dsl_identifier": "dashboard_feature_plan_approval_to_router", "semantic_id": "relationship.code-dashboard-feature-plan-approval-to-router", "source": "code_dashboard_feature_plan_approval", "destination": "code_dashboard_router", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_incidents_to_dashboard_recovery", "semantic_id": "relationship.code-dashboard-incidents-to-dashboard-recovery", "source": "code_dashboard_incidents", "destination": "code_dashboard_recovery", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_router_to_progress_reader", "semantic_id": "relationship.code-dashboard-router-to-progress-reader", "source": "code_dashboard_router", "destination": "code_dashboard_incidents", "fragment": "model.dsl"},
     {"dsl_identifier": "dashboard_progress_ui_to_router", "semantic_id": "relationship.code-dashboard-progress-ui-to-router", "source": "code_dashboard_progress_ui", "destination": "code_dashboard_router", "fragment": "model.dsl"},
@@ -634,6 +690,7 @@
   "renames": [],
   "version": 1,
   "views": [
+    {"key": "cascade-approval-code", "fragment": "views.dsl"},
     {"key": "cascade-landscape", "fragment": "views.dsl"},
     {"key": "cascade-context", "fragment": "views.dsl"},
     {"key": "cascade-containers", "fragment": "views.dsl"},
@@ -659,5 +716,5 @@
     {"key": "cascade-diagnostics-code", "fragment": "views.dsl"},
     {"key": "cascade-workspace-code", "fragment": "views.dsl"}
   ],
-  "workspace": {"source": "workspace.dsl", "owner": "epic_051"}
+  "workspace": {"source": "workspace.dsl", "owner": "epic_056"}
 }

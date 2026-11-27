@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from cascade import review
 from cascade.approvals import approve_feature, feature_approved
 from cascade.agent.discovery.inventory import (
     InventoryFreshness,
@@ -20,9 +23,15 @@ from cascade.automation import advance_work, reconcile_approval_dispatch, reset_
 from cascade.board.store import move_doc, read_doc, write_doc
 from cascade.boss.view import compute_boss_view
 from cascade.watchdog import activate_epic, dispatch_feature, read_events
+from cascade.watchdog.events import append_event
+from cascade.watchdog.types import Event
 from cascade.war_room.serialize import board_view_from_index
 from cascade.war_room.room_settings import write_stacked_pr_enabled
-from cascade.workspace.integration_worktree import doc_filesystem_root, merged_board
+from cascade.workspace.integration_worktree import (
+    doc_filesystem_root,
+    get_integration_worktree,
+    merged_board,
+)
 from tests.support import add_doc as _add_doc, commit_board, make_repo
 
 
@@ -86,6 +95,55 @@ def _active_epic(root: Path, feature_ids: list[str] | None = None) -> None:
 def _ready_to_plan_events(feature_id: str, *, root: Path) -> list[object]:
     events, _ = read_events(feature_id, 0, root=root)
     return [event for event in events if event.type == "FeatureReadyToPlan"]
+
+
+def _record_current_intended_target_delivery(feature_id: str, *, root: Path) -> None:
+    """Record accepted evidence whose source is reachable from the Epic target."""
+
+    epic = get_integration_worktree(root, "epic", "epic_001")
+    assert epic is not None
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=epic.path, text=True
+    ).strip()
+    subprocess.run(
+        ["git", "branch", "-f", f"feat/{feature_id}", head],
+        cwd=root,
+        check=True,
+    )
+    review._store_review_generation(
+        root,
+        feature_id,
+        {
+            "url": f"https://example.test/pulls/{feature_id}",
+            "source_branch": f"feat/{feature_id}",
+            "target_branch": "epic/epic_001",
+            "source_head": head,
+            "target_head": head,
+            "closed": True,
+        },
+        generation=1,
+        action_id="acceptance:1",
+    )
+    review._update_record(
+        root,
+        feature_id,
+        {
+            "accepted_merge_sha": head,
+            "accepted_source_head": head,
+            "accepted_target_head": head,
+            "reconciliation_status": "accepted",
+        },
+    )
+    append_event(
+        "epic_001",
+        Event(
+            type="FeatureCompleted",
+            ts=datetime.now(timezone.utc),
+            payload={"feature_id": feature_id},
+            dest="epic_001",
+        ),
+        root=root,
+    )
 
 
 def test_reconcile_dispatches_explicitly_approved_feature(
@@ -269,6 +327,60 @@ def test_dependency_blocks_dispatch_until_completed(
     assert read_doc("feat_002", root=root).meta.path.parent.name == "2_active"
 
 
+def test_individual_approval_waits_for_dependency_delivery_then_dispatches_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    root = make_repo(tmp_path)
+    _enable_automation(root)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    commit_board(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic = get_integration_worktree(root, "epic", "epic_001")
+    assert epic is not None
+    add_doc(
+        epic.path,
+        id="feat_001",
+        title="Producer",
+        tier="feature",
+        parent="epic_001",
+    )
+    add_doc(
+        epic.path,
+        id="feat_002",
+        title="Consumer",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+    write_stacked_pr_enabled("epic_001", False, root=root)
+    commit_board(epic.path)
+    _quiet_dispatch(monkeypatch)
+
+    result = approve_feature("feat_002", root=root)
+
+    waiting = read_doc("feat_002", root=root)
+    assert result["approval_result"] == "approved"
+    assert result["execution_state"] == "waiting"
+    assert approval_evidence(waiting.meta, root=root)[0] == "current"
+    assert waiting.meta.path.parent.name == "1_backlog"
+    assert get_integration_worktree(root, "feature", "feat_002") is None
+    assert _ready_to_plan_events("feat_002", root=root) == []
+
+    move_doc("feat_001", "completed", root=root)
+    commit_board(epic.path)
+    assert reconcile_approval_dispatch(root)["features"] == []
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
+
+    _record_current_intended_target_delivery("feat_001", root=root)
+    assert reconcile_approval_dispatch(root)["features"] == ["feat_002"]
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "2_active"
+    assert len(_ready_to_plan_events("feat_002", root=root)) == 1
+    assert reconcile_approval_dispatch(root)["features"] == []
+    assert len(_ready_to_plan_events("feat_002", root=root)) == 1
+
+
 def test_merge_gate_blocks_sibling_until_review_clears(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -317,6 +429,12 @@ def test_merge_gate_blocks_sibling_until_review_clears(
         ),
         encoding="utf-8",
     )
+    released = reconcile_approval_dispatch(root)
+
+    assert released["features"] == []
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
+
+    _record_current_intended_target_delivery("feat_001", root=root)
     released = reconcile_approval_dispatch(root)
 
     assert released["features"] == ["feat_002"]
@@ -424,7 +542,14 @@ def test_approved_waiting_feature_flows_after_handoff_and_dependency_completion(
     approve_feature("feat_003", root=root)
     assert read_doc("feat_003", root=root).meta.status == "active"
     move_doc("feat_003", "completed", root=root)
-    assert reconcile_approval_dispatch(root)["features"] == ["feat_002"]
-    assert read_doc("feat_002", root=root).meta.approved_at == accepted_at
+    assert reconcile_approval_dispatch(root)["features"] == []
+
+    # The declaration changed after the original approval, so predecessor
+    # completion cannot repair the receipt without another explicit approval.
+    assert approval_evidence(read_doc("feat_002", root=root).meta, root=root)[0] == "stale"
+    repaired = approve_feature("feat_002", root=root)
+    assert repaired["newly_approved"] is True
+    assert read_doc("feat_002", root=root).meta.path.parent.name == "2_active"
+    assert read_doc("feat_002", root=root).meta.approved_at > accepted_at
     assert len(_ready_to_plan_events("feat_002", root=root)) == 1
     assert not reconcile_approval_dispatch(root)["features"]

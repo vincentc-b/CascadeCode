@@ -601,6 +601,23 @@ body {
   font-weight: 600;
 }
 
+.feature-approval-action {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  max-width: 34rem;
+}
+
+.feature-approval-scope,
+.feature-approval-feedback {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.feature-approval-feedback.error { color: #fecaca; }
+
 .feature-attention-disclosure,
 .feature-attention-status {
   margin: 0 0 0.6rem;
