@@ -160,7 +160,7 @@ flowchart LR
     Eligible -->|retained Feature with unread input| Schedule
     Schedule --> Recheck[Recheck eligibility under graph lock]
     Recheck -->|idle retained Feature| Cursor[Advance cursor without a role turn]
-    Recheck -->|admitted repair or interrupted turn| Resume[Resume checkpoint or persist classified queue input]
+    Recheck -->|active input, admitted repair or interrupted turn| Resume[Resume checkpoint or persist classified queue input]
     Resume --> Invoke[Invoke owning graph and advance durable cursor]
 ```
 

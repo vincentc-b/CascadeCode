@@ -432,6 +432,11 @@ integration. Review-disabled delivery uses the same completion-event and local
 ancestry proof. These reads do not poll the forge, publish a review, admit repair,
 or mutate lifecycle stores.
 
+Verification for `REQ-REVIEW-DELIVERY-001` is in the
+[review-generation tests](../tests/feature/test_review_generations.py), including
+missing and closed-unmerged evidence, active versus published generations,
+intended-target ancestry and read-only projection behavior.
+
 ```mermaid
 flowchart TD
     Read[Read board, review generation, repair, event and Git evidence] --> Current{Exact current generation?}

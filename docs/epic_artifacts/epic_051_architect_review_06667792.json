@@ -1,0 +1,97 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "06667792ca7b1e5a6e7278941a17a1dfd7c7b890",
+  "reviewed_implementation_revision": "ca23bc11f62417264a0235c8840dd88023a6f967",
+  "scope": "Review the integrated Feature 1 implementation and current plan dec_008; preserve approved scope and downstream acceptance assignments. Historical evidence reports Feature review staged at 39f31030 with no acceptance/promotion and reconciliation_receipt_missing. Git source presence does not replace those receipts.",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md#delivery-and-review-boundaries",
+    "cascade/boss/DESIGN.md#delivery-and-closeout",
+    "cascade/workspace/DESIGN.md#queue-eligibility-and-restart",
+    "cascade/workspace/DESIGN.md#work-ownership-and-retirement"
+  ],
+  "design_result": "Root closeout wording agrees with exact-generation acceptance and intended-Epic proof. REQ-REVIEW-DELIVERY-001 has one owner in cascade/DESIGN.md; added its direct review-generation verification reference. Corrected the Workspace Mermaid flow so idle retained queue input reaches the graph-lock recheck before cursor advancement, while ineligible terminal owners leave the queue unchanged. Current behavior, state stores, failure/restart gates, source links and owning model/view links were reviewed; no delivery chronology was added to designs.",
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": "No actor or external dependency added by 5f4b5022..ca23bc11. Retained Feature ownership stays within Cascade and its existing forge boundary.",
+    "cascade-containers": "No new process or store. Delivery reads existing review/action/event/board/Git evidence, queue input persists in graph checkpoints, and graph locks remain process-local serialization rather than OS filesystem isolation.",
+    "cascade-supervisor-components / cascade-team-components": "Workspace now consumes the shared Boss/review delivery boundary; matching component relationship is in model and contract. Team view includes Boss and Workspace. No separately deployed implementation module is implied.",
+    "cascade-boss-code": "New feature_delivery_view Function node is the public projection entry point. current_feature_obligation consumes it and separates active generation from nullable published_generation; the obsolete obligation-to-review-generation edge is replaced in model and contract. Closeout requires exact accepted target evidence.",
+    "cascade-workspace-code": "New _retained_feature_delivery Function node connects ordinary queue scan, startup resume and locked delivery to the shared projection; retirement also consumes the same projection. Existing nodes and owning component IDs remain. No source symbol was renamed/deleted or moved between components.",
+    "supplementary_behavior": "Shared delivery flow, Boss target-proof closeout and Workspace idle/resume/retirement refusal flows were traced against source. Workspace queue diagram corrected as described above.",
+    "downstream_consumers": "Feature/Epic repair, Watchdog/Task dependency/recovery and War Room source are unchanged in the delivered slice. Features 2/3 own admission and integration-required consumer reconciliation; Feature 4 owns passive UI and full repair journey. dec_008 remains authoritative for unresolved acceptance fixtures and consumer gaps."
+  },
+  "source_traces": {
+    "normal": "feature_delivery_view(s) reads a shared board/review snapshot and derives active/published generations, repair state, completion event and intended Epic ancestry. Exact current-generation acceptance on the intended target with a missing completion event exposes record_feature_completion; current_feature_obligation lets Boss emit that event. The projection then reports verified_integrated and Workspace independently rechecks it before descendant persistence/retirement.",
+    "failure_resume": "Open, missing, stale, closed-unmerged or accepted-but-not-integrated evidence stays nonterminal. _retained_feature_delivery retains completed owners. _run_queue_delivery_locked resumes interruptions under the existing writer lock; idle retained input persists a cursor without role messages, while current admitted repair can stage work. A delivered repair with missing/older published_generation selects idempotent same-review publication instead of completion. Retirement refuses nonterminal delivery before persisting descendants.",
+    "publication_recovery": "The earlier terminal failed publication is preserved. architecture_publication._discover_publication returns nonpending rows unchanged, and only superseded/artifact_changed publication rows reopen. A new proposal for the materially changed integrated model is distinct from replaying or manufacturing a retry of that failed baseline."
+  },
+  "verification": [
+    "Canonical Epic and Feature 1 historical-evidence reads completed; read_architecture_amendments returned [].",
+    "33 focused C4 source/review and bounded renderer guard checks passed in 5.74s; the separate real-render test was deselected because the browser check exercises the actual pinned renderer.",
+    "Local file links in all four reviewed design files resolve; REQ-REVIEW-DELIVERY-001 has one owning declaration.",
+    "Manager lifecycle evidence reused: 115 passed and 17 failed, with the same 17 failures reproduced on the pre-Feature baseline. No runtime source changed during this Architect review; this is not an all-green lifecycle-suite claim.",
+    "Real pinned Structurizr render reached ready at ca23bc11 with one attempt, no recovery and unchanged CPU/memory/PID/timeout bounds. Applied test_c4_render._assert_cascade_view_coverage to the rendered semantic workspace: all components have native Code views, all Code nodes are covered by their matching component, and every source path/symbol/declaration kind matches actual source.",
+    "Browser traversed context -> containers -> supervisor components -> Code for both new Boss/Workspace nodes; restored selected-node deep links, opened pinned source and returned Level up. No observed architecture HTTP errors. Cold readiness 106.62s; Boss journey 26.70s and Workspace journey 13.59s; total 147.39s. Render operations remained 4 -> 4 during navigation/reloads, demonstrating reuse rather than per-view process startup.",
+    "No source symbols were renamed/deleted and no Code component owners changed in the integrated diff. All current source declarations were verified against the rendered metadata; replacement semantic relationship is absent from model and contract.",
+    "No implementation/model changed after browser pin. Subsequent design edits add a verification link and clarify the active-input label on the corrected queue flow. All changed-design local file links and git diff --check passed."
+  ],
+  "owner_handoffs": {
+    "feature_3": "Complete dec_008 integration-dependent consumer verification for completed/missing/closed-unmerged/stale review evidence without conflating lifecycle planning readiness with supported stacked dispatch. Route any accepted-work contract change through the amendment protocol.",
+    "feature_4": "Restore meaningful setup for the final-journey cases identified by dec_008 and verify the complete red-CI repair/dependency flow. Do not bypass activation or approval guards.",
+    "architecture_runtime": "Earlier failed render/publication still require supported recovery with preserved identity, failure history, bounds and accepted-lineage guards. No exposed Epic tool repairs terminal failed publication state; no canonical ledger was edited.",
+    "epic_architect": "Reconcile any new publication receipt through the canonical tool; pending calls must be replayed identically on a later turn."
+  },
+  "limitations": [
+    "Feature 1 historical review has no returned acceptance/promotion receipt.",
+    "Final red-CI journey, dependency-consumer acceptance and known baseline test setup remain downstream obligations.",
+    "Browser checks isolate unrelated operational panels and do not establish full application health or a latency SLA.",
+    "No dependency installed, runtime implementation edited, accepted snapshot rewritten or lifecycle gate bypassed.",
+    "Rapid browser navigation produced server BrokenPipe diagnostics for cancelled requests; asserted paths returned successfully. This smoke does not establish general HTTP cancellation behavior."
+  ],
+  "browser_receipt": "docs/epic_artifacts/epic_051_delivery_architecture_browser.json",
+  "render": {
+    "operation_id": "c4-render-a9c739ce58bdd855f5270442dce36cc77605c15ee9ad07e19cd2707653f1ebf5",
+    "render_identity": "a9c739ce58bdd855f5270442dce36cc77605c15ee9ad07e19cd2707653f1ebf5",
+    "status": "ready",
+    "attempts": 1,
+    "recovery_attempts": 0,
+    "settings": {
+      "cpus": "2",
+      "memory": "1536m",
+      "pids_limit": 256,
+      "timeout_seconds": 180.0,
+      "tmpfs_size": "512m"
+    },
+    "revision": "ca23bc11f62417264a0235c8840dd88023a6f967",
+    "closure_digest": "85df05a3c79752a705f749df29aabb042f82fdae38ee7631af3cf3866db9bc09",
+    "semantic_workspace_sha256": "3a74ed42a3c5cc547b4ed8d564997452124417b9862652d3e3026c6ea505ae52",
+    "image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "view_keys": [
+      "cascade-agent-code",
+      "cascade-architecture-browser-code",
+      "cascade-board-code",
+      "cascade-boss-code",
+      "cascade-cli-components",
+      "cascade-collaboration-code",
+      "cascade-comparison-render-code",
+      "cascade-containers",
+      "cascade-context",
+      "cascade-dashboard-code",
+      "cascade-diagnostics-code",
+      "cascade-diagram-review-code",
+      "cascade-epic-code",
+      "cascade-feature-code",
+      "cascade-landscape",
+      "cascade-supervisor-components",
+      "cascade-task-code",
+      "cascade-team-components",
+      "cascade-teams-code",
+      "cascade-war-room-components",
+      "cascade-war-room-http-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-workspace-commands-code"
+    ]
+  }
+}
