@@ -2,7 +2,7 @@
 id: feat_051_006
 title: Bound persisted review evidence and passive review responses
 tier: feature
-status: active
+status: completed
 parent: epic_051
 children:
 - task_051_006_001
