@@ -19,6 +19,7 @@ delivery='--integrated-delivery' in sys.argv
 repair='--integrated-repair' in sys.argv
 health='--review-health' in sys.argv
 integrated_ui='--integrated-ui' in sys.argv
+consumer_gates='--consumer-gates' in sys.argv
 result={'paths':[], 'http_errors':[], 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()};started=time.monotonic()
 try:
  with sync_playwright() as p:
@@ -70,7 +71,15 @@ try:
     ('war-room','dashboard','cascade-dashboard-code','element.code.dashboard.open-reviews','handle_get_open_reviews'),
     ('war-room','dashboard','cascade-dashboard-code','element.code.dashboard.review-ui','createOpenReviewsPane'),
     ('supervisor','boss','cascade-boss-code','element.code.boss.feature','try_complete_feature')]
-  if health or integrated_ui:
+  if consumer_gates:
+   cases = [
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.dependency-delivery-gate','_dependency_review_pending'),
+    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.feature-dispatch-gate','feature_dispatch_blockers'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.feature-delivery-execution-predicate','feature_delivery_satisfies_integration'),
+    ('supervisor','boss','cascade-boss-code','element.code.boss.dependency-delivery-gate','_deps_met'),
+    ('supervisor','feature-team','cascade-feature-code','element.code.feature.retry','retry_task'),
+    ('supervisor','task-team','cascade-task-code','element.code.task.upstream-review-dependency','_dependent_feature_for_task')]
+  if health or integrated_ui or consumer_gates:
    result['visible_component_relationships']=[]
    for key in ('cascade-supervisor-components','cascade-team-components'):
     select_view(key)
@@ -107,5 +116,5 @@ try:
 finally:
  server.shutdown();server.server_close();thread.join(timeout=5);set_project_context(None)
  result['total_seconds']=time.monotonic()-started
- (root/('.cascade/epic051-integrated-ui-browser.json' if integrated_ui else '.cascade/epic051-health-browser.json' if health else '.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
+ (root/('.cascade/epic051-consumer-gates-browser.json' if consumer_gates else '.cascade/epic051-integrated-ui-browser.json' if integrated_ui else '.cascade/epic051-health-browser.json' if health else '.cascade/epic051-repair-browser.json' if repair else '.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
  print(json.dumps(result,indent=2),flush=True)

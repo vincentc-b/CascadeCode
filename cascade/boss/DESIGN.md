@@ -157,8 +157,8 @@ work. This migration is action-boundary work, not a board poll. Existing
 architecture tuple, affected-work, comment, provider and dependency gates
 remain authoritative.
 
-[BossView](view.py) identifies candidates without requiring a Git ancestry
-probe or forge poll on a read. Its Task dependency filter consumes the same
+[BossView](view.py) identifies candidates without a forge poll. Its Task
+dependency filter consumes the same
 persisted [Feature delivery projection](../review.py) as canonical dispatch, so
 a closed row, missing or stale generation, or accepted commit absent from the
 intended target is not advertised as dispatchable. The projection's local Git

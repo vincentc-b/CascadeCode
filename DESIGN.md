@@ -676,6 +676,16 @@ Dependencies live on the plan, not in the watchdog's head:
 - A node is dispatchable only when every listed ID is in `3_completed`
 - The Boss may sequence work; it may not invent edges that are not on the `.md`
 
+Lifecycle dependency readiness does not establish delivery. Integration-required
+execution also consumes the [shared Feature delivery contract](cascade/DESIGN.md#delivery-and-review-boundaries).
+The [Watchdog dependency gate](cascade/watchdog/DESIGN.md#feature-delivery-dependency-gate)
+and Boss candidate projection require current intended-target evidence; explicit
+stacked Feature dispatch retains its separate predecessor-base policy. Queued
+Tasks in declared same-Epic dependent Features retain upstream review generations
+through the [Task delivery fence](cascade/task/DESIGN.md#durable-delivery-collaborators),
+which rechecks ownership and route before waiting and spends no retry attempt on
+unchanged upstream evidence.
+
 ### 9.2 Git as the revision store
 
 No integer `rev` field. Plan edits are ordinary local commits.
