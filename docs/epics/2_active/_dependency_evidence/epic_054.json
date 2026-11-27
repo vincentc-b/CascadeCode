@@ -1159,5 +1159,83 @@
       "authority_current": true
     }
   ],
-  "snapshots": []
+  "snapshots": [
+    {
+      "snapshot_id": "evidence_4c434fe5d7ee477a831ef750fb1f9316",
+      "manifest_revision": 2,
+      "created_at": "2026-11-27T19:30:21.520095+00:00",
+      "accepted": [
+        {
+          "dependency_id": "dep_python",
+          "attempt_id": "attempt_resume_321b54d957716d95e9a41aa8e30eeb8afef70123f0a56a60d6201e965861cf0a",
+          "entry_revision": "sha256:381df32170b5e5960802afce03c9d6f7071687955053c5ef9e5b987c5f0fcd75",
+          "recipe_revision": "sha256:2752706fd91f45cf1895cf38cbe2f273b2ac98904ec43a970c76f068adadd290",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_git",
+          "attempt_id": "attempt_resume_f9077706624787d87da9066546a7def7b493f93163778864b2321e7da94f7bae",
+          "entry_revision": "sha256:aba157dd01d68c29f91583664632a2ef33caa373e4cde4624193e4922cfafba9",
+          "recipe_revision": "sha256:bc200ab3b1fa7fe3884163431a296aface5e85c6896cae1d376a7775e6e7c671",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "attempt_id": "attempt_resume_a24546480ae222838295e45ee83e847743febdf5e5b0a38058d942aed3ab2b22",
+          "entry_revision": "sha256:4f1f9f3d18dfe933c8cfc3fe9a687f2586478f3dc0cced0d2afd2c0c15f29fe4",
+          "recipe_revision": "sha256:a21d6bdf699d31d4924ef166959bb1a8f7ebc468a15e378bd93011a3b671e4c8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "attempt_id": "attempt_resume_27160bb46ecc5b7da51631890d9d201d723a885e3e74ffea39f5f10eac5e76b3",
+          "entry_revision": "sha256:0f7f2b51fdcf7c16e77b28cda9b712444faf850f34214a8985baa33b946ea2a0",
+          "recipe_revision": "sha256:e30c71e84bd19b5bb573869bfaece8c84c91b0597678f619096f3ab6a5e0690c",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "attempt_id": "attempt_resume_572d110c047e9b3c3fc751da68cf24b4a2bddab613d86b300b260c96b904c722",
+          "entry_revision": "sha256:10489901c065376969bd6ee49093e19a41b49bf17cc24028b2b9793f8feee0f4",
+          "recipe_revision": "sha256:e4a059ecd6df9b991fc41f1cdcebee703268cc486a31c30ed8db29a26f848b19",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "attempt_id": "attempt_resume_943f16bd209584ff3fa4bb77632aee35394e9bfa720e305dc11d43b96d7f1eac",
+          "entry_revision": "sha256:499b1ca2d012317e1ad8e84ae0d7ff82acd7b1fe723eaeac582a261df21799a8",
+          "recipe_revision": "sha256:b480b014385a92e8df12c2317de9266d095cbe274b8c6600feed73615879b424",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "attempt_id": "attempt_resume_6e91f663d6de75a5c0cfe8ef4ae6f94fad0835d3f98df74347901cb4060070d8",
+          "entry_revision": "sha256:110581fc12325bcddeaa0713d2507be9560781bcdd8db27457a95a9c5ac999fb",
+          "recipe_revision": "sha256:20f3f177a1476cc6f6b3429a67e599661ac5eabe2f8317ac73acd5905e82a2f8",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "attempt_id": "attempt_resume_c68a9f628218d10913a44e3bd3f3082fefc15142ef0c0d30bf9cf5ba352e63e7",
+          "entry_revision": "sha256:91e8abc46b3ea862696b75648916acf7fb3422108bc21a8e35f0cdc8122d6410",
+          "recipe_revision": "sha256:d0c88ddb71cc9bbe5851806cfbf2618e4619aa0513619dbb5d5d1d490456cb0b",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "attempt_id": "attempt_resume_121e36980b7a92fd98d521cd4b07fc7f84f09bfe87d76060fb5af08278e3b60b",
+          "entry_revision": "sha256:487ada9dcd5df4389819a18844314e9045ca77520ede8caa7d0f1d68d5e3aab5",
+          "recipe_revision": "sha256:1f875da007168b5abd92b9734a09b2fffb3333c909fd1f626c025db5d3ee9fe6",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "attempt_id": "attempt_resume_10076f84bb00d791743c16b5040b1fba9a9436cc74dc807c09cf168da3c3d333",
+          "entry_revision": "sha256:6de3d809f8cb945abe2630dc8eb13cf6826fdfaee4e1c85a3e3373dd65c75303",
+          "recipe_revision": "sha256:4c899fc415e3350f3fc78276696d40c0f50360bbc0d9a960f9a3b986f49f3d79",
+          "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955"
+        }
+      ]
+    }
+  ]
 }
