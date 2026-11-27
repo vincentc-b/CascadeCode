@@ -7,6 +7,7 @@ parent: null
 children:
 - feat_054_001
 - feat_054_002
+- feat_054_003
 depends_on: []
 owners:
 - epic_manager
@@ -58,6 +59,7 @@ Reuse cascade/review_validation.py, review_rebase.py, team_review_recovery.py, r
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_054_003
 - feat_054_002
 - feat_054_001
 
