@@ -101,6 +101,15 @@ The integrated Structurizr code view is `cascade-epic-code`. From the supervisor
 [recover_feature](recovery.py) and
 [supervise_child](../team_supervision.py). The adapter requires the immediate
 parent relationship and returns an already-running outcome for a live team.
+For an explicit open-review fix request,
+[request_feature_review_repair](../team_supervision.py) accepts the exact request
+identity and observation without requiring a Task mismatch. It accepts only the
+current direct Epic parent or an `AuthenticatedHuman` from the human boundary,
+delegates admission to Feature's content-addressed action, and wakes the queue
+only after that receipt and stable event exist. A live graph owner is joined or
+deferred without a competing kickoff. Its result exposes the accountable owner,
+selected operation, action/generation, request, admission, acknowledgement,
+execution, wait/refusal and verification states separately.
 For a direct Feature owning a completed-parent Task mismatch,
 [_recover_feature_lifecycle_mismatch](../team_supervision.py) verifies the exact
 registered owner, direct Task relationship, and current durable generation,
@@ -123,13 +132,18 @@ restart; replay rechecks the same owner and generation before mutation.
 sequenceDiagram
     participant Epic as recover_feature
     participant Supervision as supervise_child
+    participant Adapter as request_feature_review_repair
     participant Feature as recover_task
     participant Repair as feature_repair
     Epic->>Supervision: direct Feature + recover
-    Supervision->>Supervision: verify owner, Task parent, generation
-    alt live Feature owner
+    alt exact open-review request
+        Supervision->>Adapter: direct-parent authority + exact observation
+        Adapter->>Repair: persist admission and stable event
+        Adapter-->>Epic: acknowledged; execution and verification remain false
+    else live Feature owner
         Supervision-->>Epic: expected wait
     else exact mismatch
+        Supervision->>Supervision: verify owner, Task parent, generation
         Supervision->>Feature: expected mismatch generation
         Feature->>Repair: inspect then admit/resume
         Repair-->>Epic: executed/refused; verified remains separate

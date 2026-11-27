@@ -65,6 +65,11 @@ def try_complete_feature(
     """Complete the feature when all rollup gates pass; otherwise return False with no side effects."""
 
     repo = resolve_root(root)
+    # Fresh forge/check evidence is collected outside the lifecycle critical
+    # section. The Watchdog helper fences the exact receipt before mutation.
+    from cascade.watchdog.incident_postcheck import reconcile_open_review_repair
+
+    reconcile_open_review_repair(feature_id, root=repo)
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
@@ -402,6 +407,15 @@ def current_feature_obligation(
         )
     current = max(live, key=lambda row: int(row.get("generation") or 0))
     generation = int(current.get("generation") or 0)
+    if current.get("repair_route") == "open_review":
+        return CurrentFeatureObligation(
+            False,
+            generation,
+            str(
+                current.get("next_action")
+                or "independent_review_repair_postcheck_pending"
+            ),
+        )
     if any(
         action.get("phase") in {"prepared", "authority_recorded", "parent_enabled"}
         for action in live
@@ -498,9 +512,9 @@ def _record_satisfied_repair(
 ) -> None:
     if not obligation.satisfied or not obligation.generation:
         return
-    from cascade.feature.repair import mark_feature_repair_verified
+    from cascade.feature.repair import mark_legacy_feature_repair_verified
 
-    mark_feature_repair_verified(feature_id, obligation.generation, root=root)
+    mark_legacy_feature_repair_verified(feature_id, obligation.generation, root=root)
 
 
 def _feature_owner_root(feature_id: str, doc, repo: Path) -> Path:

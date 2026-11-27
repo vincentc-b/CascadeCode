@@ -1424,9 +1424,17 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
             )
         mr = _record_to_mr(existing)
         if generation > 0:
+            if repair and repair.get("repair_route") == "open_review":
+                _require_open_review_repair_identity(repair, existing, mr)
             snapshot = merge_request_snapshot(trunk, mr)
+            if repair and repair.get("repair_route") == "open_review":
+                _require_open_review_repair_identity(
+                    repair, existing, mr, snapshot=snapshot
+                )
             _require_repair_review_route(existing, snapshot, mr)
             if snapshot.get("state") not in {"open", "opened"}:
+                if repair and repair.get("repair_route") == "open_review":
+                    raise GitError("scoped repair review is no longer open")
                 if snapshot.get("state") == "merged":
                     return mr
                 raise GitError("current repair review is not open or merged")
@@ -1481,15 +1489,25 @@ def ensure_feature_review(feature_id: str, *, root: Path) -> MergeRequest | None
     prior: dict[str, object] | None = None
     reuse: MergeRequest | None = None
     route = "initial" if existing is None else "follow_up"
+    if repair and repair.get("repair_route") == "open_review" and existing is None:
+        raise GitError("scoped repair requires its recorded original review")
     if existing is not None:
         prior = _generation_projection(existing)
         prior_mr = _record_to_mr(prior)
+        if repair and repair.get("repair_route") == "open_review":
+            _require_open_review_repair_identity(repair, existing, prior_mr)
         snapshot = merge_request_snapshot(trunk, prior_mr)
+        if repair and repair.get("repair_route") == "open_review":
+            _require_open_review_repair_identity(
+                repair, existing, prior_mr, snapshot=snapshot
+            )
         _require_repair_review_route(prior, snapshot, prior_mr, intended_target=target)
         state_name = snapshot.get("state")
         if state_name in {"open", "opened"}:
             reuse = prior_mr
             route = "refresh"
+        elif repair and repair.get("repair_route") == "open_review":
+            raise GitError("scoped repair review is no longer open")
         elif state_name != "merged":
             raise GitError("historical review state is unknown or conflicting")
 
@@ -1585,6 +1603,63 @@ def _require_repair_review_route(
         or snapshot.get("url") != mr.url
     ):
         raise GitError("review route conflicts with authoritative forge facts")
+
+
+def _require_open_review_repair_identity(
+    repair: dict[str, object],
+    record: dict[str, object],
+    mr: MergeRequest,
+    *,
+    snapshot: dict[str, object] | None = None,
+) -> None:
+    """Bind scoped publication to the exact review admitted for repair.
+
+    Before the first refresh the registry still projects the observed review
+    generation and heads.  After checkpointing it projects the repair
+    generation and newly pushed source head, so replay instead joins through
+    the durable publication action ID.  Both cases retain the same review URL,
+    forge, and source/target route.
+    """
+
+    repair_generation = int(repair.get("generation") or 0)
+    record_generation = int(record.get("current_generation") or 0)
+    expected = {
+        "url": repair.get("review_url"),
+        "forge": repair.get("review_forge"),
+        "source_branch": repair.get("source_ref"),
+        "target_branch": repair.get("target_ref"),
+    }
+    actual = {
+        "url": record.get("url"),
+        "forge": record.get("forge"),
+        "source_branch": record.get("source_branch"),
+        "target_branch": record.get("target_branch"),
+    }
+    if expected != actual or any(value in {None, ""} for value in expected.values()):
+        raise GitError("scoped repair review identity changed after admission")
+    if (
+        mr.url != expected["url"]
+        or mr.forge != expected["forge"]
+        or mr.source_branch != expected["source_branch"]
+        or mr.target_branch != expected["target_branch"]
+    ):
+        raise GitError("scoped repair review identity changed after admission")
+    if snapshot is not None and snapshot.get("target_revision") != record.get(
+        "target_head"
+    ):
+        raise GitError("scoped repair review target head changed")
+    if record_generation == repair_generation:
+        if record.get("action_id") != repair.get("action_id"):
+            raise GitError("scoped repair publication action changed")
+        return
+    observed_generation = repair.get("review_generation")
+    if (
+        type(observed_generation) is not int
+        or record_generation != observed_generation
+        or record.get("source_head") != repair.get("source_head")
+        or record.get("target_head") != repair.get("target_head")
+    ):
+        raise GitError("scoped repair review observation is stale")
 
 
 def _ensure_opened_toast(

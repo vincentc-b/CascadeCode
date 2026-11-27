@@ -31,7 +31,7 @@ custom "cascade-epic-code" {
         "cascade.codeComponent" "element.component.epic-team"
     }
     include code_epic_graph code_epic_state code_epic_checkpoint code_epic_wiring code_epic_registry code_epic_guard code_epic_runtime code_epic_provider
-    include code_epic_recover code_epic_supervise code_epic_mismatch_route code_epic_prepare_checkout
+    include code_epic_recover code_epic_supervise code_epic_review_repair_request code_epic_mismatch_route code_epic_prepare_checkout
     autoLayout lr
 }
 
@@ -41,7 +41,7 @@ custom "cascade-feature-code" {
         "cascade.codeComponent" "element.component.feature-team"
     }
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
-    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_reserve
+    include code_feature_mint code_feature_recover code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_reserve code_feature_repair_verify
     autoLayout lr
 }
 
@@ -122,7 +122,7 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_activate_epic code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_repair_postcheck code_watchdog_verify code_watchdog_incident_projection
     include code_watchdog_review_health code_watchdog_review_snapshot
     autoLayout lr
 }
@@ -133,7 +133,7 @@ custom "cascade-boss-code" {
         "cascade.codeComponent" "element.component.boss"
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
-    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_reconcile code_boss_lock code_boss_obligation code_boss_delivery_view
+    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_open_review_identity code_boss_reconcile code_boss_lock code_boss_obligation code_boss_delivery_view
     include code_boss_review_generation code_boss_review_pending
     autoLayout lr
 }
@@ -203,7 +203,7 @@ custom "cascade-workspace-code" {
     }
     include code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
     include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
-    include code_workspace_invoke code_workspace_owner_live code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
+    include code_workspace_invoke code_workspace_owner_live code_workspace_queue_kickoff code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked code_workspace_retained_feature
     autoLayout lr
 }

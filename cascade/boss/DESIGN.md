@@ -16,15 +16,19 @@ shared [Feature delivery projection](../review.py) and requires exact acceptance
 of the current generation plus independent ancestry of that merge on the
 intended Epic branch. A merge callback, green checks, a closed forge row, stale
 heads, or an accepted merge that is absent from the target cannot authorize the
-completion event. Review-disabled delivery retains its supervised local merge
-proof. This predicate runs before the completed fast path and its result gates
-both `FeatureCompleted` and checkout retirement. The active delivery generation
-may exist before its review is published. Once the exact repair child is delivered
-and all current gates pass, a missing or older published generation is
-`review_not_published`, selecting idempotent review publication/recovery even
-for a completed-path Feature (including split tracking/product roots). An open
-current review or newer mismatched publication cannot authorize completion or
-trigger a replacement review.
+completion event. Open-review repair first asks Watchdog for a fresh independent
+postcheck outside the lifecycle critical section; only the resulting exact action,
+generation, corrected-head, required-check and Epic-integration receipt can make
+that repair historical. Review-disabled delivery retains its supervised local
+merge proof. This predicate runs before the completed fast path and its result
+gates both `FeatureCompleted` and checkout retirement. For the legacy repair
+route, the active delivery generation may exist before its review is published.
+Once the exact repair child is delivered and all current gates pass, a missing
+or older published generation is `review_not_published`, selecting idempotent
+review publication/recovery even for a completed-path Feature (including split
+tracking/product roots). An open current review or newer mismatched publication
+cannot authorize closeout or trigger a replacement review; scoped open-review
+repairs still use the independent postcheck and original-review publication path.
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and
@@ -58,11 +62,13 @@ own forge state. These functions collaborate within the local supervisor.
 | [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
+| [reconcile_open_review_repair](../watchdog/incident_postcheck.py) | Collect fresh forge/check evidence before the lifecycle lock and persist an unchanged exact-generation verification receipt. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
 | [feature_delivery_view](../review.py) | Derive retained Feature ownership and delivery phase from current local review, repair, completion, and target evidence without polling the forge. |
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
 | [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
+| [_require_open_review_repair_identity](../review.py) | Join scoped repair publication to the admitted original review identity, observation or checkpointed action. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -83,15 +89,15 @@ flowchart TD
     Proof -->|refused| Preserve
 ```
 
-An open historical review is reused for a repair generation only when a fresh
-forge snapshot confirms the same URL and intended target. Its current generation
-then records the newly published source and target heads. A merged historical
-generation retains its accepted URL and heads; publication creates or recovers a
-distinct follow-up review from the retained Feature branch to the owning Epic
-branch and links it to the prior generation. Closed, missing, unknown, or
-conflicting forge facts stop publication. Registry writes are atomic, so a
-restart after remote creation discovers the same open review instead of creating
-a duplicate.
+An admitted scoped open-review repair reuses the original review only when its
+durable URL, forge, source/target route, observed generation and heads still
+agree with the registry and a fresh forge snapshot. Its current generation then
+records the newly published source and target heads under the same URL and
+publication action. Merged, closed, missing, unknown or conflicting forge facts
+stop this route before push or review creation. Other already-admitted legacy
+delivery routes may retain their linked follow-up behavior; they cannot be
+selected by an open-review repair action. Registry writes are atomic, so restart
+joins the checkpointed repair generation without creating a duplicate review.
 
 Actions in `executions.json` retain authoritative delivery and repair evidence;
 the pending merge list is a scheduling index. Feature records in `reviews.json`
