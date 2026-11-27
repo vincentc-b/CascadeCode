@@ -1373,12 +1373,21 @@ code_boss_merge = element "merge_task_branch" "Function" "Integrates an approved
     }
 }
 
-code_boss_feature = element "try_complete_feature" "Function" "Evaluates child completion and Feature closeout gates." {
+code_boss_feature = element "try_complete_feature" "Function" "Refreshes scoped-review verification, then evaluates child completion and Feature closeout gates." {
     properties {
         "cascade.semanticId" "element.code.boss.feature"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/boss/rollup.py"
         "cascade.sourceSymbol" "try_complete_feature"
+    }
+}
+
+code_boss_repair_postcheck_gate = element "_current_open_review_postcheck_matches" "Function" "Require the fresh postcheck result to name the greatest scoped repair action before closeout side effects." {
+    properties {
+        "cascade.semanticId" "element.code.boss.repair-postcheck-gate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "_current_open_review_postcheck_matches"
     }
 }
 
@@ -2307,12 +2316,21 @@ code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Functio
     }
 }
 
-code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Observe the original forge review and normalized required checks outside the lifecycle lock, then fence exact current-generation verification before closeout." {
+code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Refresh the original review, target and normalized check generations, then fence exact current-generation verification before every closeout." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-postcheck"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
         "cascade.sourceSymbol" "reconcile_open_review_repair"
+    }
+}
+
+code_watchdog_required_checks = element "_required_checks" "Function" "Require current-target policy and a source-bound, generation-bearing green result for every required check." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.required-checks"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "_required_checks"
     }
 }
 
@@ -2511,6 +2529,15 @@ code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one co
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task_rollup.py"
         "cascade.sourceSymbol" "ParentLifecycleMismatch"
+    }
+}
+
+code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker and evidence generation separately from downstream Task failure and evaluated generation." {
+    properties {
+        "cascade.semanticId" "element.code.task.upstream-review-fence"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "record_upstream_review_observation"
     }
 }
 
@@ -2835,6 +2862,12 @@ code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppres
     }
 }
 
+code_task_upstream_review_fence_to_actions = code_task_upstream_review_fence -> code_task_actions "Stores observed and evaluated generations on the existing queued action" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-actions"
+    }
+}
+
 code_task_actions_to_leases = code_task_actions -> code_task_leases "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-task-actions-to-leases"
@@ -2940,6 +2973,18 @@ code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_rep
 code_boss_feature_to_repair_postcheck = code_boss_feature -> code_watchdog_repair_postcheck "Requests fresh verification before the lifecycle critical section" {
     properties {
         "cascade.semanticId" "relationship.code-boss-feature-to-watchdog-repair-postcheck"
+    }
+}
+
+code_boss_feature_to_repair_postcheck_gate = code_boss_feature -> code_boss_repair_postcheck_gate "Consumes only the matching fresh receipt before closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-repair-postcheck-gate"
+    }
+}
+
+code_watchdog_repair_postcheck_to_required_checks = code_watchdog_repair_postcheck -> code_watchdog_required_checks "Validates current policy and check generations" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-repair-postcheck-to-required-checks"
     }
 }
 
@@ -4112,7 +4157,7 @@ code_workspace_retained_feature = element "_retained_feature_delivery" "Function
     }
 }
 
-code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Observe tracked reviews and admit conflict resolution; clean mergeability alone currently yields healthy." {
+code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify normalized open-review evidence, return non-provider typed waits, and route actionable evidence through one Feature repair owner." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-health"
         "cascade.parent" "element.component.watchdog"
@@ -4121,12 +4166,30 @@ code_watchdog_review_health = element "reconcile_open_review_health" "Function" 
     }
 }
 
-code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Read forge review state, source revision, branch refs and mergeability through the configured CLI." {
+code_watchdog_actionable_review = element "_route_actionable_review_health" "Function" "Bind original review, exact heads, check-run or feedback identity and repair generation before joining the durable Feature repair action." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.actionable-review-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review_health.py"
+        "cascade.sourceSymbol" "_route_actionable_review_health"
+    }
+}
+
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, mergeability, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-snapshot"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/tracking.py"
         "cascade.sourceSymbol" "merge_request_snapshot"
+    }
+}
+
+code_watchdog_review_evidence_health = element "_review_health" "Function" "Classify normalized current-generation evidence as green, failed, pending, missing, stale, approval-only, actionable feedback, conflict, unavailable or terminal." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-evidence-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "_review_health"
     }
 }
 
@@ -4193,9 +4256,33 @@ code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_works
     }
 }
 
-code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads fresh forge facts before conflict admission" {
+code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads authoritative review identity, head, policy, check-generation and feedback facts before routing" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_watchdog_health_to_actionable_review = code_watchdog_review_health -> code_watchdog_actionable_review "Routes only failed checks, actionable feedback and confirmed conflicts" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-actionable-review"
+    }
+}
+
+code_watchdog_actionable_review_to_feature_request = code_watchdog_actionable_review -> code_epic_review_repair_request "Joins the existing direct-parent Feature repair admission and single-writer gate" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-feature-request"
+    }
+}
+
+code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized upstream blocker evidence without claiming downstream delivery" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-task-fence"
+    }
+}
+
+code_watchdog_snapshot_to_evidence_health = code_watchdog_review_snapshot -> code_watchdog_review_evidence_health "Classifies only normalized evidence bound to the observed head pair" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-snapshot-to-review-evidence-health"
     }
 }
 
