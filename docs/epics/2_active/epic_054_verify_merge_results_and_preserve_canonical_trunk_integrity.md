@@ -192,6 +192,11 @@ Material current limits are explicit: source-board parsing does not prove a pros
   Chose Add four source-linked Function nodes and four relationships to the existing Teams, Boss and Workspace Code views for physical source-board validation, Epic merged-document verification, detached fetched-trunk inspection and fast-forward synchronization. Preserve existing component ownership and correct feat_054_001 to require cascade-teams-code in Task acceptance..
   Rationale: The plan's proposed evidence dimensions and three-feature sequence are sound, but the current Code model omitted material existing gates. Current behavior is now documented explicitly: source-board parsing is not candidate/history proof; fetched trunk and merge/document ancestry are not exact merged CI; Git fast-forward permits non-overlapping local edits. These limits justify the planned implementation without presenting it as complete.
   Honors: Design implementation-depth and one-owner contracts; current source accuracy; bounded validation and human review authority; revision-pinned architecture publication. Future candidate receipts, board/history gates and post-merge CI/sync recovery remain assigned to Features 1–3..
+
+- `dec_005` · 2026-11-27 · Epic Architect · **Pinned source artifact ownership**
+  Chose Bind the workspace and DSL fragment source-contract owner to epic_054 while preserving every semantic component owner. Re-render and browser-check the corrected committed pin before replacing the failed publication request..
+  Rationale: The initial publication was rejected with invalid_publication because the inherited contract named epic_056 but the authenticated reference correctly named epic_054. This is source-artifact provenance, not a change to Teams, Board, Boss or Workspace implementation ownership. No accepted snapshot is rewritten and the failed operation is not treated as pending or successful.
+  Honors: Exact committed source ownership, revision-pinned publication and actual verification. Preserve the original failed receipt in architecture evidence; re-sign the revised plan and submit only the newly reviewed references..
 ## Amendment log
 
 _(none)_
