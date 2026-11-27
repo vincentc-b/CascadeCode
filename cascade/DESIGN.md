@@ -25,7 +25,9 @@ not establish a successful lifecycle transition.
 execution attempt. A saved approval does not establish dispatch readiness, and
 an execution refusal cannot erase a saved approval. The approval service owns
 mutation; [Feature evidence](feature/DESIGN.md#approval-evidence-and-readiness)
-owns receipt interpretation; [Watchdog](watchdog/DESIGN.md) owns admission.
+owns receipt interpretation; [Watchdog](watchdog/DESIGN.md) owns admission; and
+the [War Room readiness contract](war_room/DESIGN.md#feature-activation-explanations-and-new-work-attention)
+owns operator presentation without acquiring approval authority.
 
 `DEC-CASCADE-APPROVAL-001`: Keep approval orchestration in the existing local
 service and reuse board timestamps and Feature receipts. A separate scheduler or

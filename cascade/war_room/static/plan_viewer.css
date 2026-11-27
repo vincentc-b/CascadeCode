@@ -171,6 +171,34 @@ body {
   color: #b00020;
 }
 
+.feature-plan-approval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--plan-border);
+  border-radius: 6px;
+}
+
+.feature-plan-approval-scope,
+.feature-plan-approval-status {
+  flex: 1 1 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.feature-plan-approval-refused .feature-plan-approval-status,
+.feature-plan-approval-unconfirmed .feature-plan-approval-status {
+  color: #b00020;
+}
+
+.feature-plan-approval-button {
+  font: inherit;
+  padding: 0.35rem 0.75rem;
+}
+
 .plan-main {
   max-width: 112rem;
   margin: 0 auto;
