@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,15 +10,26 @@ from types import SimpleNamespace
 import pytest
 
 import cascade.review as review_module
-from tests.support import approve_epic_plan_when_ready
-from cascade.automation import advance_work
-from cascade.board.store import read_doc
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
+from cascade.automation import advance_work, reconcile_approval_dispatch
+from cascade.board.store import move_doc, read_doc
 from cascade.boss.rollup import on_task_merged, try_complete_feature
 from cascade.review import ensure_feature_review
 from cascade.tracking import MergeRequest
 from cascade.watchdog.events import append_event, read_events
+from cascade.watchdog.dispatch import activate_epic
 from cascade.watchdog.types import Event
-from tests.support import add_doc, make_repo
+from cascade.war_room.room_settings import write_stacked_pr_enabled
+from cascade.workspace.integration_worktree import (
+    get_integration_worktree,
+    refresh_merged_board,
+)
+from tests.support import add_doc, approve_epic_plan_when_ready, make_repo
 
 
 def _completed_feature_board(root: Path, *, sibling: bool = False) -> None:
@@ -223,42 +236,114 @@ def test_saved_review_retries_linked_toast_after_append_failure(
 def test_merged_review_releases_next_dependent_feature_on_next_pass(
     tmp_path: Path, monkeypatch
 ) -> None:
-    root = make_repo(tmp_path, git=False)
-    (root / "cascade.toml").write_text("[automation]\nenabled = true\n", encoding="utf-8")
-    _completed_feature_board(root, sibling=True)
-    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
-    def _ensure(feature_id: str, *, root: Path):
-        state_path = root / ".cascade" / "reviews.json"
-        state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(
-            json.dumps(
-                {
-                    feature_id: {
-                        "url": f"https://github.example/o/r/pull/{feature_id}",
-                        "number": "1",
-                        "forge": "github",
-                        "source_branch": "feat/feat_001",
-                        "target_branch": "epic/epic_001",
-                        "draft": False,
-                    }
-                }
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        return None
-
-    monkeypatch.setattr("cascade.review.ensure_feature_review", _ensure)
+    root = make_repo(tmp_path, models=True)
+    with (root / "cascade.toml").open("a", encoding="utf-8") as config:
+        config.write("\n[automation]\nenabled = true\n")
+    observed_at = time.time()
+    provider_inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="cursor",
+                display_name="Cursor",
+                models=tuple(
+                    DiscoveredModel(id=model_id, display_name=model_id)
+                    for model_id in ("proj-epic", "proj-feature", "proj-task")
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, observed_at, observed_at + 300, 300),
+    )
+    # Scripted seam: provider discovery only. Approval still evaluates the
+    # configured Feature and Task selections through its normal preflight.
+    monkeypatch.setattr(
+        "cascade.approvals.get_provider_inventory", lambda: provider_inventory
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: provider_inventory
+    )
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "upstream target base"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_worktree = get_integration_worktree(root, "epic", "epic_001")
+    assert epic_worktree is not None
+    epic_root = epic_worktree.path
+    add_doc(
+        epic_root,
+        id="feat_001",
+        title="First feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+        children=["task_001"],
+    )
+    add_doc(
+        epic_root,
+        id="task_001",
+        title="Finished task",
+        tier="task",
+        status="completed",
+        parent="feat_001",
+    )
+    add_doc(
+        epic_root,
+        id="feat_002",
+        title="Next feature",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
     from cascade.boss.rollup import write_closeout
 
     write_closeout("feat_001", "Done.", root=root)
-    review_pending = True
-    monkeypatch.setattr(
-        "cascade.review.feature_review_pending",
-        lambda feature_id, *, root: review_pending and feature_id == "feat_001",
+    move_doc("feat_001", "completed", root=epic_root)
+    (epic_root / "delivery.txt").write_text(
+        "accepted upstream delivery\n", encoding="utf-8"
     )
+    subprocess.run(["git", "add", "-A"], cwd=epic_root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "upstream delivery"],
+        cwd=epic_root,
+        check=True,
+        capture_output=True,
+    )
+    accepted = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=epic_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "feat/feat_001", accepted], cwd=root, check=True)
+    monkeypatch.setattr("cascade.review.review_enabled", lambda _root: True)
+    review_module._store_review_generation(
+        root,
+        "feat_001",
+        {
+            "url": "https://github.example/o/r/pull/1",
+            "number": "1",
+            "forge": "github",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+            "source_head": accepted,
+            "target_head": accepted,
+            "draft": False,
+            "closed": False,
+        },
+        generation=1,
+        action_id="repair:1",
+    )
+    # Scripted seam: provider turn transport. The lifecycle dispatch below
+    # remains real, while no external planning model is launched by this test.
     monkeypatch.setattr("cascade.watchdog.dispatch.invoke_boot", lambda *_args: None)
     monkeypatch.setattr("cascade.workspace.kickoff.kickoff_turn", lambda *_args: None)
+    write_stacked_pr_enabled("epic_001", False, root=root)
     approve_epic_plan_when_ready("epic_001", root=root)
 
     first = advance_work(root)
@@ -266,13 +351,47 @@ def test_merged_review_releases_next_dependent_feature_on_next_pass(
     assert read_doc("feat_001", root=root).meta.status == "completed"
     assert read_doc("feat_002", root=root).meta.status == "backlog"
 
+    review_module._update_record(
+        root,
+        "feat_001",
+        {
+            "closed": True,
+            "accepted_merge_sha": accepted,
+            "accepted_source_head": accepted,
+            "accepted_target_head": accepted,
+            "reconciliation_status": "accepted",
+        },
+    )
     assert try_complete_feature("feat_001", root=root, review_merged=True) is True
-    review_pending = False
-    second = advance_work(root)
+    delivery = review_module.feature_delivery_view("feat_001", root=root)
+    assert delivery["phase"] == "verified_integrated", delivery
+    from cascade.boss.view import compute_boss_view
+    from cascade.feature.readiness import compute_feature_readiness
 
-    assert second["features"] == ["feat_002"]
+    assert "feat_002" in compute_boss_view(root=root).dispatchable_features
+    readiness = compute_feature_readiness("feat_002", root=root)
+    assert readiness is not None and not readiness.blockers, readiness
+    released = reconcile_approval_dispatch(root)
+
     assert read_doc("feat_001", root=root).meta.status == "completed"
-    assert read_doc("feat_002", root=root).meta.status == "active"
+    assert refresh_merged_board(root).by_id["feat_002"].status == "active"
+    assert released["features"] == ["feat_002"]
+    planning_events = [
+        event
+        for event in read_events("epic_001", 0, root=root)[0]
+        if event.type == "FeaturePlanningStarted"
+        and event.payload.get("feature_id") == "feat_002"
+    ]
+    assert len(planning_events) == 1
+    assert reconcile_approval_dispatch(root)["features"] == []
+    assert len(
+        [
+            event
+            for event in read_events("epic_001", 0, root=root)[0]
+            if event.type == "FeaturePlanningStarted"
+            and event.payload.get("feature_id") == "feat_002"
+        ]
+    ) == 1
 
 
 def test_polling_merged_review_does_not_create_source_completion_commit(
