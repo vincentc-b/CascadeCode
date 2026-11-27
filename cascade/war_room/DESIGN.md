@@ -25,6 +25,12 @@ bounded scalar fields so persisted forge payloads cannot expand a response
 without limit. The open-review endpoint returns at most one hundred rows and
 marks an omitted tail as `truncated`.
 
+Implementation gap against this bound: persisted check-name keys and string
+generations are not length-limited. The response caps displayed names at eighty
+characters but passes generation strings through unchanged. The row cap therefore
+does not establish a total payload bound; authoritative identities must retain
+their equality semantics when enforcing limits.
+
 `REQ-WARROOM-REVIEW-003`: `POST /api/open-reviews/repair` accepts only a
 request-scoped authenticated local human and one complete, bounded repair
 envelope. The envelope binds a stable request ID, reason and JSON evidence to
@@ -45,7 +51,7 @@ board serialization, and Feature document serialization consume that shared
 projection. They do not call tracking transport, refresh forge evidence, start a
 provider, enqueue work, or publish recovery progress. Product-root review
 identity and tracking-root plans/actions remain joined through the configured
-project context. The authorized Watchdog health pass persists a bounded
+project context. The authorized Watchdog health pass persists a row-capped
 observation through [`record_feature_review_evidence`](../review.py) after its
 forge query; unavailable publication remains a typed health wait rather than
 allowing an action to proceed with evidence that readers cannot inspect.

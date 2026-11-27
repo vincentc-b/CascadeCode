@@ -88,7 +88,7 @@ idle polls and generic messages advance the durable cursor without a role turn,
 while an admitted repair or interrupted checkpoint resumes the same graph under
 its existing writer lock. Current review health checks route failed required
 checks, actionable feedback and confirmed conflicts through the same admitted
-repair owner, but first persist a bounded normalized observation in the canonical
+repair owner, but first persist a normalized observation in the canonical
 review registry. A failed persistence step remains an evidence-unavailable wait
 and cannot enqueue repair; browser and delivery reads use the persisted observation
 without polling the forge. A green source check and a merged review do not

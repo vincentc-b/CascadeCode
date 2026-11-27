@@ -453,8 +453,10 @@ generation, while pending, missing, stale, approval-only and unavailable evidenc
 remains a non-provider wait. The existing team adapter and Feature action ledger
 own admission and restart deduplication; this package boundary adds no scheduler,
 CI runner, provider launcher or merge authority.
-Watchdog bounds and persists each current normalized observation in the canonical
-review registry before classification can route work. Persistence failure remains
+Watchdog caps rows and selected text fields and persists each current normalized
+observation in the canonical review registry before classification can route work.
+The [War Room projection contract](war_room/DESIGN.md#accountable-open-review-projection)
+identifies the remaining check-name and generation size gap. Persistence failure remains
 a typed evidence-unavailable wait, so War Room and delivery projections never
 derive repair authority from an observation they cannot inspect after restart.
 Affected queued Task actions retain the upstream blocker and material evidence
