@@ -159,6 +159,10 @@ No DESIGN.md/model edits are included in this planning turn: existing documents 
 
 - 2026-11-25 · Human · Brief approved through merge request review.
 
+- `dec_001` · 2026-11-27 · Epic Architect · **Scope and sequencing**
+  Chose Deliver feat_054_001 → feat_054_002 → feat_054_003: exact candidate/fresh-source validation, canonical physical board/history admission, then exact merged CI/trunk convergence and accountable recovery..
+  Rationale: These slices cover all six success criteria while ordering shared receipt and gate changes. Tests/design updates belong to each feature; the last slice proves the integrated incidents. Reuse existing stores, scheduler, owner lifecycle and incident-wide budget.
+  Honors: All original success criteria; human review/approval gates; no implementation before approval; frugal engineering..
 ## Amendment log
 
 _(none)_
