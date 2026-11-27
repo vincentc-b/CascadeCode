@@ -1,0 +1,139 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "fb8ed5f3ea12583069d4a7db289b6212c74a6e0c",
+  "proposal": {
+    "owner_work_id": "epic_054",
+    "authorized_owner": "epic_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": ".",
+    "design_owner_directory": ".",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_054",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/epics/2_active/epic_054_verify_merge_results_and_preserve_canonical_trunk_integrity.md",
+      "revision": "fb8ed5f3ea12583069d4a7db289b6212c74a6e0c",
+      "content_digest": "e3eb29aaefbb251dc06aea304e947ca341fc4c536b3b8a8656e23de70629ceba"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "owning_work": "epic_054",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "DESIGN.md",
+        "revision": "4827ef66f615820e258206d1f28d2f2903e0aab7"
+      },
+      "content_digest": "0f1183ff1f8e3aa76e1e706f021c6c14d69e18a94315a5357588b26f1129c724"
+    },
+    "proposed_model": {
+      "contract": {
+        "reference": {
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "owning_work": "epic_054",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "8b870e45845e89eb782be9f48f9bb4d612ba0486"
+        },
+        "content_digest": "81d2ba764b6fc9962dcb417bb1c583ec925d69cb46b1d5c571037a2678dff641"
+      },
+      "sources": [
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_054",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "8b870e45845e89eb782be9f48f9bb4d612ba0486"
+          },
+          "content_digest": "35b109704919c6da37875973f07f2ce4454677745c5b3ebb3b335e5b10317111"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_054",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "8b870e45845e89eb782be9f48f9bb4d612ba0486"
+          },
+          "content_digest": "c88cbda86550ecf2a0075a47e4c0c4449198532b158192896ecdea312376b72d"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_054",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "8b870e45845e89eb782be9f48f9bb4d612ba0486"
+          },
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a"
+        }
+      ],
+      "source_closure_digest": "841bff720298fb3fa71c7d76c0fd039fa06b09e31ff9420fd15aa1c77c0119cf",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180.0,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "229463e1cf437f701d5382848b27a47299cba91b51f13981fd9a6872ffa49fe6",
+      "render_identity": "90422e4b2a0194f83eee8e493a76a6d2464d81cddfb0bc94d0d0f9e8e1fa8345"
+    },
+    "requirement_citations": [
+      "REQ-REVIEW-PUBLISH-001",
+      "REQ-BOARD-001",
+      "REQ-WORKSPACE-001",
+      "REQ-BOSS-001"
+    ],
+    "decision_citations": [
+      "DEC-REVIEW-PUBLISH-001",
+      "DEC-BOARD-001",
+      "DEC-WORKSPACE-001",
+      "DEC-BOSS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-teams-code",
+      "cascade-board-code",
+      "cascade-boss-code",
+      "cascade-workspace-code"
+    ],
+    "affected_work_ids": [
+      "epic_054"
+    ],
+    "architecture_impact": "diagram_change",
+    "impact_reason": "Add four current implementation Function nodes and four relationships for source-board scanning, merged Epic document verification, detached remote-trunk inspection and fast-forward synchronization under existing component owners. Reconcile package, Board, Boss and Workspace designs with actual limits. All 25 views rendered with existing bounds; four actual context/container/component/Code, source, deep-link and Level-up paths passed with one reused render operation. Proposed stronger candidate/history/CI gates remain Feature implementation obligations. Evidence: docs/epic_artifacts/epic_054_architecture_evidence.json."
+  }
+}
