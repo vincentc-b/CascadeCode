@@ -133,6 +133,11 @@ Concrete documentation gap: root DESIGN.md describes durable approval in .cascad
   Chose Allow explicit approval with a known, valid, noncancelled incomplete predecessor; preserve unknown/invalid dependency and every independent authorization refusal..
   Rationale: The direct approval path currently conflates ordinary sequencing with authorization. Limit the change to reviewed Feature approval while canonical Watchdog/Boss execution remains gated. Keep strict shared dependency checks elsewhere.
   Honors: Epic success criteria 1 and 2; existing dependency, provider, architecture and software authority..
+
+- `dec_002` · 2026-11-27 · Epic Architect · **Delivery scope and verification**
+  Chose Deliver feat_056_001 followed by feat_056_002, with design/Code-view work and bounded API, real-Git and browser evidence inside each Feature..
+  Rationale: One backend authority contract followed by its UI consumer provides the smallest coherent delivery. Reuse current receipt, lifecycle state and test fixtures; require architecture reconciliation before plan sign-off.
+  Honors: Epic success criteria 3 and 4; frugal-engineering and design skill contracts..
 ## Amendment log
 
 _(none)_
