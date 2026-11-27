@@ -2,7 +2,7 @@
 id: feat_054_001
 title: Validate exact merge results with isolated fresh checks
 tier: feature
-status: active
+status: completed
 parent: epic_054
 children:
 - task_054_001_001
