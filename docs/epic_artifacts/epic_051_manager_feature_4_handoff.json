@@ -1,0 +1,43 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_manager",
+  "trigger": "FeaturePlanningStarted feat_051_004",
+  "reviewed_plan_revision": "7b5e38818f284add8b9c6aa4523f1478f7d77d48",
+  "implementation_base": "589932f1",
+  "canonical_changes": {
+    "write_doc_revision": "2b783ed42e2dc26f7997ef57daf4e5ef620dd97d",
+    "decision": "dec_009",
+    "scope": "Approved scope and sequencing unchanged; Feature 4 Task constraints and acceptance handoff persisted through Cascade MCP."
+  },
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md#delivery-and-review-boundaries",
+    "cascade/war_room/DESIGN.md",
+    "cascade/recovery_progress/DESIGN.md"
+  ],
+  "design_changes": "Corrected root Feature lifecycle and completion-table summaries to link shared delivery ownership and require intended-Epic integration/retirement proof. No duplicate requirement or historical attribution added. Other inspected design contracts remain accurate for local source; final inherited-interface reconciliation belongs to Feature 4.",
+  "diagram_impact": {
+    "context": "No actor/external-system change in this planning diff. Feature 4 reconciles landscape/context against final implementation.",
+    "containers": "No runtime or persistence change. Existing evidence stores and boundaries remain.",
+    "components": "No source/model change now. Feature 4 owns War Room presentation/action relationships and final cross-owner interface verification.",
+    "code": "Existing native views explain this prose correction. Feature 4 must reconcile dashboard/HTTP source nodes and all affected inherited team/Workspace/Watchdog/Boss views, including source symbols, kinds and component ownership.",
+    "behavior": "Reviewed shared normal target-proof and nonterminal missing/stale evidence flow plus passive progress/transcript reads and publisher restart replay. Feature 4 owns complete repair/UI and failure/resume traces."
+  },
+  "verification": [
+    "Canonical Epic and Feature 4 reads succeeded; Feature 4 has no Tasks yet. list_children reports Features 1-3 completed; supplied dependency projection is satisfied. This does not prove their integration in this checkout.",
+    "read_architecture_amendments returned an empty list.",
+    "Final read_doc confirmed handoff, dec_009 and revision 7b5e38818f284add8b9c6aa4523f1478f7d77d48.",
+    "Local file links resolve across all four reviewed designs and the Epic record, including both changed root links.",
+    "git diff --check passed. No runtime/model changed, so no new runtime tests, render or browser run was warranted or claimed.",
+    "Recovery workflow already selects both existing journey suites and retains its bounded timeout; Feature 4 must keep new acceptance in that gate."
+  ],
+  "handoffs": {
+    "feature_4": "Bind Tasks to actual inherited admission/health interfaces; implement passive coherent UI and explicit authenticated action results; close fixture and integration-consumer acceptance gaps; verify full red-CI repair, bounded Recovery gate and final design/browser inventory.",
+    "epic_architect": "Latest integrated publication request for 06667792 is durably pending in its saved receipt; earlier failed publication remains separate. Discover/reconcile via supported publication tools, preserving saved requests and accounting for the changed plan revision and root prose. No accepted publication is claimed."
+  },
+  "limitations": [
+    "Features 2/3 source and acceptance evidence have not been integrated into this Epic checkout; Feature 4 must verify its own inherited source.",
+    "Complete repair journey and operational UI acceptance remain unrun here; prior baseline failures and publication gaps remain explicitly assigned.",
+    "Epic already has human plan approval; no redundant refused sign-off, new approval request, installation, child dispatch or lifecycle mutation was attempted."
+  ]
+}

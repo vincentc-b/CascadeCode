@@ -477,7 +477,7 @@ The Epic Manager mints Feature files into `/docs/features/1_backlog/`. The watch
 
 | | |
 |---|---|
-| **Lifecycle** | Medium-lived. Booted when a Feature is `ready_to_plan` (then moved to `2_active`). Dies when every child Task is in `3_completed` and the Feature itself is moved to completed. |
+| **Lifecycle** | Booted when a Feature is `ready_to_plan` (then moved to `2_active`). Completed-source staging can retain an idle, wakeable team while delivery is nonterminal. Retirement requires the [shared delivery proof](cascade/DESIGN.md#delivery-and-review-boundaries) and descendant cleanup gates. |
 | **Roster** | Feature Lead, Feature Architect. |
 | **Reads** | Parent Epic at `parent_rev` (git SHA) plus that commit's decision log, own Feature doc, own decision log, own comment threads, own Task list. |
 | **Does not read** | Other Features' planning transcripts or comments, Task implementation chats, unrelated Epics, the Epic War Room transcript. |
@@ -972,7 +972,7 @@ A path sandbox enforces the above. Prompting alone is not sufficient.
 | Object | Completes when |
 |---|---|
 | Task | `task/{id}` is merged into `feat/{parent}` (tests green) and the file is in `3_completed` |
-| Feature | Every `children` Task is completed, **no open human comment threads**, the Feature Architect writes a one-paragraph closeout, and the draft feature MR is merged (forge-backed mode) |
+| Feature | Child delivery and governing comment gates pass, the Feature Architect records closeout, and current-generation acceptance plus independent intended-Epic integration proof satisfy the [shared delivery contract](cascade/DESIGN.md#delivery-and-review-boundaries). Review-disabled delivery requires local integration proof. Completed-source staging alone is nonterminal. |
 | Epic | Every `children` Feature is completed, **no open human comment threads**, and the human confirms in the War Room |
 
 Orphans are illegal: a Feature without `parent`, a Task whose Feature is completed, a completed Epic with an active child. The watchdog flags these; it does not auto-repair strategy.
