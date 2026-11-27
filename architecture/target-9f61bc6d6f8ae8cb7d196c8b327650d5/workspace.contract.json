@@ -20,6 +20,8 @@
     {"dsl_identifier": "code_http_approve_feature", "semantic_id": "element.code.http.approve-feature", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_feature_approve", "semantic_id": "element.code.dashboard.feature-approve", "fragment": "model.dsl"},
     {"dsl_identifier": "code_dashboard_feature_readiness", "semantic_id": "element.code.dashboard.feature-readiness", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_readiness_ui", "semantic_id": "element.code.dashboard.feature-readiness-ui", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_dashboard_feature_action_state", "semantic_id": "element.code.dashboard.feature-approval-state", "fragment": "model.dsl"},
 
     {"dsl_identifier": "code_workspace_delivery", "semantic_id": "element.code.workspace.delivery", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_resume", "semantic_id": "element.code.workspace.resume", "fragment": "model.dsl"},
@@ -329,7 +331,10 @@
     {"dsl_identifier": "rel_feature_read_revision", "semantic_id": "relationship.feature-read-revision", "fragment": "model.dsl", "source": "code_feature_receipt_read", "destination": "code_feature_revision"},
     {"dsl_identifier": "rel_http_approve_handler", "semantic_id": "relationship.http-approve-handler", "fragment": "model.dsl", "source": "code_http_handler", "destination": "code_http_approve_feature"},
     {"dsl_identifier": "rel_http_approve_state", "semantic_id": "relationship.http-approve-state", "fragment": "model.dsl", "source": "code_http_approve_feature", "destination": "code_approval_state"},
-    {"dsl_identifier": "rel_dashboard_approve_lifecycle", "semantic_id": "relationship.dashboard-approve-lifecycle", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_lifecycle_ui"},
+    {"dsl_identifier": "rel_dashboard_readiness_ui_approve", "semantic_id": "relationship.dashboard-readiness-ui-approve", "fragment": "model.dsl", "source": "code_dashboard_feature_readiness_ui", "destination": "code_dashboard_feature_approve"},
+    {"dsl_identifier": "rel_dashboard_approve_state", "semantic_id": "relationship.dashboard-approve-state", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_feature_action_state"},
+    {"dsl_identifier": "rel_dashboard_feature_approve_post", "semantic_id": "relationship.dashboard-feature-approve-post", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_post"},
+    {"dsl_identifier": "rel_dashboard_feature_approve_refresh", "semantic_id": "relationship.dashboard-feature-approve-refresh", "fragment": "model.dsl", "source": "code_dashboard_feature_approve", "destination": "code_dashboard_board_refresh"},
     {"dsl_identifier": "rel_dashboard_feature_readiness", "semantic_id": "relationship.dashboard-feature-readiness", "fragment": "model.dsl", "source": "code_dashboard_feature_readiness", "destination": "code_feature_readiness"},
 
     {"dsl_identifier": "code_workspace_delivery_to_schedule", "semantic_id": "relationship.code-workspace-delivery-to-schedule", "fragment": "model.dsl", "source": "code_workspace_delivery", "destination": "code_workspace_schedule"},

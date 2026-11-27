@@ -416,23 +416,28 @@ legacy provenance, and `detail_truncated` without opening a recovery ledger.
 ## Refresh latency and coherent read projections
 
 `REQ-WARROOM-LIFECYCLE-FEEDBACK-001`: Activating an Epic team and approving
-its plan acknowledge the first operator click immediately, with a disabled
+Epic plans or individual Features acknowledge the first operator click immediately, with a disabled
 pending control that survives board redraws. A successful write shows an
 acknowledgement before the follow-up board GET completes. The actual column,
 readiness, and approval state still come from the canonical board; the UI must
 not fabricate lifecycle state or require a full page reload. A refused write
-shows its reason directly on the affected Epic row across polling; a lost response
+shows its reason directly on the affected work row across polling; a lost response
 is an unconfirmed outcome, not proof of failure. The activation route returns a
 JSON conflict for known board/workspace errors rather than dropping its connection.
 The plan viewer likewise shows pending and confirmed approval and retains the
-exact review tuple and dispatch-pending warning.
+exact review tuple and dispatch-pending warning. A board Feature action first
+loads and visibly presents its scoped review tuple, then submits that same tuple.
+Its row-local status renders the typed approval result, canonical approval state,
+explanation, affected work IDs, execution state, and readiness reasons. A timeout
+or disconnect requires a fresh canonical board read before retry becomes available.
 
 `DEC-WARROOM-LIFECYCLE-FEEDBACK-001`: The 10-second read deadline is not a
 suitable mutation deadline: recorded activation and approval requests lasted
 10.3 and 25.3 seconds respectively. The HTTP server gives activation the same 60-second connection deadline as
-approval, rather than closing after the generic 10 seconds. Board activation
-and plan approval use a 120-second client write deadline, keyed by operation and Epic ID to suppress duplicate
-clicks across renders. A durable `ok` acknowledgement remains disabled until
+approval, rather than closing after the generic 10 seconds. Board activation,
+Epic plan approval, and individual Feature approval use a 120-second client write
+deadline. The corresponding action identity is keyed by operation and work ID to
+suppress duplicate clicks across renders. A durable `ok` acknowledgement remains disabled until
 canonical board state confirms the transition, including when a refresh fails.
 An action response triggers a fresh single-flight board read; flight and Boss
 panels refresh independently. Polling can also observe the durable transition
@@ -440,13 +445,30 @@ while the POST is still running. Background board reads defer their DOM update
 across a pressed button's pointer gesture so a poll cannot remove the click
 recipient between pointerdown and click. Only the latest deferred snapshot is
 applied. The plan page protects its approval control from concurrent readiness
-updates and checks `meta.plan_approved` after a lost response. No retry POST is
-issued automatically, no authorization or dispatch gates change, and no client
-state is persisted as board truth.
+updates and checks `meta.plan_approved` after a lost response. The board keeps only
+an in-memory Feature action presentation; canonical approval and readiness replace
+or confirm it, while an older poll cannot erase a newer pending, saved, refused,
+or unconfirmed result. No retry POST is issued automatically, no authorization or
+dispatch gates change, and no client state is persisted as board truth.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Pending: displayed review tuple submitted
+  Pending --> SavedWaiting: durable approval, prerequisites remain
+  Pending --> Refused: typed refusal
+  Pending --> Unconfirmed: timeout or disconnect
+  Unconfirmed --> SavedWaiting: canonical GET finds approval
+  Unconfirmed --> Pending: explicit retry after canonical GET
+  Refused --> Pending: operator retries displayed tuple
+```
 
 Regression coverage: `tests/war_room/war_room_refresh_races.mjs` exercises
 slow writes, rerenders, acknowledgement before a slow or failed GET, duplicate
 clicks, explicit refusal, ambiguous responses, and pointer gestures;
+`tests/war_room/test_board_feature_readiness.py` drives the API-backed Feature
+action through Chromium with exact tuple display, delayed and repeated clicks,
+row replacement, typed refusal, ambiguous transport reconciliation and ARIA focus;
 `tests/war_room/epic_plan_readiness_integration.mjs` exercises pending approval,
 concurrent readiness updates, reviewed context, dispatch warnings and durable
 readback after a lost response. The real Chromium test in

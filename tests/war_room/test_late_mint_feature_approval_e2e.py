@@ -100,7 +100,8 @@ def _assert_war_room_feature_approve_action() -> None:
     )
     source = js_path.read_text(encoding="utf-8")
     assert "featureApproveActionButton" in source
-    assert 'dispatch("/api/approve_feature", { id: item.id })' in source
+    assert 'apiPost("/api/approve_feature", {' in source
+    assert "review_context: state.reviewContext" in source
     assert "Awaiting feature approval" in source
 
 

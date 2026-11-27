@@ -4679,12 +4679,30 @@ code_http_approve_feature = element "WarRoomRequestHandler._handle_approve_featu
     }
 }
 
-code_dashboard_feature_approve = element "featureApproveActionButton" "Function" "Renders the Feature approval action from the board projection." {
+code_dashboard_feature_approve = element "featureApproveActionButton" "Function" "Loads and visibly presents the exact review tuple, submits it once through the bounded approval write, and renders typed outcomes with keyboard focus continuity." {
     properties {
         "cascade.semanticId" "element.code.dashboard.feature-approve"
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/static/war_room.js"
         "cascade.sourceSymbol" "featureApproveActionButton"
+    }
+}
+
+code_dashboard_feature_readiness_ui = element "appendFeatureReadinessUi" "Function" "Combines canonical readiness with the retained row-local Feature approval action across board row replacement." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-readiness-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "appendFeatureReadinessUi"
+    }
+}
+
+code_dashboard_feature_action_state = element "featureApprovalActionState" "Function" "Keeps one in-memory per-Feature pending, saved-awaiting-prerequisite, refused or transport-unconfirmed presentation while canonical board approval remains authoritative." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-approval-state"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/war_room.js"
+        "cascade.sourceSymbol" "featureApprovalActionState"
     }
 }
 
@@ -4841,9 +4859,27 @@ rel_http_approve_state = code_http_approve_feature -> code_approval_state "Seria
     }
 }
 
-rel_dashboard_approve_lifecycle = code_dashboard_feature_approve -> code_dashboard_lifecycle_ui "Uses existing action presentation" {
+rel_dashboard_readiness_ui_approve = code_dashboard_feature_readiness_ui -> code_dashboard_feature_approve "Adds the scoped action and retained outcome to eligible Feature rows" {
     properties {
-        "cascade.semanticId" "relationship.dashboard-approve-lifecycle"
+        "cascade.semanticId" "relationship.dashboard-readiness-ui-approve"
+    }
+}
+
+rel_dashboard_approve_state = code_dashboard_feature_approve -> code_dashboard_feature_action_state "Reads and advances per-Feature action presentation" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-approve-state"
+    }
+}
+
+rel_dashboard_feature_approve_post = code_dashboard_feature_approve -> code_dashboard_post "Submits the visibly displayed review context through the bounded approval write" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-feature-approve-post"
+    }
+}
+
+rel_dashboard_feature_approve_refresh = code_dashboard_feature_approve -> code_dashboard_board_refresh "Reconciles ambiguous transport and canonical approval after the write" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-feature-approve-refresh"
     }
 }
 

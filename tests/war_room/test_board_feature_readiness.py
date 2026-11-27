@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from datetime import date
 from http import HTTPStatus
 
@@ -250,4 +251,164 @@ def test_approved_feature_waits_for_sibling_then_refreshes_without_reapproval(
             ).count() == 0
             assert approval_requests == []
         finally:
+            browser.close()
+
+
+def test_feature_approval_action_survives_rerenders_and_announces_typed_outcomes(
+    war_room_server,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Drive the real board DOM and loopback POST boundary with delayed writes."""
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    base, root, _server = war_room_server
+    add_doc(
+        root,
+        id="feat_006",
+        title="Unknown transport",
+        tier="feature",
+        parent="epic_001",
+    )
+    approval_started = threading.Event()
+    release_approval = threading.Event()
+    posts: list[tuple[str, object]] = []
+    context = {
+        "owner_work_id": "feat_001",
+        "target_repository_key": "target-fixture",
+        "plan_revision": "a" * 40,
+        "review_unit_id": "review-fixture-1",
+        "reviewed_tuple_digest": "b" * 64,
+        "accepted_baseline_generation": 7,
+    }
+
+    def review_projection(_root, work_id, **_kwargs):  # type: ignore[no-untyped-def]
+        return {
+            "owner_work_id": work_id,
+            "state": "ready",
+            "approval_context": {**context, "owner_work_id": work_id},
+            "views": [],
+            "pagination": {"cursor": 0, "limit": 1, "total": 0, "next_cursor": None},
+        }
+
+    def approve_feature(work_id, *, root, review_context):  # type: ignore[no-untyped-def]
+        posts.append((work_id, review_context))
+        if work_id == "feat_002":
+            from cascade.planning_action_dependencies import DependencyActionRefused
+
+            raise DependencyActionRefused(
+                "dependency_unmet",
+                reasons=("predecessor incomplete",),
+                affected_work_ids=("feat_002", "feat_005"),
+            )
+        approval_started.set()
+        assert release_approval.wait(timeout=10)
+        return {
+            "ok": True,
+            "approval_result": "approved",
+            "approval_state": "approved",
+            "approval_explanation": {
+                "code": "approval_saved_waiting",
+                "message": "Approval saved; predecessor completion is still required.",
+            },
+            "affected_work_ids": ["feat_001", "feat_002"],
+            "execution_state": "waiting",
+            "dispatch_pending": True,
+        }
+
+    monkeypatch.setattr(
+        "cascade.war_room.architecture_routes.review_projection", review_projection
+    )
+    monkeypatch.setattr("cascade.approvals.approve_feature", approve_feature)
+
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch(headless=True)
+        except playwright.Error as exc:
+            pytest.skip(f"chromium is unavailable: {exc}")
+        page = browser.new_page()
+        try:
+            page.goto(base, wait_until="domcontentloaded")
+            row = page.locator('.board-row[data-id="feat_001"]')
+            load = row.get_by_role("button", name="Load approval scope")
+            load.focus()
+            load.press("Enter")
+            approve = page.locator(
+                '.board-row[data-id="feat_001"] button', has_text="Approve feature"
+            )
+            approve.wait_for()
+            scope = page.locator('.board-row[data-id="feat_001"] .feature-approval-scope')
+            assert context["plan_revision"] in scope.inner_text()
+            assert context["review_unit_id"] in scope.inner_text()
+            assert context["reviewed_tuple_digest"] in scope.inner_text()
+            assert approve.evaluate("element => document.activeElement === element") is True
+
+            approve.press("Enter")
+            assert approval_started.wait(timeout=5)
+            pending = page.locator(
+                '.board-row[data-id="feat_001"] button', has_text="Approving…"
+            )
+            pending.wait_for()
+            assert pending.is_disabled()
+            pending.evaluate("element => element.click()")
+            # A board poll can replace the row while the POST remains in flight.
+            page.evaluate("() => window.dispatchEvent(new Event('focus'))")
+            time.sleep(0.1)
+            assert len(posts) == 1
+            release_approval.set()
+            outcome = page.locator(
+                '.board-row[data-id="feat_001"] .feature-approval-feedback'
+            )
+            page.wait_for_function(
+                """() => document.querySelector('.board-row[data-id="feat_001"] .feature-approval-feedback')
+                  ?.textContent.includes('Approval approved · state approved · execution waiting')"""
+            )
+            assert "Affected: feat_001, feat_002." in outcome.inner_text()
+            assert page.locator(
+                '.board-row[data-id="feat_001"] button[data-feature-approval-action]'
+            ).count() == 0
+            assert posts[0][1].to_dict() == context
+
+            refused = page.locator('.board-row[data-id="feat_002"]')
+            refused.get_by_role("button", name="Load approval scope").click()
+            refused.get_by_role("button", name="Approve feature").click()
+            page.wait_for_function(
+                """() => document.querySelector('.board-row[data-id="feat_002"] .feature-approval-feedback')
+                  ?.textContent.includes('Approval refused')"""
+            )
+            assert "Affected: feat_002, feat_005." in refused.inner_text()
+            assert refused.get_by_role("button", name="Retry approval").count() == 1
+            # The explicit refusal remains row-local through a canonical poll.
+            page.wait_for_timeout(3_200)
+            refused = page.locator('.board-row[data-id="feat_002"]')
+            assert "Approval refused" in refused.inner_text()
+            assert refused.get_by_role("button", name="Retry approval").count() == 1
+
+            def abort_unknown(route):  # type: ignore[no-untyped-def]
+                payload = route.request.post_data_json
+                if payload and payload.get("id") == "feat_006":
+                    route.abort("connectionfailed")
+                else:
+                    route.continue_()
+
+            page.route("**/api/approve_feature", abort_unknown)
+            unknown = page.locator('.board-row[data-id="feat_006"]')
+            unknown.get_by_role("button", name="Load approval scope").click()
+            unknown.get_by_role("button", name="Approve feature").click()
+            page.wait_for_function(
+                """() => document.querySelector('.board-row[data-id="feat_006"] .feature-approval-feedback')
+                  ?.textContent.includes('Canonical board evidence remains unapproved')"""
+            )
+            unknown = page.locator('.board-row[data-id="feat_006"]')
+            assert "Approval unknown" in unknown.inner_text()
+            assert unknown.get_by_role("button", name="Retry approval").count() == 1
+            assert [work_id for work_id, _context in posts].count("feat_006") == 0
+            page.unroute("**/api/approve_feature", abort_unknown)
+            unknown.get_by_role("button", name="Retry approval").click()
+            page.wait_for_function(
+                """() => document.querySelector('.board-row[data-id="feat_006"] .feature-approval-feedback')
+                  ?.textContent.includes('Approval approved')"""
+            )
+            assert [work_id for work_id, _context in posts].count("feat_006") == 1
+        finally:
+            release_approval.set()
             browser.close()
