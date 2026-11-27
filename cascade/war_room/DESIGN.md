@@ -85,9 +85,19 @@ sequenceDiagram
     R-->>UI: Accountable state and typed prerequisite
     alt Missing or stale health evidence
         R-->>UI: Explicit unknown/unavailable or stale evidence
+    else Oversized or malformed current, legacy, request, or postcheck evidence
+        R-->>UI: Unavailable, not fresh or verified; refresh_review_observation
     end
     Note over UI,A: No forge query, provider start, queue write, or lifecycle mutation
 ```
+
+The same flow applies after process restart: the reader reloads the registry and
+action ledger, validates the complete selected evidence payload before projecting
+it, and never repairs either file. A valid normalized observation retains exact
+names and generations while displaying only its sorted row window. An oversized
+legacy row or fallback postcheck produces no green rows, no verified repair flag,
+unknown freshness and the safe refresh prerequisite until an authorized Watchdog
+observation replaces it.
 
 ```mermaid
 sequenceDiagram

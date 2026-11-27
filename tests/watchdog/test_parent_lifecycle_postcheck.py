@@ -442,6 +442,7 @@ def test_open_review_postcheck_retains_generation_when_check_policy_is_missing(
         ("policy_target", "required_check_policy_stale"),
         ("result_source", "required_check_results_stale"),
         ("red", "required_checks_not_green"),
+        ("boolean_generation", "required_checks_not_green"),
     ],
 )
 def test_required_checks_refuse_changed_policy_or_old_head(
@@ -474,6 +475,8 @@ def test_required_checks_refuse_changed_policy_or_old_head(
         snapshot["required_check_policy"]["target_head"] = "old-target"
     elif change == "result_source":
         snapshot["required_check_results"]["source_head"] = "old-source"
+    elif change == "boolean_generation":
+        snapshot["required_check_results"]["checks"]["tests"]["generation"] = True
     else:
         snapshot["required_check_results"]["statuses"]["tests"] = "failure"
         snapshot["required_check_results"]["checks"]["tests"].update(

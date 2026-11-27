@@ -510,6 +510,18 @@ def _review_evidence_unavailable_marker(observed_at: str) -> dict[str, object]:
     }
 
 
+def _review_evidence_payload_within_bound(value: object) -> bool:
+    """Return whether one legacy/fallback evidence payload is safely normalizable."""
+
+    try:
+        serialized = json.dumps(
+            value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError):
+        return False
+    return len(serialized) <= _REVIEW_EVIDENCE_MAX_BYTES
+
+
 def record_feature_review_evidence(
     feature_id: str, snapshot: Mapping[str, object], *, root: Path
 ) -> bool:
@@ -1416,6 +1428,13 @@ def _review_evidence_projection(
     results = record.get("required_check_results")
     feedback = record.get("review_feedback")
     observed_at = record.get("review_observed_at") or record.get("observed_at")
+    bounded_payload: object = {
+        "review_health": health,
+        "required_check_policy": policy,
+        "required_check_results": results,
+        "review_feedback": feedback,
+        "review_observed_at": observed_at,
+    }
 
     if repair is not None:
         postcheck = repair.get("verification_postcheck")
@@ -1432,12 +1451,14 @@ def _review_evidence_projection(
         )
         if isinstance(postcheck, Mapping):
             source = "verification_postcheck"
+            bounded_payload = postcheck
             health = {"state": "green"} if postcheck.get("verified") else health
             policy = postcheck.get("required_check_policy") or policy
             results = postcheck.get("required_check_results") or results
             observed_at = postcheck.get("verified_at") or repair.get("verified_at")
         elif isinstance(observation, Mapping):
             source = "repair_request"
+            bounded_payload = observation
             health = {
                 "state": observation.get("health_state"),
                 "reason": observation.get("reason"),
@@ -1466,11 +1487,27 @@ def _review_evidence_projection(
     evidence_unavailable = False
     omitted = 0
     try:
+        if not _review_evidence_payload_within_bound(bounded_payload):
+            raise ValueError("review evidence exceeds the normalized byte limit")
+        health_checks = health.get("checks")
+        if health_checks is not None:
+            if not isinstance(health_checks, list):
+                raise ValueError("health checks must be a list")
+            for name in health_checks:
+                _review_evidence_name(name)
+        required = policy.get("required")
+        if required is not None:
+            if not isinstance(required, list):
+                raise ValueError("required checks must be a list")
+            for name in required:
+                _review_evidence_name(name)
         _review_evidence_generation(results.get("generation"))
         raw_statuses = results.get("statuses")
         if isinstance(raw_statuses, Mapping):
-            for name in raw_statuses:
+            for name, status in raw_statuses.items():
                 _review_evidence_name(name)
+                if not isinstance(status, str):
+                    raise ValueError("check status must be a string")
         elif raw_statuses is not None:
             raise ValueError("check statuses must be a mapping")
         if isinstance(raw_checks, Mapping):
@@ -1482,6 +1519,14 @@ def _review_evidence_projection(
                 normalized_generations[name] = _review_evidence_generation(
                     raw_check.get("generation")
                 )
+                if raw_check.get("status") is not None and not isinstance(
+                    raw_check.get("status"), str
+                ):
+                    raise ValueError("check result status must be a string")
+                if raw_check.get("conclusion") is not None and not isinstance(
+                    raw_check.get("conclusion"), str
+                ):
+                    raise ValueError("check result conclusion must be a string")
             omitted = max(0, len(names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS)
             for name in names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]:
                 check = raw_checks[name]
@@ -1514,6 +1559,11 @@ def _review_evidence_projection(
             if type(normalized_omitted) is not int or normalized_omitted < 0:
                 raise ValueError("omitted check count must be a non-negative integer")
             omitted = max(omitted, normalized_omitted)
+        if health_state == "green" and (
+            policy.get("available") is not True
+            or results.get("available") is not True
+        ):
+            raise ValueError("green evidence requires available policy and results")
     except (TypeError, ValueError, UnicodeError):
         evidence_unavailable = True
         check_rows = []
@@ -1529,7 +1579,15 @@ def _review_evidence_projection(
         health_reason and "stale" in health_reason
     )
     observed = _bounded_text(observed_at, limit=64)
-    freshness = "stale" if stale else "current" if observed else "unknown"
+    freshness = (
+        "unknown"
+        if evidence_unavailable
+        else "stale"
+        if stale
+        else "current"
+        if observed
+        else "unknown"
+    )
     policy_status = (
         "available"
         if policy.get("available") is True
@@ -1573,6 +1631,9 @@ def _review_evidence_projection(
         },
         "observed_at": observed,
         "freshness": freshness,
+        "next_prerequisite": (
+            "refresh_review_observation" if evidence_unavailable else None
+        ),
     }
 
 
@@ -1623,10 +1684,20 @@ def _accountable_review_projection(
 ) -> dict[str, object]:
     projection = _feature_review_projection(record, state)
     repair_view = _repair_projection(repair)
+    evidence = _review_evidence_projection(record, repair)
     epic_id = _review_target_epic(record) or (str(meta.parent) if meta and meta.parent else None)
-    next_prerequisite = repair_view.get("next_prerequisite") or delivery.get(
-        "next_prerequisite"
+    next_prerequisite = (
+        evidence.get("next_prerequisite")
+        or repair_view.get("next_prerequisite")
+        or delivery.get("next_prerequisite")
     )
+    if evidence.get("health_state") == "unavailable" and repair_view.get("verified"):
+        repair_view = {
+            **repair_view,
+            "verified": False,
+            "waiting": True,
+            "next_prerequisite": "refresh_review_observation",
+        }
     projection.update(
         {
             "original_review": {
@@ -1643,7 +1714,7 @@ def _accountable_review_projection(
             "work_status": meta.status if meta is not None else "unknown",
             "delivery_status": delivery.get("phase"),
             "delivery": delivery,
-            "evidence": _review_evidence_projection(record, repair),
+            "evidence": evidence,
             "repair": repair_view,
             "repair_identity": {
                 "review_url": _bounded_text(record.get("url"), limit=2048),

@@ -383,6 +383,11 @@ observation. The registry write is serialized and atomically replaced. If the
 review record is missing or persistence fails, reconciliation returns the typed
 `review_evidence_persistence_failed` prerequisite and does not route repair from
 evidence that read-only consumers cannot later inspect.
+Classification also requires every target-required check to carry the observed
+source head and a nonempty, non-boolean generation; a status-only green map is
+stale evidence. The independent repair postcheck repeats that rule for the fresh
+source/target pair before the Feature ledger can record verification. Integer
+zero remains a valid generation.
 [_route_actionable_review_health](../review_health.py) constructs the material
 identity and calls
 [request_feature_review_repair](../team_supervision.py), whose existing action
@@ -432,6 +437,10 @@ the existing direct-parent adapter and Feature action remain visible in their
 owning team Code views in the
 [authoritative views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 Verification: [review-health tests](../../tests/test_review_health.py).
+The postcheck cases in
+[parent lifecycle postcheck tests](../../tests/watchdog/test_parent_lifecycle_postcheck.py)
+cover changed heads, red results and malformed generations without weakening the
+exact repair-generation fence.
 
 ## Recovery admission and active-path authority
 

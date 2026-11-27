@@ -83,6 +83,50 @@ def _green_check_snapshot(
     }
 
 
+@pytest.mark.parametrize("generation", [None, "", True])
+def test_authoritative_health_refuses_missing_or_boolean_check_generation(
+    generation: object,
+) -> None:
+    snapshot = {
+        "state": "open",
+        "url": "https://example.test/pull/1",
+        "source_branch": "feat/feat_001",
+        "target_branch": "epic/epic_001",
+        "source_revision": "source-head",
+        "target_revision": "target-head",
+        "review_identity": {
+            "url": "https://example.test/pull/1",
+            "source_branch": "feat/feat_001",
+            "target_branch": "epic/epic_001",
+        },
+        "mergeability": "mergeable",
+        "required_check_policy": {
+            "available": True,
+            "source_head": "source-head",
+            "target_head": "target-head",
+            "required": ["build"],
+        },
+        "required_check_results": {
+            "available": True,
+            "source_head": "source-head",
+            "statuses": {"build": "success"},
+            "checks": {
+                "build": {
+                    "status": "success",
+                    "source_head": "source-head",
+                    "generation": generation,
+                }
+            },
+        },
+        "review_feedback": {"available": True, "actionable": False},
+    }
+
+    assert tracking._review_health(snapshot) == {
+        "state": "conflict_or_moving_target",
+        "reason": "stale_check_generation",
+    }
+
+
 def test_review_evidence_preserves_exact_utf8_boundaries_and_zero_generation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
