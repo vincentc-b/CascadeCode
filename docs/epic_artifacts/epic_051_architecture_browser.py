@@ -5,7 +5,7 @@ Only unrelated operational-panel requests are stubbed; architecture requests
 use the production HTTP routes and real renderer. Results stay in .cascade/.
 """
 from pathlib import Path
-import json,time,threading
+import json,time,threading,sys,subprocess
 from playwright.sync_api import sync_playwright
 from cascade.board.context import set_project_context
 from cascade.workspace import ProjectContext
@@ -15,7 +15,8 @@ from cascade.war_room.server import serve
 root=Path.cwd(); canonical=ProjectContext.colocated(locate_trunk(root))
 repo=RepositoryContext(root=root,repository_key=canonical.target.repository_key);set_project_context(ProjectContext(repo,repo))
 server=serve(root=root,port=0);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();base=f'http://127.0.0.1:{server.server_port}'
-result={'paths':[], 'http_errors':[]};started=time.monotonic()
+delivery='--integrated-delivery' in sys.argv
+result={'paths':[], 'http_errors':[], 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()};started=time.monotonic()
 try:
  with sync_playwright() as p:
   browser=p.chromium.launch(headless=True);page=browser.new_page(viewport={'width':1440,'height':1100});page.set_default_timeout(20000)
@@ -36,10 +37,15 @@ try:
    page.locator('#architecture-viewer .semantic-c4-svg').wait_for()
   def target(sid):
    page.locator(f'[aria-label="element {sid}"]').click()
-  for container,component,cv,node,symbol in [
+  cases = [
    ('supervisor','watchdog','cascade-watchdog-code','element.code.watchdog.review-health','reconcile_open_review_health'),
    ('supervisor','boss','cascade-boss-code','element.code.boss.review-pending','feature_review_pending'),
-   ('supervisor','workspace','cascade-workspace-code','element.code.workspace.delivery-locked','_run_queue_delivery_locked')]:
+   ('supervisor','workspace','cascade-workspace-code','element.code.workspace.delivery-locked','_run_queue_delivery_locked')]
+  if delivery:
+   cases = [
+    ('supervisor','boss','cascade-boss-code','element.code.boss.feature-delivery-view','feature_delivery_view'),
+    ('supervisor','workspace','cascade-workspace-code','element.code.workspace.retained-feature-delivery','_retained_feature_delivery')]
+  for container,component,cv,node,symbol in cases:
    tick=time.monotonic();select_view('cascade-context');target('element.system.cascade');assert 'cascade-containers' in view.input_value()
    target('element.container.'+container)
    # Supervisor exposes a focused team view as another destination; use the real chooser when shown.
@@ -66,5 +72,5 @@ try:
 finally:
  server.shutdown();server.server_close();thread.join(timeout=5);set_project_context(None)
  result['total_seconds']=time.monotonic()-started
- (root/'.cascade/epic051-browser.json').write_text(json.dumps(result,indent=2)+'\n')
+ (root/('.cascade/epic051-delivery-browser.json' if delivery else '.cascade/epic051-browser.json')).write_text(json.dumps(result,indent=2)+'\n')
  print(json.dumps(result,indent=2),flush=True)
