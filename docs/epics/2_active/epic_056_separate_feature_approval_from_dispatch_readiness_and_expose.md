@@ -4,7 +4,8 @@ title: Separate Feature approval from dispatch readiness and expose refusal reas
 tier: epic
 status: active
 parent: null
-children: []
+children:
+- feat_056_001
 depends_on: []
 owners:
 - epic_manager
@@ -54,6 +55,7 @@ Reuse approvals.py, planning_action_dependencies.py, dependency_evaluation.py, F
 To be identified during epic planning.
 
 ## Feature breakdown
+- feat_056_001
 
 The Epic Team will create and sequence feature plans here.
 
