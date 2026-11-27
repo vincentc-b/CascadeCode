@@ -538,6 +538,16 @@ readiness awaiting dispatch. Passing gates never claims execution; historical
 refusals remain separate from a newer evaluation. The browser renders these
 projections without implementing eligibility rules.
 
+Each Feature readiness object also exposes `approval.result`, `approval.state`,
+`approval.eligibility`, `approval.eligible`, `approval.explanation`, and
+`approval.affected_work_ids`. This approval-only projection is independent of
+the compatible execution `blockers`: a current receipt remains `approved` while
+ordinary predecessor, sibling, required integration, review, provider,
+software, parent, or dispatch-base facts keep execution waiting. Missing or
+stale receipt evidence never projects an approved state. Board GETs use the
+request-scoped board and cached provider facts and do not write receipts,
+dispatch work, or refresh external authority.
+
 `DEC-WARROOM-READINESS-001`: Board responses reuse request-scoped facts. Missing
 cached evidence remains unknown; polling does not discover providers, perform
 expensive per-feature Git probes, dispatch, or mutate lifecycle state. Action

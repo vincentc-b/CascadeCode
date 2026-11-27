@@ -34,12 +34,24 @@ checks and writes; it is not a transaction across Git and JSON or an OS sandbox.
 
 | Entry point | Responsibility and failure boundary |
 |---|---|
-| [`approve_feature`, `approve_epic_plan`](approvals.py) | Resolve the canonical owning document, refresh dependency evidence, preflight selected providers, and require corrective-plan and lifecycle review checks before new approval writes. Individual approval currently requires all declared work dependencies to be complete. Epic approval checks the Epic dependency declaration and its current child set. |
-| [`evaluate_action_dependencies`, `require_action_dependencies`](planning_action_dependencies.py) | Refresh the merged board and evaluate canonical dependency status/column evidence. Unknown sources, missing dependencies, cancellation, incomplete work and illegal status/column combinations refuse strict planning actions. |
+| [`approve_feature`, `approve_epic_plan`](approvals.py) | Resolve the canonical owning document, refresh dependency evidence, preflight selected providers, and require corrective-plan and lifecycle review checks before new approval writes. Individual approval accepts only satisfied predecessors or known `dependency_incomplete` waits in legal noncancelled lifecycle state, then refreshes the owner and declaration again before writing. Epic approval checks the Epic dependency declaration and its current child set with the strict policy. |
+| [`evaluate_action_dependencies`, `require_action_dependencies`, `require_feature_approval_dependencies`](planning_action_dependencies.py) | Refresh the merged board and evaluate canonical dependency status/column evidence. The strict adapter refuses every unsatisfied dependency for minting, sign-off, Epic approval and dispatch-related planning boundaries. The individual-approval adapter permits only legal incompleteness; unknown sources, missing work, cancellation, illegal status/column evidence, or a changed owner/declaration refuse with stable reasons and affected IDs. |
 | [`require_lifecycle_review_gate`](lifecycle_review_gate.py) | Apply comment and architecture gates; enforce the displayed exact review context when rollout policy requires it. |
 | [`_set_feature_approved`](approvals.py) | Commit the owning Feature timestamp, then write its revision receipt through the Feature evidence owner. |
 | [`reconcile_approval_dispatch`](automation.py) | Use Boss ordering and canonical Watchdog dispatch after approval when automation is enabled; later reconciliation can retry a wait. |
 | [`WarRoomRequestHandler._handle_approve_feature`](war_room/server.py) | Decode the submitted review context and serialize approval/refusal. Provider and dependency failures have typed payloads; other exceptions use the generic conflict response. |
+
+The individual HTTP result preserves `ok`, `feature_id`, `newly_approved`,
+`dispatch_pending`, `dispatch_outcome`, and existing refusal fields. Additive
+fields separate the authorization result from execution: `approval_result` is
+`approved`, `refused`, or `unknown`; `approval_state` is the receipt-backed
+`approved`, `unapproved`, `stale`, or `unknown` state; `approval_explanation`
+contains a stable code and message; and `affected_work_ids` names the current
+scope or wait. `execution_state` reports `waiting`, `admitted`, `completed`, or
+`unknown`; `admitted` describes the canonical active board lane rather than a
+claim about provider execution. A current receipt can therefore return HTTP
+success with `execution_state: waiting` and `dispatch_pending: true` without
+claiming that Feature execution started.
 
 Epic plan approval additionally uses
 [`require_epic_plan_ready_for_approval`](epic/plan_readiness.py), including
@@ -55,10 +67,11 @@ sequenceDiagram
     participant Receipt as Feature evidence
     participant Dispatch as Boss / Watchdog
     HTTP->>Approval: Feature ID and displayed review context
-    Approval->>Board: Lock, refresh owner and strict dependencies
+    Approval->>Board: Lock, refresh owner and dependency rows
     alt dependency or authorization refusal
-        Approval-->>HTTP: Refusal before approval writes
-    else authorization checks pass
+        Approval-->>HTTP: Typed refusal before approval writes
+    else satisfied or known legal predecessor wait and authorization checks pass
+        Approval->>Board: Recheck unchanged owner and declaration
         Approval->>Board: Commit approved_at
         Approval->>Receipt: Persist matching revision receipt
         Approval->>Dispatch: Existing reconciliation when enabled

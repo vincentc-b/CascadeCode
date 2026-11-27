@@ -7,6 +7,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
@@ -85,6 +86,146 @@ def test_approve_feature_persists_and_is_idempotent(tmp_path: Path) -> None:
     second = approve_feature("feat_001", root=root)
     assert second["newly_approved"] is False
     assert read_doc("feat_001", root=root).meta.approved_at == approved_at
+
+
+def test_concurrent_feature_approval_commits_one_current_receipt(tmp_path: Path) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _item: approve_feature("feat_001", root=root), range(2)))
+
+    assert sorted(result["newly_approved"] for result in results) == [False, True]
+    doc = read_doc("feat_001", root=root)
+    assert approval_evidence(doc.meta, root=root)[0] == "current"
+
+
+def test_dependency_declaration_is_revision_fenced_but_completion_is_not(
+    tmp_path: Path,
+) -> None:
+    from cascade.feature.readiness_evidence import approval_evidence
+    from cascade.board.store import move_doc
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="First", tier="feature", parent="epic_001")
+    add_doc(root, id="feat_004", title="Fourth", tier="feature", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_002",
+        title="Second",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_004", "feat_001"],
+    )
+    _select_supported(root, "feat_002")
+
+    approve_feature("feat_002", root=root)
+    owner = read_doc("feat_002", root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "current"
+    assert dispatch_feature("feat_002", "boss", root=root).reason == "dependency_unmet"
+
+    owner.meta.depends_on.reverse()
+    write_doc(owner, root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "current"
+
+    move_doc("feat_001", "completed", root=root)
+    owner = read_doc("feat_002", root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "current"
+
+    add_doc(root, id="feat_003", title="Third", tier="feature", parent="epic_001")
+    owner.meta.depends_on.append("feat_003")
+    write_doc(owner, root=root)
+    assert approval_evidence(owner.meta, root=root)[0] == "stale"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "reason", "affected_ids"),
+    [
+        (
+            "declaration",
+            "dependency_declaration_changed",
+            ("feat_001", "feat_002", "feat_003"),
+        ),
+        ("owner", "dependency_owner_changed", ("feat_001", "feat_002")),
+    ],
+)
+def test_feature_approval_refuses_dependency_owner_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    reason: str,
+    affected_ids: tuple[str, ...],
+) -> None:
+    from cascade.planning_action_dependencies import DependencyActionRefused
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(root, id="feat_001", title="First", tier="feature", parent="epic_001")
+    add_doc(root, id="feat_003", title="Third", tier="feature", parent="epic_001")
+    add_doc(
+        root,
+        id="feat_002",
+        title="Owner",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+    _select_supported(root, "feat_002")
+
+    def change_declaration(*_args: object, **_kwargs: object) -> None:
+        doc = read_doc("feat_002", root=root)
+        if mutation == "declaration":
+            doc.meta.depends_on.append("feat_003")
+        else:
+            doc.meta.owners.append("replacement")
+        write_doc(doc, root=root)
+
+    monkeypatch.setattr(
+        "cascade.lifecycle_review_gate.require_lifecycle_review_gate",
+        change_declaration,
+    )
+    with pytest.raises(DependencyActionRefused) as refused:
+        approve_feature("feat_002", root=root)
+
+    assert refused.value.reasons == (reason,)
+    assert refused.value.affected_work_ids == affected_ids
+    assert read_doc("feat_002", root=root).meta.approved_at is None
+
+
+def test_retry_repairs_interrupted_approval_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.feature import readiness_evidence
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+    real_write = readiness_evidence.write_approval_evidence
+    calls = 0
+
+    def interrupt_once(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("interrupted receipt write")
+        real_write(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(readiness_evidence, "write_approval_evidence", interrupt_once)
+    with pytest.raises(OSError, match="interrupted receipt write"):
+        approve_feature("feat_001", root=root)
+    interrupted = read_doc("feat_001", root=root)
+    assert interrupted.meta.approved_at is not None
+    assert readiness_evidence.approval_evidence(interrupted.meta, root=root)[0] == "unknown"
+
+    assert approve_feature("feat_001", root=root)["newly_approved"] is True
+    repaired = read_doc("feat_001", root=root)
+    assert readiness_evidence.approval_evidence(repaired.meta, root=root)[0] == "current"
 
 
 def test_epic_approval_snapshots_children_and_is_idempotent(tmp_path: Path) -> None:
@@ -239,6 +380,12 @@ def test_approve_feature_api(tmp_path: Path) -> None:
             payload = json.loads(resp.read().decode())
         assert resp.status == HTTPStatus.OK
         assert payload["newly_approved"] is True
+        assert payload["approval_result"] == "approved"
+        assert payload["approval_state"] == "approved"
+        assert payload["execution_state"] == "waiting"
+        assert payload["dispatch_pending"] is True
+        assert payload["approval_explanation"]["code"] == "approval_saved_waiting"
+        assert payload["affected_work_ids"] == ["feat_001", "epic_001"]
         assert feature_approved("feat_001", root=root) is True
 
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/board") as resp:
@@ -251,6 +398,30 @@ def test_approve_feature_api(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_saved_approval_stays_successful_when_result_readback_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic")
+    add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_001")
+
+    def fail_readback(*_args: object, **_kwargs: object) -> None:
+        raise OSError("readback unavailable")
+
+    monkeypatch.setattr(
+        "cascade.approvals._add_feature_approval_contract", fail_readback
+    )
+    result = approve_feature("feat_001", root=root)
+
+    assert result["ok"] is True
+    assert result["newly_approved"] is True
+    assert result["approval_result"] == "unknown"
+    assert result["approval_state"] == "unknown"
+    assert result["execution_state"] == "unknown"
+    assert feature_approved("feat_001", root=root) is True
 
 
 def test_approval_apis_return_conflict_for_board_failures(
@@ -293,7 +464,19 @@ def test_approval_apis_return_conflict_for_board_failures(
             with pytest.raises(urllib.error.HTTPError) as exc_info:
                 urllib.request.urlopen(req)
             assert exc_info.value.code == HTTPStatus.CONFLICT
-            assert json.loads(exc_info.value.read().decode()) == {"error": message}
+            payload = json.loads(exc_info.value.read().decode())
+            assert payload["error"] == message
+            if endpoint == "approve_feature":
+                assert payload["approval_result"] == "refused"
+                assert payload["approval_state"] == "unapproved"
+                assert payload["execution_state"] == "unknown"
+                assert payload["affected_work_ids"] == ["feat_001"]
+                assert payload["approval_explanation"] == {
+                    "code": "board_refused",
+                    "message": message,
+                }
+            else:
+                assert payload == {"error": message}
     finally:
         server.shutdown()
         server.server_close()

@@ -241,8 +241,10 @@ This implements the [shared approval boundary](../DESIGN.md#feature-approval-aut
 replacement. Ordinary receipts use scope mode: `_scope_body` excludes named
 delegated planning sections, so tactical decomposition can proceed without a new
 scope approval. Corrective Features use exact mode. `_revision` hashes body,
-parent and provider/model configuration; scope mode also hashes the title.
-Frontmatter `depends_on` is not part of that digest.
+parent, sorted frontmatter `depends_on` IDs and provider/model configuration;
+scope mode also hashes the title. Dependency lifecycle state is not hashed, so
+predecessor completion does not stale an approval while a declaration change
+does.
 
 [`_set_feature_approved`](../approvals.py) writes the document before the receipt.
 A crash between these writes leaves unknown evidence. For an open backlog
@@ -253,9 +255,14 @@ bounded owning-path Git history; read-only projections cannot mint receipts.
 
 [`compute_feature_readiness`](readiness.py) combines supplied approval evidence
 with dependency, parent, sibling, integration-base and review facts. It returns
-`approved`, stable blocker codes and typed explanation reasons with affected
-work IDs. The Watchdog passes actual receipt state before admission; callers
-must not treat the timestamp-only `feature_approved` helper as that proof.
+the compatible `approved` and blocker fields plus a canonical approval state and
+an independent `ApprovalEligibility`. The eligibility projection applies the
+same pure approval-only predecessor allowlist as the mutation boundary: a known,
+legal incomplete predecessor yields `eligible_waiting`, while missing,
+cancelled, or illegal lifecycle evidence refuses or remains unavailable. Its
+explanation and affected IDs do not erase execution blockers. The Watchdog
+passes actual receipt state before admission; callers must not treat the
+timestamp-only `feature_approved` helper as that proof.
 The existing dispatch path rechecks provider and lifecycle review gates.
 
 ```mermaid
@@ -263,7 +270,7 @@ stateDiagram-v2
     [*] --> NeedsApproval
     NeedsApproval --> Unknown: timestamp saved, receipt absent
     Unknown --> Current: explicit approval passes gates and saves receipt
-    Current --> Stale: hashed scope or selection changes
+    Current --> Stale: hashed scope, dependency declaration or selection changes
     Stale --> Current: explicit approval of current scope
     Current --> Waiting: execution gates block
     Waiting --> Current: facts reevaluated
@@ -275,5 +282,6 @@ and `cascade-feature-code` include receipt write/read, revision calculation and
 readiness functions. The supervisor component view connects this owner to the
 approval service and Watchdog. Verification locations:
 [approval integration](../../tests/test_approval_dispatch_integration.py) and
-[Feature tests](../../tests/feature/). Dependency-declaration fencing is not
-established by the current revision digest.
+[Feature tests](../../tests/feature/). Both scope and exact approval revisions
+include the sorted dependency declaration, while mutable predecessor completion
+state remains outside the receipt.

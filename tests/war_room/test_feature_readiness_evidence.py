@@ -135,6 +135,18 @@ def test_approval_evidence_is_bound_to_current_plan_body(tmp_path: Path) -> None
     changed.body = changed.body.replace("## Scope", "## Scope\n\nPlan scope changed.")
     write_doc(changed, root=root)
     assert approval_evidence(changed.meta, root=root)[0] == "stale"
+    ledger = root / ".cascade" / "feature_approvals.json"
+    original = ledger.read_bytes()
+    board = merged_board(root)
+    readiness = compute_feature_readiness(
+        "feat_001", root=root, board=board, approval_state="stale"
+    )
+    assert readiness is not None
+    projection = feature_readiness_to_dict(readiness)
+    assert projection["approved"] is False
+    assert projection["approval"]["state"] == "stale"
+    assert projection["approval"]["result"] == "approval_required"
+    assert ledger.read_bytes() == original
 
 
 def test_approval_survives_planning_handoffs_but_not_scope_changes(tmp_path: Path) -> None:

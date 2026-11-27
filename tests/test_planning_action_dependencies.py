@@ -20,9 +20,14 @@ from cascade.epic.planning_signoffs import (
 from cascade.planning_action_dependencies import (
     DependencyActionRefused,
     evaluate_action_dependencies,
+    require_feature_approval_dependencies,
 )
 from cascade.watchdog import dispatch_feature
-from cascade.workspace.integration_worktree import merged_board, merged_board_snapshot
+from cascade.workspace.integration_worktree import (
+    merged_board,
+    merged_board_snapshot,
+    save_registry,
+)
 from cascade.war_room.server import WarRoomRequestHandler
 from tests.support import (
     SyntheticDependencyLifecycle,
@@ -49,6 +54,23 @@ class _ApprovalHandler:
 
     def _json_error(self, status: HTTPStatus, message: str) -> None:
         self._json_response(status, {"error": message})
+
+
+@pytest.fixture(autouse=True)
+def dependency_tests_skip_unrelated_provider_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "cascade.approvals._require_approval_selections", lambda *_args, **_kwargs: ()
+    )
+    monkeypatch.setattr(
+        "cascade.lifecycle_review_gate.require_lifecycle_review_gate",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def test_action_refresh_ignores_cached_and_request_scoped_board(tmp_path: Path) -> None:
@@ -191,6 +213,9 @@ def test_synthetic_sign_off_succeeds_then_refuses_stale_success(
     assert signed["newly_signed"] is True
 
     stale = merged_board(root)
+    # The fixture's registered stale copy is deliberately not a real worktree;
+    # remove that read-only incident evidence before exercising a legal write.
+    save_registry(root, [])
     move_doc(scenario.dependency_id, "backlog", root=root)
 
     with merged_board_snapshot(root, stale):
@@ -208,7 +233,7 @@ def test_synthetic_sign_off_succeeds_then_refuses_stale_success(
     ]
 
 
-def test_feature_approval_fails_closed_after_dependency_regresses(tmp_path: Path) -> None:
+def test_feature_approval_policy_allows_known_incomplete_dependency(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
@@ -216,7 +241,6 @@ def test_feature_approval_fails_closed_after_dependency_regresses(tmp_path: Path
         id="feat_001",
         title="Dependency",
         tier="feature",
-        status="completed",
         parent="epic_001",
     )
     add_doc(
@@ -227,13 +251,57 @@ def test_feature_approval_fails_closed_after_dependency_regresses(tmp_path: Path
         parent="epic_001",
         depends_on=["feat_001"],
     )
-    stale = merged_board(root)
-    move_doc("feat_001", "backlog", root=root)
+    evidence = require_feature_approval_dependencies("feat_002", root=root)
 
-    with merged_board_snapshot(root, stale):
-        with pytest.raises(DependencyActionRefused, match="dependency_unmet"):
-            approve_feature("feat_002", root=root)
+    assert evidence.outcome == "dependency_unmet"
+    assert evidence.evaluation.unsatisfied_ids == ["feat_001"]
 
+
+@pytest.mark.parametrize(
+    ("dependency_status", "mutate", "reason"),
+    [
+        ("backlog", "missing", "dependency_not_found"),
+        ("cancelled", None, "dependency_cancelled"),
+        ("active", "column_mismatch", "dependency_status_column_mismatch"),
+    ],
+)
+def test_feature_approval_refuses_unsafe_dependency_evidence(
+    tmp_path: Path,
+    dependency_status: str,
+    mutate: str | None,
+    reason: str,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    dependency = add_doc(
+        root,
+        id="feat_001",
+        title="Dependency",
+        tier="feature",
+        status=dependency_status,  # type: ignore[arg-type]
+        parent="epic_001",
+    )
+    add_doc(
+        root,
+        id="feat_002",
+        title="Owner",
+        tier="feature",
+        parent="epic_001",
+        depends_on=["feat_001"],
+    )
+    if mutate == "missing":
+        dependency.meta.path.unlink()
+    elif mutate == "column_mismatch":
+        raw = dependency.meta.path.read_text(encoding="utf-8")
+        dependency.meta.path.write_text(
+            raw.replace("status: active", "status: backlog"), encoding="utf-8"
+        )
+
+    with pytest.raises(DependencyActionRefused) as refused:
+        approve_feature("feat_002", root=root)
+
+    assert refused.value.reasons == (reason,)
+    assert refused.value.affected_work_ids == ("feat_001",)
     assert read_doc("feat_002", root=root).meta.approved_at is None
 
 
@@ -330,7 +398,7 @@ def test_epic_dependency_regression_refuses_before_any_bulk_approval(
     assert read_doc("epic_002", root=root).meta.plan_approved_at is None
 
 
-def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
+def test_epic_approval_route_keeps_strict_dependency_refusal(tmp_path: Path) -> None:
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Prerequisite", tier="epic")
     add_doc(
@@ -358,23 +426,9 @@ def test_approval_routes_expose_dependency_refusal_code(tmp_path: Path) -> None:
     )
     handler = _ApprovalHandler(root)
 
-    WarRoomRequestHandler._handle_approve_feature(handler, {"id": "feat_002"})  # type: ignore[arg-type]
     WarRoomRequestHandler._handle_approve_epic_plan(handler, {"id": "epic_002"})  # type: ignore[arg-type]
 
     assert handler.responses == [
-        (
-            HTTPStatus.CONFLICT,
-            {
-                "ok": False,
-                "code": "dependency_unmet",
-                "reasons": ["dependency_incomplete"],
-                "error": "dependency_unmet",
-                "explanation": (
-                    "One or more declared dependencies are not complete in "
-                    "canonical lifecycle state."
-                ),
-            },
-        ),
         (
             HTTPStatus.CONFLICT,
             {

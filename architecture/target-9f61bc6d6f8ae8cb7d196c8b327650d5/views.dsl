@@ -40,7 +40,7 @@ custom "cascade-feature-code" {
     properties {
         "cascade.codeComponent" "element.component.feature-team"
     }
-    include code_feature_receipt_write code_feature_receipt_read code_feature_revision code_feature_readiness
+    include code_feature_receipt_write code_feature_receipt_read code_feature_revision code_feature_readiness code_feature_approval_eligibility
     include code_feature_graph code_feature_state code_feature_checkpoint code_feature_wiring code_feature_registry code_feature_guard code_feature_runtime code_feature_provider
     include code_feature_mint code_feature_recover code_feature_retry code_feature_mismatch_result code_feature_repair code_feature_open_review_repair code_feature_inspect_open_review_repair code_feature_latest_open_review_repair code_feature_reserve code_feature_repair_verify
     autoLayout lr
@@ -171,7 +171,7 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_feature_approve code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_feature_approve code_dashboard_feature_readiness code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
     include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_post
     include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
@@ -214,6 +214,6 @@ custom "cascade-approval-code" {
     properties {
         "cascade.codeComponent" "element.component.approval"
     }
-    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_strict code_approval_review code_approval_save code_approval_reconcile
+    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_policy code_approval_strict code_approval_review code_approval_save code_approval_reconcile code_approval_result code_approval_state
     autoLayout lr
 }
