@@ -425,7 +425,10 @@ target integration remains a separate closeout obligation.
 derive a Feature's delivery phase from the canonical board row, current immutable
 review generation, admitted repair action, completion event, and local
 intended-target ancestry. The projection retains the accountable Feature team and
-original review URL while evidence is nonterminal. Missing, legacy, stale, or
+original review URL while evidence is nonterminal. `generation` includes the
+admitted obligation; nullable `published_generation` identifies the independently
+persisted review receipt (including generation zero), so delivery does not mistake
+a pending repair for a published review. Missing, legacy, stale, or
 closed-unmerged evidence cannot create accepted heads or report verified
 integration. Review-disabled delivery uses the same completion-event and local
 ancestry proof. These reads do not poll the forge, publish a review, admit repair,

@@ -470,6 +470,13 @@ def current_feature_obligation(
             return CurrentFeatureObligation(
                 False, generation, "current_review_generation_mismatch"
             )
+        # The shared delivery generation includes the admitted repair even
+        # before the forge receipt has been persisted. After all child and
+        # approval gates above pass, an absent/older publication must select
+        # the existing idempotent publication path, not terminal closeout.
+        published_generation = delivery.get("published_generation")
+        if published_generation is None or int(published_generation) < generation:
+            return CurrentFeatureObligation(False, generation, "review_not_published")
         if delivery.get("phase") == "verified_integrated" or (
             delivery.get("phase") == "merge_verification_pending"
             and delivery.get("evidence_status") == "accepted_current_generation"
