@@ -1,0 +1,59 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_manager",
+  "trigger": "TeamMessage feat_051_006:feat_051_006:review-resolution-architecture-handoff-e21827a9",
+  "reviewed_checkout_revision": "5638520a2575360cd99329861becbcd744345466",
+  "reviewed_plan_revision": "46af22a911951398038da7f5d34ae8d170444fb3",
+  "reported_feature_publication": "e21827a9bfe7f5a35e50754ae5f2dfd3b160028b",
+  "disposition": "Received the Feature 6 conflict-resolution publication handoff. Existing dec_011/dec_012 scope and architecture ownership cover the requested reconciliation; no new Feature, decision or plan revision is needed. Final integrated acceptance and architecture publication remain completion gates.",
+  "canonical_state": {
+    "method": "Cascade read_doc(epic_051) and list_children",
+    "child_metadata": "All six Features have completed status in their owning documents.",
+    "integration_check": "git merge-base --is-ancestor e21827a9bfe7f5a35e50754ae5f2dfd3b160028b HEAD returned 1. The reported Feature publication is not yet integrated into the owned Epic checkout. Completed-source metadata does not independently prove intended-target integration.",
+    "next_owner": "Supervisor normal child integration between parent turns; no manual merge or lifecycle transition requested."
+  },
+  "reported_child_evidence": {
+    "source": "Incoming TeamMessage, not independently rerun in this turn",
+    "focused_review_api_postcheck_publication_safeguards": "97 passed",
+    "c4_source_contract_and_pinned_render": "15 passed",
+    "other": "Board validation and diff check passed; no accepted snapshots rewritten.",
+    "bounds": "256 UTF-8 bytes for check names and string generations, 64-digit integers, 32 KiB normalized observation, 20 rows plus omission, unavailable/refusal behavior. Verify exact scope and serialization semantics against integrated source before publication."
+  },
+  "design_review": {
+    "paths": ["DESIGN.md", "cascade/DESIGN.md", "cascade/watchdog/DESIGN.md", "cascade/war_room/DESIGN.md"],
+    "scope": "Reviewed affected evidence producer/reader descriptions and parent contract links in the current Epic checkout, plus the Feature team's reported reconciliation. This is not a review of the unintegrated child diff.",
+    "source_trace": "Current record_feature_review_evidence caps rows and selected text but stores check-name keys and string/integer generations without the reported new bounds. Current _review_evidence_projection gives postcheck/request observations precedence and returns string generations unchanged. Current model and explicit War Room gap describe these bytes accurately.",
+    "no_change_reason": "Do not claim the published Feature behavior exists in this checkout before integration. Epic Architect owns the source/model/design reconciliation after the Feature lands. No changed design prose is introduced by this evidence-only turn."
+  },
+  "diagram_impact_handoff": {
+    "owner": "Epic Architect",
+    "model_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+    "landscape_context": "cascade-landscape and cascade-context: child reports unchanged actors, external dependencies and responsibility boundaries; confirm against integrated diff.",
+    "containers": "cascade-containers: child reports the same runtime and review/action stores; no new persistence or isolation boundary is requested.",
+    "components": "cascade-supervisor-components, cascade-team-components and cascade-war-room-components: retain current producer, registry, reader and repair owners; verify unavailable evidence cannot route work.",
+    "code": [
+      "cascade-watchdog-code: reconcile element.code.watchdog.review-evidence-record (cascade/review.py::record_feature_review_evidence) with implemented scalar, aggregate and refusal limits.",
+      "cascade-dashboard-code: reconcile element.code.dashboard.review-projection (cascade/review.py::feature_review_views and its projection helpers) with current/legacy/request/postcheck bounds and omission semantics.",
+      "Update relationship.code-watchdog-health-to-evidence-record to describe bounded persistence and refusal before routing. Existing stable nodes and views suffice according to the child handoff; preserve source symbols, declaration kinds and component ownership."
+    ],
+    "behavior": "Reconcile normal observation persistence and passive reads, oversized/unsupported evidence refusal, fallback precedence and restart behavior in package/Watchdog/War Room designs. Preserve Feature 5 consumer and downstream retry fences.",
+    "verification_required": "Against the integrated committed revision: source-contract validation, supported pinned rendering, context/container/component-to-Code navigation, Level up, deep-link restoration, pinned source, normal and refusal/resume traces, and measured warm artifact reuse. Retain historical fixture, suite-order and cold-readiness gaps unless current evidence resolves them."
+  },
+  "verification_this_turn": {
+    "publication_pins": "All six saved plan/design/contract/source digests match their Git revisions and current file bytes.",
+    "plan": "Current plan revision remains 46af22a911951398038da7f5d34ae8d170444fb3.",
+    "checks": "Artifact JSON parsing and git diff --check passed before commit.",
+    "runtime_tests": "Not rerun: this turn changes only a handoff artifact; Feature code is not integrated here. Reported child passes are attributed separately."
+  },
+  "publication": {
+    "saved_request": "docs/epic_artifacts/epic_051_architecture_review_46af22a9.json",
+    "last_receipt": "docs/epic_artifacts/epic_051_architect_feature_5_publication_replay.json",
+    "last_recorded_status": "pending",
+    "handoff": "Architect may replay the saved prior tuple unchanged through the normal tool. That tuple covers Feature 5, not Feature 6. After integration and model reconciliation, publish a separately reviewed exact current tuple; do not mutate the old replay request or accepted snapshots."
+  },
+  "remaining_gates": [
+    "Normal integration of the reported Feature 6 publication into the intended Epic branch.",
+    "Final integrated acceptance, model/design reconciliation and current architecture verification/publication.",
+    "Explicit disposition of recorded verification gaps before recommending completion; human Epic confirmation remains separate."
+  ]
+}
