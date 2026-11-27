@@ -149,6 +149,11 @@ Reviewed relevant approval/readiness sections in DESIGN.md, cascade/DESIGN.md, c
   Chose Bind a canonical sorted unique depends_on declaration to both scope and exact approval evidence and to the displayed approval request; predecessor lifecycle facts remain outside the approval identity..
   Rationale: The current _revision omits depends_on. Changed declarations must require explicit review, while lifecycle progress must release already authorized work. Extend the existing receipt with a versioned declaration fingerprint; never upgrade an old receipt from today's declaration without immutable historical proof. Unknown proof remains non-dispatchable and requires explicit review.
   Honors: Success criteria 1, 2 and 4; delegated tactical scope mode, corrective exact mode, changed-plan invalidation, restart and concurrency fences..
+
+- `dec_004` · 2026-11-27 · Epic Architect · **Approval component and gate ownership**
+  Chose Model the existing approval orchestration as element.component.approval with cascade-approval-code; retain receipt/readiness ownership in element.component.feature-team and execution admission in Watchdog. Require only dependency_incomplete to become approval-permissive; unknown, cancelled and malformed evidence still refuses..
+  Rationale: A dedicated in-process component makes authorization, persistence and execution inspectable without inventing a runtime service. The explicit gate matrix records the current HTTP identity and direct software-gate gaps so the backend Feature reuses those existing authorities rather than claiming they are already enforced.
+  Honors: Design implementation-depth contract and success criteria 1–4; two existing Features remain sufficient..
 ## Amendment log
 
 _(none)_
