@@ -18,7 +18,13 @@ intended Epic branch. A merge callback, green checks, a closed forge row, stale
 heads, or an accepted merge that is absent from the target cannot authorize the
 completion event. Review-disabled delivery retains its supervised local merge
 proof. This predicate runs before the completed fast path and its result gates
-both `FeatureCompleted` and checkout retirement.
+both `FeatureCompleted` and checkout retirement. The active delivery generation
+may exist before its review is published. Once the exact repair child is delivered
+and all current gates pass, a missing or older published generation is
+`review_not_published`, selecting idempotent review publication/recovery even
+for a completed-path Feature (including split tracking/product roots). An open
+current review or newer mismatched publication cannot authorize completion or
+trigger a replacement review.
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and

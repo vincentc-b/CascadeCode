@@ -514,6 +514,7 @@ def test_delivery_view_projects_current_admitted_repair(
 
     assert view["phase"] == expected_phase
     assert view["generation"] == 1
+    assert view["published_generation"] == 0
     assert view["actionable"] is True
     assert view["review_url"] == "https://example.test/pulls/1"
 

@@ -353,7 +353,7 @@ def _feature_completed_events(root: Path) -> list[Event]:
     return [event for event in events if event.type == "FeatureCompleted"]
 
 
-def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path) -> None:
+def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path, monkeypatch) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
     add_doc(
@@ -403,6 +403,31 @@ def test_original_repair_task_is_the_current_closeout_child(tmp_path: Path) -> N
     obligation = current_feature_obligation("feat_001", root=root)
     assert obligation.generation == 1
     assert obligation.reason == "local integration evidence is missing"
+
+    # Completed source documents can retain an undelivered repair obligation.
+    # Publication is permitted only after its exact child delivery gates pass;
+    # neither an older review nor a forged callback authorizes closeout.
+    move_doc("feat_001", "completed", root=root)
+    monkeypatch.setattr(review, "review_enabled", lambda _: True)
+    publications = []
+    monkeypatch.setattr(review, "ensure_feature_review", lambda feature_id, *, root: publications.append(feature_id))
+    for published in (None, 0, 1, 2):
+        if published is not None:
+            _store_review(root, base="base", source="source", generation=published)
+        view = review.feature_delivery_view("feat_001", root=root)
+        assert view["published_generation"] == published
+        obligation = current_feature_obligation("feat_001", root=root)
+        assert not obligation.satisfied
+        if published in (None, 0):
+            assert obligation.reason == "review_not_published"
+        elif published == 2:
+            assert obligation.reason == "current_review_generation_mismatch"
+        before = len(publications)
+        assert not try_complete_feature("feat_001", root=root, review_merged=True, review_generation=1)
+        assert len(publications) == before
+        assert not try_complete_feature("feat_001", root=root)
+        assert len(publications) == before + int(published in (None, 0))
+    assert _feature_completed_events(root) == []
 
 
 def test_on_task_merged_synthesizes_closeout_without_model_action(
