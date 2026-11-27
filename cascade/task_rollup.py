@@ -18,6 +18,7 @@ from cascade.task.action_recovery import (
     ActionResult,
     create_or_load_action,
     load_action,
+    merge_action_metadata,
     record_owner_decision,
     record_owner_resolution,
     replace_action_metadata,
@@ -49,6 +50,17 @@ class ParentLifecycleMismatch(TypedDict):
     accountable_owner: str
     selected_operation: str
     evidence: dict[str, Any]
+
+
+class UpstreamReviewFence(TypedDict):
+    """Exact upstream review observation fencing one downstream delivery."""
+
+    schema_version: int
+    feature_id: str
+    blocker_identity: str
+    evidence_generation: str
+    repair_action_id: str | None
+    repair_generation: int | None
 
 
 def _path(root: Path) -> Path:
@@ -297,6 +309,58 @@ def pending_task_merges(root: Path) -> set[str]:
         return set(_read(repo))
 
 
+def record_upstream_review_observation(
+    feature_id: str,
+    *,
+    blocker_identity: str,
+    evidence_generation: str,
+    repair_action_id: str | None,
+    repair_generation: int | None,
+    root: Path,
+) -> list[str]:
+    """Attach current upstream evidence to affected queued Task actions.
+
+    The observation is descriptive metadata in the existing action ledger.  It
+    deliberately does not alter the downstream Task's recovery state or attempt
+    history: the retry boundary separately records which generation it actually
+    evaluated.
+    """
+
+    if not blocker_identity or not evidence_generation:
+        raise ValueError("upstream review observation needs exact identities")
+    repo = resolve_root(root)
+    from cascade.task.action_recovery import recovery_actions
+
+    affected: list[str] = []
+    for action in recovery_actions(root=repo):
+        if (
+            action.get("action_kind") != _QUEUED_MERGE_KIND
+            or action.get("recovery_state") == "completed"
+        ):
+            continue
+        metadata = action.get("metadata")
+        task_id = metadata.get("task_id") if isinstance(metadata, Mapping) else None
+        if not isinstance(task_id, str) or not _owned_by_feature(
+            task_id, feature_id, repo
+        ):
+            continue
+        observation: UpstreamReviewFence = {
+            "schema_version": 1,
+            "feature_id": feature_id,
+            "blocker_identity": blocker_identity,
+            "evidence_generation": evidence_generation,
+            "repair_action_id": repair_action_id,
+            "repair_generation": repair_generation,
+        }
+        if metadata.get("upstream_review_observation") == observation:
+            continue
+        merge_action_metadata(
+            action["action_id"], {"upstream_review_observation": observation}, root=repo
+        )
+        affected.append(task_id)
+    return affected
+
+
 def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> list[str]:
     """Retry durable task merges and return ids completed on this pass."""
 
@@ -357,6 +421,12 @@ def retry_pending_task_merges(root: Path, *, feature_id: str | None = None) -> l
         if state in {"awaiting_owner_decision", "awaiting_human_gate", "blocked", "running"}:
             if state == "blocked":
                 removable.append(task_id)
+            continue
+
+        if _unchanged_upstream_review_fence(action, repo):
+            # An upstream review poll is not a downstream Task retry.  Only one
+            # ordinary gated reevaluation is admitted for each exact evidence
+            # generation, even across supervisor restart.
             continue
 
         if _unchanged_parent_lifecycle_mismatch(task_id, action, repo):
@@ -539,9 +609,17 @@ def _unchanged_parent_lifecycle_mismatch(
 ) -> bool:
     """Observe an unchanged mismatch without spending another merge attempt."""
 
+    metadata = action.get("metadata")
+    if isinstance(metadata, Mapping):
+        observation = metadata.get("upstream_review_observation")
+        evaluated = metadata.get("upstream_review_evaluation")
+        if isinstance(observation, Mapping) and isinstance(evaluated, Mapping) and any(
+            evaluated.get(field) != observation.get(field)
+            for field in ("feature_id", "blocker_identity", "evidence_generation")
+        ):
+            return False
     if action.get("failure_classification") != "parent_lifecycle_mismatch":
         return False
-    metadata = action.get("metadata")
     recorded = (
         metadata.get("parent_lifecycle_mismatch")
         if isinstance(metadata, Mapping)
@@ -557,6 +635,50 @@ def _unchanged_parent_lifecycle_mismatch(
     )
 
 
+def _unchanged_upstream_review_fence(
+    action: Mapping[str, Any], root: Path
+) -> bool:
+    """Whether this downstream action already evaluated the observed blocker."""
+
+    metadata = action.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return False
+    observation = metadata.get("upstream_review_observation")
+    evaluated = metadata.get("upstream_review_evaluation")
+    if not isinstance(observation, Mapping) or not isinstance(evaluated, Mapping):
+        return False
+    if _upstream_review_verified(observation, root):
+        return False
+    return all(
+        evaluated.get(field) == observation.get(field)
+        for field in ("feature_id", "blocker_identity", "evidence_generation")
+    )
+
+
+def _upstream_review_verified(observation: Mapping[str, Any], root: Path) -> bool:
+    """Require the independent exact-generation postcheck before release."""
+
+    action_id = observation.get("repair_action_id")
+    generation = observation.get("repair_generation")
+    feature_id = observation.get("feature_id")
+    if (
+        not isinstance(action_id, str)
+        or type(generation) is not int
+        or not isinstance(feature_id, str)
+    ):
+        return False
+    from cascade.feature.repair import feature_repair_actions
+
+    return any(
+        repair.get("action_id") == action_id
+        and repair.get("generation") == generation
+        and repair.get("phase") == "verified"
+        and isinstance(repair.get("verification_postcheck"), Mapping)
+        and repair["verification_postcheck"].get("verified") is True
+        for repair in feature_repair_actions(feature_id, root=root)
+    )
+
+
 def _store_parent_lifecycle_mismatch(task_id: str, root: Path) -> dict[str, Any]:
     """Attach the exact completed-parent generation to the original action."""
 
@@ -567,9 +689,15 @@ def _store_parent_lifecycle_mismatch(task_id: str, root: Path) -> dict[str, Any]
     action = load_action(action_id, root=root)
     if action is None:
         raise ActionRecoveryError("queued delivery action disappeared")
-    metadata = dict(action.get("metadata") or {})
-    metadata["parent_lifecycle_mismatch"] = mismatch
-    replace_action_metadata(action_id, metadata, root=root)
+    updates: dict[str, Any] = {"parent_lifecycle_mismatch": mismatch}
+    metadata = action.get("metadata") or {}
+    observation = metadata.get("upstream_review_observation")
+    if isinstance(observation, Mapping):
+        updates["upstream_review_evaluation"] = {
+            field: observation.get(field)
+            for field in ("feature_id", "blocker_identity", "evidence_generation")
+        }
+    merge_action_metadata(action_id, updates, root=root)
     return mismatch
 
 

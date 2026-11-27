@@ -291,17 +291,10 @@ def test_open_review_postcheck_marks_only_exact_current_green_generation(
         "accepted_source_head": "corrected",
         "accepted_target_head": "target",
         "accepted_merge_sha": "merge",
-        "required_check_policy": {
-            "available": True,
-            "source_head": "corrected",
-            "target_head": "target",
-            "required": ["tests"],
-        },
-        "required_check_results": {
-            "available": True,
-            "source_head": "corrected",
-            "statuses": {"tests": "success"},
-        },
+        # Cached green evidence must not authorize closeout; the postcheck uses
+        # only the fresh normalized forge snapshot below.
+        "required_check_policy": {"available": False},
+        "required_check_results": {"available": False},
     }
     monkeypatch.setattr(subject, "task_lifecycle_lock", lambda **_kwargs: nullcontext())
     monkeypatch.setattr(subject, "_repair_owner_and_claim_current", lambda *_args: True)
@@ -311,10 +304,10 @@ def test_open_review_postcheck_marks_only_exact_current_green_generation(
     )
     monkeypatch.setattr(
         "cascade.feature.repair.mark_feature_repair_verified",
-        lambda _feature_id, _generation, *, postcheck, root: action.update(
-            phase="verified", verification_postcheck=dict(postcheck)
-        )
-        is None,
+        lambda _feature_id, _generation, *, postcheck, root: (
+            action.update(phase="verified", verification_postcheck=dict(postcheck))
+            is None
+        ),
     )
     monkeypatch.setattr(
         "cascade.review.review_record_for_feature",
@@ -323,20 +316,49 @@ def test_open_review_postcheck_marks_only_exact_current_green_generation(
     forge_calls: list[str] = []
     monkeypatch.setattr(
         "cascade.tracking.merge_request_snapshot",
-        lambda *_args, **_kwargs: forge_calls.append("read")
-        or {
-            "state": "merged",
-            "url": action["review_url"],
-            "source_branch": action["source_ref"],
-            "target_branch": action["target_ref"],
-            "source_revision": "corrected",
-            "merge_sha": "merge",
-        },
+        lambda *_args, **_kwargs: (
+            forge_calls.append("read")
+            or {
+                "state": "merged",
+                "url": action["review_url"],
+                "source_branch": action["source_ref"],
+                "target_branch": action["target_ref"],
+                "source_revision": "corrected",
+                "target_revision": "merged-target",
+                "merge_sha": "merge",
+                "required_check_policy": {
+                    "available": True,
+                    "source_head": "corrected",
+                    "target_head": "merged-target",
+                    "required": ["tests"],
+                },
+                "required_check_results": {
+                    "available": True,
+                    "source_head": "corrected",
+                    "target_head": "merged-target",
+                    "statuses": {"tests": "success"},
+                    "checks": {
+                        "tests": {
+                            "status": "success",
+                            "source_head": "corrected",
+                            "generation": 22,
+                        }
+                    },
+                },
+            }
+        ),
     )
+    git_calls: list[list[str]] = []
     monkeypatch.setattr(
         subject.subprocess,
         "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+        lambda args, **_kwargs: (
+            git_calls.append(args)
+            or SimpleNamespace(
+                returncode=0,
+                stdout="merged-target\n" if args[1] == "rev-parse" else "",
+            )
+        ),
     )
 
     verified = reconcile_open_review_repair("feat_001", root=tmp_path, now=STAMP)
@@ -346,8 +368,11 @@ def test_open_review_postcheck_marks_only_exact_current_green_generation(
     assert verified["repair_generation"] == 2
     assert verified["checked_source_head"] == "corrected"
     assert action["phase"] == "verified"
-    assert replay == verified
-    assert forge_calls == ["read"]
+    assert replay["verified"] is True
+    assert replay["repair_action_id"] == verified["repair_action_id"]
+    assert replay["required_check_results"] == verified["required_check_results"]
+    assert forge_calls == ["read", "read"]
+    assert len(git_calls) == 8
 
 
 def test_open_review_postcheck_retains_generation_when_check_policy_is_missing(
@@ -393,6 +418,8 @@ def test_open_review_postcheck_retains_generation_when_check_policy_is_missing(
             "source_branch": action["source_ref"],
             "target_branch": action["target_ref"],
             "source_revision": "corrected",
+            "target_revision": "target",
+            "required_check_policy": {"available": False},
         },
     )
 
@@ -422,7 +449,7 @@ def test_required_checks_refuse_changed_policy_or_old_head(
 ) -> None:
     from cascade.watchdog.incident_postcheck import _required_checks
 
-    record = {
+    snapshot = {
         "required_check_policy": {
             "available": True,
             "source_head": "current-source",
@@ -432,17 +459,61 @@ def test_required_checks_refuse_changed_policy_or_old_head(
         "required_check_results": {
             "available": True,
             "source_head": "current-source",
+            "target_head": "current-target",
             "statuses": {"tests": "success"},
+            "checks": {
+                "tests": {
+                    "status": "success",
+                    "source_head": "current-source",
+                    "generation": 10,
+                }
+            },
         },
     }
     if change == "policy_target":
-        record["required_check_policy"]["target_head"] = "old-target"
+        snapshot["required_check_policy"]["target_head"] = "old-target"
     elif change == "result_source":
-        record["required_check_results"]["source_head"] = "old-source"
+        snapshot["required_check_results"]["source_head"] = "old-source"
     else:
-        record["required_check_results"]["statuses"]["tests"] = "failure"
+        snapshot["required_check_results"]["statuses"]["tests"] = "failure"
+        snapshot["required_check_results"]["checks"]["tests"].update(
+            status="failure", generation=11
+        )
 
-    pending = _required_checks(record, "current-source", "current-target")
+    pending = _required_checks(snapshot, "current-source", "current-target")
 
     assert pending["verified"] is False
     assert pending["reason"] == reason
+
+
+def test_required_checks_accept_pipeline_generation_and_confirmed_empty_policy() -> (
+    None
+):
+    from cascade.watchdog.incident_postcheck import _required_checks
+
+    pipeline = {
+        "required_check_policy": {
+            "available": True,
+            "source_head": "source",
+            "target_head": "target",
+            "required": ["pipeline"],
+        },
+        "required_check_results": {
+            "available": True,
+            "source_head": "source",
+            "target_head": "target",
+            "statuses": {"pipeline": "success"},
+            "checks": {
+                "pipeline": {
+                    "status": "success",
+                    "source_head": "source",
+                    "generation": {"pipeline_id": 12, "job_id": 34},
+                }
+            },
+        },
+    }
+    assert _required_checks(pipeline, "source", "target")["verified"] is True
+
+    pipeline["required_check_policy"].update(required=[], confirmed_empty=True)
+    pipeline["required_check_results"].update(statuses={}, checks={})
+    assert _required_checks(pipeline, "source", "target")["verified"] is True

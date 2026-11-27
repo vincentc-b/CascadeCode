@@ -69,7 +69,7 @@ def try_complete_feature(
     # section. The Watchdog helper fences the exact receipt before mutation.
     from cascade.watchdog.incident_postcheck import reconcile_open_review_repair
 
-    reconcile_open_review_repair(feature_id, root=repo)
+    repair_postcheck = reconcile_open_review_repair(feature_id, root=repo)
     from cascade.task.lifecycle_lock import task_lifecycle_lock
 
     with task_lifecycle_lock(root=repo):
@@ -78,6 +78,7 @@ def try_complete_feature(
             root=repo,
             review_merged=review_merged,
             review_generation=review_generation,
+            repair_postcheck=repair_postcheck,
         )
 
 
@@ -87,6 +88,7 @@ def _try_complete_feature(
     root: Path,
     review_merged: bool = False,
     review_generation: int | None = None,
+    repair_postcheck: dict[str, object] | None = None,
 ) -> bool:
     """Locked Feature closeout implementation."""
 
@@ -98,6 +100,10 @@ def _try_complete_feature(
         return False
     feature_meta = board.by_id[feature_id]
     if feature_meta.tier != "feature":
+        return False
+    if not _current_open_review_postcheck_matches(
+        feature_id, repair_postcheck, root=repo
+    ):
         return False
     from cascade.lifecycle_review_gate import require_lifecycle_review_gate
     from cascade.workspace.architecture_review import ArchitectureProposalError
@@ -117,10 +123,7 @@ def _try_complete_feature(
         and feature_meta.path.parent.name == "3_completed"
     ):
         if not obligation.satisfied:
-            if (
-                not review_merged
-                and obligation.reason == "review_not_published"
-            ):
+            if not review_merged and obligation.reason == "review_not_published":
                 from cascade.review import ensure_feature_review, review_enabled
 
                 if review_enabled(repo):
@@ -270,6 +273,33 @@ def _try_complete_feature(
         current_obligation=obligation,
     )
     return True
+
+
+def _current_open_review_postcheck_matches(
+    feature_id: str,
+    postcheck: dict[str, object] | None,
+    *,
+    root: Path,
+) -> bool:
+    """Require Boss to consume the fresh receipt for any scoped review repair."""
+
+    from cascade.feature.repair import feature_repair_actions
+
+    candidates = [
+        action
+        for action in feature_repair_actions(feature_id, root=root)
+        if action.get("repair_route") == "open_review"
+        and action.get("phase") not in {"blocked", "refused", "superseded"}
+    ]
+    if not candidates:
+        return True
+    current = max(candidates, key=lambda row: int(row.get("generation") or 0))
+    return bool(
+        isinstance(postcheck, dict)
+        and postcheck.get("verified") is True
+        and postcheck.get("repair_action_id") == current.get("action_id")
+        and postcheck.get("repair_generation") == current.get("generation")
+    )
 
 
 def feature_completed_recorded(

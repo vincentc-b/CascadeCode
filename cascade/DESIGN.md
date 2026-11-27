@@ -403,6 +403,61 @@ roles. These are linked requirements, not duplicate ownership declarations.
 
 ## Delivery and review boundaries
 
+`REQ-REVIEW-EVIDENCE-001`: [merge_request_snapshot](tracking.py) preserves the
+original forge review identity while reporting the observed URL and route, exact
+source and target heads, mergeability, human approval or actionable feedback,
+and required-check policy and results. Required checks come only from the target
+branch's authoritative forge policy. An empty check listing is not an empty
+policy; an empty policy is valid only when the policy endpoint or project
+configuration confirms it. Policy, target-head, result and feedback failures
+remain explicit unavailable evidence.
+
+`REQ-REVIEW-EVIDENCE-002`: Check results retain their forge check-run or pipeline
+generation and source head. The newest generation for each required name wins,
+so an older green result cannot mask a newer failure. Classification distinguishes
+failed, pending, missing, stale, green, approval-only wait, actionable human
+feedback, conflicting or moving heads, transient unavailable evidence and terminal
+review disposition. Forge response text is data and is never used as a shell or
+validation command.
+
+`DEC-REVIEW-EVIDENCE-001`: Keep forge normalization at the existing scripted
+Runner boundary in `cascade.tracking`. Fixed `gh api` and `glab api` argument
+vectors make production adapters replaceable by deterministic tests without a
+second forge client, credential store, scheduler or persistence boundary.
+
+```mermaid
+flowchart LR
+    Review[Original review identity] --> Snapshot[merge_request_snapshot]
+    Snapshot --> Heads[Exact source and target heads]
+    Snapshot --> Policy[Authoritative target policy]
+    Snapshot --> Results[Head-bound check generations]
+    Snapshot --> Feedback[Approval and actionable feedback]
+    Heads --> Health[_review_health]
+    Policy --> Health
+    Results --> Health
+    Feedback --> Health
+    Policy -. unavailable .-> Unknown[Typed transient prerequisite]
+    Results -. missing or stale .-> Blocked[Typed non-green evidence]
+```
+
+Normal evidence flow is exercised by the GitHub and GitLab scripted transport
+cases in [tracking adapter tests](../tests/test_tracking_find.py), including a
+confirmed empty target policy and newest-generation selection. The same tests
+cover unavailable policy, a missing required result, stale source evidence and a
+newer failure after an older success. The integrated Watchdog Code view is
+[`cascade-watchdog-code`](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+and its source contract pins both normalization and classification symbols.
+The [Watchdog open-review contract](watchdog/DESIGN.md#open-review-observation)
+owns the next boundary: actionable normalized evidence joins one Feature repair
+generation, while pending, missing, stale, approval-only and unavailable evidence
+remains a non-provider wait. The existing team adapter and Feature action ledger
+own admission and restart deduplication; this package boundary adds no scheduler,
+CI runner, provider launcher or merge authority.
+Affected queued Task actions retain the upstream blocker and material evidence
+generation through the [Task delivery fence](task/DESIGN.md#durable-delivery-collaborators).
+Watchdog observes evidence, Task owns retry charging, and the independent repair
+postcheck remains the only release evidence.
+
 `REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
 relationship before delegating recovery. Durable attempts, acknowledgements and
 verified lifecycle results are distinct evidence.
@@ -421,6 +476,10 @@ a follow-up. Legacy accepted-review follow-up remains a distinct route and canno
 be selected by this scoped action. Reconciliation binds callbacks to their
 immutable generation and exact accepted source/target heads, while independent
 target integration remains a separate closeout obligation.
+Independent repair verification obtains policy and check results from the same
+fresh normalized snapshot as the observed original review. Registry-cached check
+facts and a prior verified phase cannot satisfy Boss closeout; the accepted merge
+remains on the fresh intended Epic target.
 `REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
 derive a Feature's delivery phase from the canonical board row, current immutable
 review generation, admitted repair action, completion event, and local

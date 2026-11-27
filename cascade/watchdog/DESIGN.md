@@ -313,32 +313,61 @@ requirement for responsive architecture rendering.
 
 ## Open-review observation
 
+`REQ-WATCHDOG-REVIEW-001`: A registered open review is healthy only when its
+normalized current-head evidence is green. Failed required checks, actionable
+feedback and a confirmed merge conflict are actionable even when the forge
+reports clean mergeability. Pending or missing checks, stale evidence, unknown
+policy, approval-only waits and transient forge failures remain typed waits and
+cannot enqueue a provider turn.
+
+`DEC-WATCHDOG-REVIEW-001`: Route all actionable evidence for one Feature review
+through its existing generation-bound Feature repair owner. The durable request
+evidence binds the original review and route, source/target head pair, failing
+check generation or feedback identity, and repair generation. An identical poll
+or restart rejoins that action and retains its attempts and budgets. Changed
+material evidence receives one new content-addressed request identity, still
+subject to the single-writer and ordinary repair gates.
+
 [reconcile_open_review_health](../review_health.py) reads registered reviews and
-uses [merge_request_snapshot](../tracking.py) for fresh forge state, source
-revision, branch refs and mergeability. Conflict handling fetches source and
-target heads separately before resolution admission. Confirmed conflicts enter the existing resolution-action admission
-and guarded publication path; unknown mergeability, unavailable snapshots and
-missing worktrees retain an explicit recovery prerequisite. Resolution actions
-retain the source/target pair and admission identity so repeated observations
-rejoin existing work. A successful publication can precede forge mergeability
-refresh; target ancestry avoids repeating an already integrated conflict repair.
+uses [merge_request_snapshot](../tracking.py) for the normalized original-review
+identity, exact heads, mergeability, policy, current check generations and human
+feedback. [_route_actionable_review_health](../review_health.py) constructs the
+material identity and calls
+[request_feature_review_repair](../team_supervision.py), whose existing action
+ledger and single-writer gate retain repair ownership across restart. The Feature
+owner creates any repair Task and uses the guarded resolution publication path;
+the observer never reruns CI, executes forge text, opens another review or merges
+the original review.
+
+The same actionable observation calls the Task-owned
+[record_upstream_review_observation](../task_rollup.py) boundary for queued
+deliveries owned by that Feature. Watchdog supplies the normalized blocker and
+material generation but does not claim or retry a downstream Task. The
+[Task delivery contract](../task/DESIGN.md#durable-delivery-collaborators) owns
+generation comparison, attempt charging and release after the independent
+verified repair postcheck.
 
 ```mermaid
-flowchart LR
+flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]
-    Snapshot -->|conflicting| Heads[Fetch and compare exact heads]
-    Heads --> Admission[Resolution action and owner gates]
-    Admission --> Publish[Guarded repair publication]
-    Snapshot -->|missing or unknown| Wait[Recovery prerequisite]
-    Snapshot -->|clean or mergeable| Healthy[Mergeability health restored]
+    Snapshot --> Classify[Normalized evidence classification]
+    Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
+    Identity --> Repair[Join one Feature repair generation]
+    Repair --> Publish[Guarded exact-head publication]
+    Publish --> Pending[New head checks pending]
+    Classify -->|pending, missing, stale, unknown, approval or transient| Wait[Typed wait; no provider]
+    Pending --> Snapshot
+    Classify -->|current green| Human[Human-controlled original review merge]
+    Classify -->|unchanged after restart| Repair
 ```
 
-This observer currently classifies clean mergeability as healthy without
-checking required CI policy or results. That result is not proof of green CI or
-intended-target delivery. The [shared review contract](../DESIGN.md#delivery-and-review-boundaries)
-and [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) retain acceptance
-and integration ownership. Both observation functions are native nodes in
-`cascade-watchdog-code`, below `cascade-supervisor-components` in the
+Green observation does not merge a review or prove intended-target integration.
+The [shared review contract](../DESIGN.md#delivery-and-review-boundaries) and
+[Boss closeout](../boss/DESIGN.md#delivery-and-closeout) retain acceptance and
+integration ownership. Snapshot, classification and actionable routing are
+native nodes in `cascade-watchdog-code`, below `cascade-supervisor-components`;
+the existing direct-parent adapter and Feature action remain visible in their
+owning team Code views in the
 [authoritative views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 Verification: [review-health tests](../../tests/test_review_health.py).
 
@@ -379,6 +408,7 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
 | [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts, then require a fresh host inspection of the reviewed worker receipt and capability generation. |
 | [reconcile_open_review_repair](incident_postcheck.py) | Observe the original forge review and normalized required-check policy/results outside lifecycle critical sections, then re-read the exact action, review generation and evidence digest under the owner fence before recording verification. |
+| [_required_checks](incident_postcheck.py) | Require current-target policy and a green, source-bound, generation-bearing result for every required name. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
@@ -420,6 +450,11 @@ published generation and corrected source head, and an accepted merge reachable
 from the intended Epic target. The postcheck consumes authoritative normalized
 `required_check_policy` and `required_check_results` evidence for that same head;
 missing, unavailable, stale or non-green evidence returns a typed prerequisite.
+Each required result names its current forge run or pipeline generation and
+corrected source head. A persisted green result is not reused: every Boss
+closeout rereads the original review, current target head, authoritative policy
+and newest normalized results. The local intended Epic ref equals that fresh
+target head and contains the forge-accepted merge object.
 It does not infer success from mergeability, Feature/Task status, queue
 acknowledgement, publication, or validation of an older head.
 
@@ -437,15 +472,15 @@ sequenceDiagram
     participant Forge
     participant Ledger as action/review stores
     Boss->>Watchdog: pre-closeout verification request
-    Watchdog->>Ledger: read current generation and normalized check evidence
-    Watchdog->>Forge: fresh original-review observation outside lock
+    Watchdog->>Ledger: read current action, review generation and corrected source
+    Watchdog->>Forge: fresh original review, target policy and check generations
     alt identity, head, policy, checks and Epic integration agree
         Watchdog->>Ledger: re-read digest under owner/lifecycle fence
         Watchdog->>Ledger: persist exact verified receipt
     else missing, stale or changed evidence
         Watchdog-->>Boss: verification pending + typed prerequisite
     end
-    Note over Watchdog,Ledger: Restart reuses a verified receipt; pending attempts retain claim and budgets
+    Note over Watchdog,Ledger: Restart retains the receipt; closeout still refreshes forge and target evidence
 ```
 
 The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,

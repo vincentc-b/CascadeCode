@@ -51,7 +51,7 @@ custom "cascade-task-code" {
         "cascade.codeComponent" "element.component.task-team"
     }
     include code_task_graph code_task_state code_task_checkpoint code_task_wiring code_task_registry code_task_guard code_task_runtime code_task_provider
-    include code_task_actions code_task_delivery_queue code_task_mismatch code_task_leases code_task_validation code_task_revalidation
+    include code_task_actions code_task_delivery_queue code_task_mismatch code_task_upstream_review_fence code_task_leases code_task_validation code_task_revalidation
     include code_task_generation
     include code_task_budget_bind code_task_budget_read code_task_budget_extend code_task_budget_exhaust code_task_budget_reserve code_task_budget_settle
     include code_task_ack code_task_claim code_task_finalize code_task_action_checkpoint code_task_transition_receipt code_task_execution_start code_task_transition_notify code_task_executor_live_identity
@@ -122,8 +122,8 @@ custom "cascade-watchdog-code" {
         "cascade.codeComponent" "element.component.watchdog"
     }
     include code_watchdog_tick code_watchdog_dispatch code_watchdog_activate_epic code_watchdog_health code_watchdog_audit_lane code_watchdog_publish code_watchdog_progress_drain code_watchdog_progress_publish code_watchdog_milestone_record code_watchdog_milestone_upsert
-    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_repair_postcheck code_watchdog_verify code_watchdog_incident_projection
-    include code_watchdog_review_health code_watchdog_review_snapshot
+    include code_watchdog_authority code_watchdog_repair_authority code_watchdog_recover code_watchdog_contract code_watchdog_budget_bind code_watchdog_incident_record code_watchdog_stage_receipt code_watchdog_transition_receipt code_watchdog_transition_notify code_watchdog_executor code_watchdog_capability code_watchdog_reservation code_watchdog_budget_reserve code_watchdog_budget_settle code_watchdog_claim code_watchdog_result code_watchdog_postcheck code_watchdog_repair_postcheck code_watchdog_required_checks code_watchdog_verify code_watchdog_incident_projection
+    include code_watchdog_review_health code_watchdog_actionable_review code_watchdog_review_snapshot code_watchdog_review_evidence_health
     autoLayout lr
 }
 
@@ -133,7 +133,7 @@ custom "cascade-boss-code" {
         "cascade.codeComponent" "element.component.boss"
     }
     include code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
-    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_open_review_identity code_boss_reconcile code_boss_lock code_boss_obligation code_boss_delivery_view
+    include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_open_review_identity code_boss_reconcile code_boss_lock code_boss_obligation code_boss_repair_postcheck_gate code_boss_delivery_view
     include code_boss_review_generation code_boss_review_pending
     autoLayout lr
 }
