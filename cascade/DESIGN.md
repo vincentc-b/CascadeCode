@@ -244,6 +244,17 @@ is still insufficient to publish after source, target, validation policy,
 authorization, credentials or remote lease drift. Remote ancestry reconciliation
 is the authoritative completion check after an interrupted push.
 
+After a successful leased publication, `record_exact_candidate_proof` attaches
+the receipt's immutable candidate/review/profile/runtime identity to the matching
+current review generation. Forge acceptance remains a different fact:
+`merge_request_snapshot` reports the actual accepted commit, observed target head,
+URL and source/target route, and review reconciliation stores those fields with
+the local review generation. `matching_exact_result_receipt` reuses the Teams
+matcher before acceptance and again during the independent repair postcheck. A
+changed generation, route, source, original target, prospective result, profile
+or runtime makes the proof unusable. Missing actual merge or target identity
+fails closed. The candidate commit/tree is not merged-revision CI proof.
+
 ### Publication implementation and recovery
 
 The [model](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
@@ -264,6 +275,8 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [check_and_publish_review_rebase](review_rebase.py) | Validate the exact source/target candidate, recheck policy/remote authority and push the admitted source SHA under its lease. |
 | [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
 | [inspect_exact_validation_material / match_review_validation_receipt](review_validation.py) | Establish the complete candidate/review/profile/runtime identity and physical board before reservation; reuse only an exact settled green or fence exact deterministic red. |
+| [record_exact_candidate_proof / matching_exact_result_receipt](review.py) | Bind the settled candidate proof to one review generation and make publication, acceptance and independent postcheck consume the same exact receipt comparison. |
+| [_actual_accepted_merge_identity](review.py) / [merge_request_snapshot](tracking.py) | Keep actual forge merge SHA, observed target head, route and local generation separate from the prospective candidate proof; incomplete identity fails closed. |
 | [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
 | [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
 | [validate_publication_board](review_validation.py) | Parse every physical lifecycle-column document in the publication checkout and reject symlinks, malformed records and duplicate IDs before validation. Board owns schema invariants; Teams owns this publication gate. |
@@ -292,8 +305,10 @@ flowchart TD
     Settle -->|green| Recheck
     Recheck -->|match| Push[Lease-publish tested SHA]
     Recheck -->|drift| Preserve
-    Push --> Receipt[Record publication evidence]
-    Receipt --> Verify[Independent obligation-specific postcheck]
+    Push --> Proof[Bind exact candidate proof to review generation]
+    Proof --> Accept{Fresh actual forge merge identity?}
+    Accept -->|missing / changed| Preserve
+    Accept -->|complete| Verify[Re-match receipt in independent postcheck]
 ```
 
 The action ledger and review registry survive restart. A reserved operation whose

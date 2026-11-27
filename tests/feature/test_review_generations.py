@@ -12,6 +12,7 @@ import pytest
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import CancellationFeedback
 from cascade.tracking import MergeRequest
+from cascade.review_validation import ExactValidationMaterial, exact_material_fingerprint
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
 from tests.support import add_doc, make_repo
@@ -101,6 +102,112 @@ def test_legacy_closed_record_is_generation_zero_without_inferred_heads(
     assert versioned["current_generation"] == 0
     assert generation.get("accepted_merge_sha") is None
     assert generation["reconciliation_status"] == "legacy_unverified"
+
+
+def test_exact_candidate_receipt_is_shared_by_acceptance_and_fenced_on_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    source_sha, target_sha = "a" * 40, "b" * 40
+    merge_sha, observed_target = "c" * 40, "d" * 40
+    current = _projection("https://example.test/pulls/12")
+    current.update(source_head=source_sha, target_head=target_sha)
+    current = review._store_review_generation(
+        root,
+        "feat_001",
+        current,
+        generation=2,
+        action_id="feature_repair:feat_001:two",
+    )
+    identity = {
+        "candidate": {
+            "source_sha": source_sha,
+            "target_sha": target_sha,
+            "result_commit": "e" * 40,
+            "result_tree": "f" * 40,
+        },
+        "review": {
+            "action_id": "review:12",
+            "review_id": "12",
+            "review_url": current["url"],
+            "source_ref": current["source_branch"],
+            "target_ref": current["target_branch"],
+            "generation": "review-generation-12",
+        },
+        "profile": {"id": "approved"},
+        "runtime": {"python": "3.12"},
+    }
+    material = ExactValidationMaterial(identity, exact_material_fingerprint(identity))
+    receipt = {
+        "state": "settled",
+        "operation_id": "validator:12",
+        "exact_validation_material": identity,
+        "material_fingerprint": material.fingerprint,
+        "observation": {"outcome": "success", "validation_status": "passed"},
+    }
+    monkeypatch.setattr(
+        "cascade.review_validation.match_review_validation_receipt",
+        lambda incident_id, candidate, **_kwargs: (
+            "matching_green",
+            receipt,
+        )
+        if incident_id == "review:12" and candidate == material
+        else ("admission_required", None),
+    )
+    assert review.record_exact_candidate_proof(
+        "feat_001", "review:12", "validator:12", material, root=root
+    )
+    current = review.review_record_for_feature("feat_001", root=root)
+    assert current is not None
+    snapshot = {
+        "state": "merged",
+        "url": current["url"],
+        "source_branch": current["source_branch"],
+        "target_branch": current["target_branch"],
+        "source_revision": source_sha,
+        "target_revision": observed_target,
+        "merge_sha": merge_sha,
+    }
+
+    assert review._accept_current_review_generation(
+        "feat_001", current, snapshot, root=root
+    )
+    accepted = review.review_record_for_feature("feat_001", root=root)
+    assert accepted is not None
+    assert accepted["accepted_merge_identity"]["merge_sha"] == merge_sha
+    assert accepted["accepted_merge_identity"]["review_generation"] == 2
+    assert accepted["accepted_candidate_proof"]["fingerprint"] == material.fingerprint
+
+    drifted = {**snapshot, "target_branch": "epic/epic_002"}
+    assert review.matching_exact_result_receipt(current, drifted, root=root) is None
+
+
+def test_new_generation_drops_prior_exact_candidate_proof(tmp_path: Path) -> None:
+    root = make_repo(tmp_path)
+    projection = _projection("https://example.test/pulls/20")
+    first = review._store_review_generation(
+        root, "feat_001", projection, generation=1, action_id="repair:one"
+    )
+    review._update_record(
+        root,
+        "feat_001",
+        {
+            "candidate_proof_required": True,
+            "exact_candidate_proof": {"fingerprint": "old"},
+        },
+    )
+
+    second = review._store_review_generation(
+        root,
+        "feat_001",
+        {**projection, "url": "https://example.test/pulls/21"},
+        generation=2,
+        action_id="repair:two",
+    )
+
+    assert first["generation"] == 1
+    assert "candidate_proof_required" not in second
+    assert "exact_candidate_proof" not in second
 
 
 def test_generation_save_failure_replays_without_overwriting_acceptance(

@@ -62,7 +62,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.agent"
             }
         }
-        team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs." "cascade.epic/feature/task" {
+        team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs, exact candidate validation, proof binding and leased review publication." "cascade.epic/feature/task" {
             properties {
                 "cascade.designPath" "cascade/DESIGN.md"
                 "cascade.semanticId" "element.component.teams"
@@ -91,7 +91,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.designPath" "cascade/watchdog/DESIGN.md"
             }
         }
-        boss_component = component "Boss" "Owns rollups, merge gates, and completion." "cascade.boss" {
+        boss_component = component "Boss" "Owns rollups, merge gates, review acceptance orchestration, and completion." "cascade.boss" {
             properties {
                 "cascade.semanticId" "element.component.boss"
             }
@@ -2250,6 +2250,24 @@ code_boss_review_route = element "_require_repair_review_route" "Function" "Requ
     }
 }
 
+code_boss_exact_result = element "matching_exact_result_receipt" "Function" "Re-match the generation-bound candidate proof through the Teams receipt reader before acceptance and independent repair verification." {
+    properties {
+        "cascade.semanticId" "element.code.boss.exact-result"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "matching_exact_result_receipt"
+    }
+}
+
+code_boss_accepted_identity = element "_actual_accepted_merge_identity" "Function" "Require actual forge merge SHA, observed target head, URL, route, source and local review generation separately from candidate proof." {
+    properties {
+        "cascade.semanticId" "element.code.boss.accepted-identity"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_actual_accepted_merge_identity"
+    }
+}
+
 code_boss_open_review_identity = element "_require_open_review_repair_identity" "Function" "Bind publication to the admitted original review observation or its checkpointed repair action." {
     properties {
         "cascade.semanticId" "element.code.boss.open-review-repair-identity"
@@ -2832,6 +2850,18 @@ code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks f
     }
 }
 
+code_boss_reconcile_to_exact_result = code_boss_reconcile -> code_boss_exact_result "Requires the original settled candidate receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-reconcile-to-exact-result"
+    }
+}
+
+code_boss_reconcile_to_accepted_identity = code_boss_reconcile -> code_boss_accepted_identity "Separates actual forge acceptance from prospective proof" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-reconcile-to-accepted-identity"
+    }
+}
+
 code_boss_review_to_open_identity = code_boss_review -> code_boss_open_review_identity "Joins the admitted original review" {
     properties {
         "cascade.semanticId" "relationship.code-boss-review-to-open-review-identity"
@@ -3405,6 +3435,15 @@ code_teams_receipt_match = element "match_review_validation_receipt" "Function" 
     }
 }
 
+code_teams_proof_bind = element "record_exact_candidate_proof" "Function" "Bind one settled exact candidate receipt to the matching current review URL, route and generation after leased publication." {
+    properties {
+        "cascade.semanticId" "element.code.teams.proof-bind"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "record_exact_candidate_proof"
+    }
+}
+
 code_teams_review_identity = element "exact_review_identity" "Function" "Canonicalize the durable review URL, route, observed heads and generation for admission and pre-push refresh." {
     properties {
         "cascade.semanticId" "element.code.teams.review-identity"
@@ -3657,6 +3696,24 @@ code_teams_publication_to_material_inspect = code_teams_publication -> code_team
 code_teams_publication_to_receipt_match = code_teams_publication -> code_teams_receipt_match "Reuses or fences only complete exact-material receipts" {
     properties {
         "cascade.semanticId" "relationship.code-teams-publication-to-receipt-match"
+    }
+}
+
+code_teams_publication_to_proof_bind = code_teams_publication -> code_teams_proof_bind "Attaches the settled proof after leased publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-proof-bind"
+    }
+}
+
+code_teams_proof_bind_to_receipt_match = code_teams_proof_bind -> code_teams_receipt_match "Retains the identity consumed by the shared matcher" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-proof-bind-to-receipt-match"
+    }
+}
+
+code_boss_exact_result_to_teams_match = code_boss_exact_result -> code_teams_receipt_match "Consumes the same exact receipt comparison as publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-exact-result-to-teams-match"
     }
 }
 
@@ -4562,7 +4619,7 @@ code_watchdog_actionable_review = element "_route_actionable_review_health" "Fun
     }
 }
 
-code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, mergeability, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, actual accepted merge identity, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-snapshot"
         "cascade.parent" "element.component.watchdog"

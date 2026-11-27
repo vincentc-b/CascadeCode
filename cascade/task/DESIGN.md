@@ -127,6 +127,14 @@ same receipt without a retry fence. Transient failure uses the ledger's persiste
 classification waits for owner reconciliation. Extensions keep all prior
 attempts, decisions, charges and the first escalation.
 
+The Teams publication owner attaches the settled receipt identity to the matching
+review generation. Boss acceptance and Watchdog's later repair postcheck call the
+same `match_review_validation_receipt` reader through the review adapter; neither
+creates a new operation or allowance. Duplicate callbacks and restart reuse a
+settled green, preserve a deterministic-red fence, and fail closed on legacy,
+in-flight, changed-generation or incomplete evidence. Task continues to own
+admission and charging; forge acceptance and merged-revision CI remain separate.
+
 Profile resolution and feasibility do not grant allowance: the executable and
 working directory must exist, then `reserve_incident_operation` must issue the
 matching live receipt. Command or timeout drift after reservation refuses before

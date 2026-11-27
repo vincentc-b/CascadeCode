@@ -537,6 +537,24 @@ def publish_team_review_resolution(
                     ],
                 },
             )
+        if team_kind == "feature_team" and validation_material is not None:
+            from cascade.review import record_exact_candidate_proof
+
+            if not record_exact_candidate_proof(
+                team_id,
+                action_id,
+                operation_id,
+                validation_material,
+                root=trunk,
+            ):
+                raise ActionFailure(
+                    "owner_decision",
+                    "The exact candidate proof could not be bound to the current review.",
+                    metadata={
+                        "reason": "review_candidate_proof_changed",
+                        "publication_generation": generation,
+                    },
+                )
         return {
             "metadata": {
                 "published_head": publication.source_head,
