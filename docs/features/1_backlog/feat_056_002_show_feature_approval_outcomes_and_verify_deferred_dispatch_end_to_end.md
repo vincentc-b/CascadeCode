@@ -24,6 +24,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-27T16:40:57.231519+00:00'
 ---
 # Show Feature approval outcomes and verify deferred dispatch end to end
 
