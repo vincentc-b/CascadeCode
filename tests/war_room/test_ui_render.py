@@ -651,6 +651,16 @@ def test_open_review_repair_journey_in_real_browser(ui_server):
         try:
             page = browser.new_page()
 
+            def next_held_review():
+                # The action result renders before its follow-up GET is dispatched.
+                # Let Playwright service the route callback before inspecting it.
+                for _ in range(200):
+                    if held_execution:
+                        assert len(held_execution) == 1
+                        return held_execution.pop()
+                    page.wait_for_timeout(25)
+                pytest.fail("Expected the next open-review refresh")
+
             def read_reviews(route):
                 if reads:
                     route.fulfill(json={"reviews": [reads.pop(0)]})
@@ -683,23 +693,19 @@ def test_open_review_repair_journey_in_real_browser(ui_server):
                 "next_prerequisite": "feature_queue_checkpoint",
             })
             playwright.expect(card).to_contain_text("Admitted · Next: feature_queue_checkpoint")
-            assert len(held_execution) == 1
-
-            held_execution.pop().fulfill(json={"reviews": [review(
+            next_held_review().fulfill(json={"reviews": [review(
                 "failed", "repair_in_progress", "await_repair_execution",
                 {"generation": 1, "admitted": True, "executing": True},
             )]})
             playwright.expect(card).to_contain_text("Delivery: repair_in_progress")
             page.get_by_role("button", name="Refresh", exact=True).click()
-            assert len(held_execution) == 1
-            held_execution.pop().fulfill(json={"reviews": [review(
+            next_held_review().fulfill(json={"reviews": [review(
                 "green", "review_pending", "await_human_approval",
                 {"generation": 1, "admitted": True, "waiting": True},
             )]})
             playwright.expect(card).to_contain_text("Next: await_human_approval")
             page.get_by_role("button", name="Refresh", exact=True).click()
-            assert len(held_execution) == 1
-            held_execution.pop().fulfill(json={"reviews": [review(
+            next_held_review().fulfill(json={"reviews": [review(
                 "green", "verified_integrated", "retirement_eligible",
                 {"generation": 1, "verified": True},
             )]})
