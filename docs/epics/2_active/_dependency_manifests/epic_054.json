@@ -361,6 +361,366 @@
           "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
         }
       ]
+    },
+    {
+      "revision": 2,
+      "recorded_at": "2026-11-27T19:23:26.992245+00:00",
+      "target_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "none_required": false,
+      "dependencies": [
+        {
+          "dependency_id": "dep_python",
+          "version": "3.12.8",
+          "source": "file:///opt/conda/bin/python3.12",
+          "digest": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing host executable; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/opt/conda/bin/python3.12\").read_bytes()).hexdigest()==\"0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612\"; print(\"python 3.12.8 verified\")'",
+          "requested_range": ">=3.12",
+          "resolved_version": "3.12.8",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/bin/python3.12",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:0fb93d1b94684f3524d4aff036cd377e0dc060a1847efd65b5e2a4885b14d612"
+        },
+        {
+          "dependency_id": "dep_git",
+          "version": "2.34.1",
+          "source": "file:///usr/bin/git",
+          "digest": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing host executable; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/usr/bin/git\").read_bytes()).hexdigest()==\"07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9\"; print(\"git 2.34.1 verified\")'",
+          "requested_range": "2.34.1",
+          "resolved_version": "2.34.1",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/usr/bin/git",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:07997209f4513fdee3e1eb151b1c37d56cfe37f9915d331ec37d688c6b9d3ce9"
+        },
+        {
+          "dependency_id": "dep_docker",
+          "version": "28.0.0",
+          "source": "file:///usr/bin/docker",
+          "digest": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing host executable; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"/usr/bin/docker\").read_bytes()).hexdigest()==\"acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49\"; print(\"docker 28.0.0 verified\")'",
+          "requested_range": "28.0.0",
+          "resolved_version": "28.0.0",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/usr/bin/docker",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:acf5bdfb16ed9d9bf16b34dd2dd58b5afdb7eb6a7f6d0effd813299224d97d49"
+        },
+        {
+          "dependency_id": "dep_pyyaml",
+          "version": "6.0.3",
+          "source": "file:///opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA",
+          "digest": "sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing Python distribution; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"PyYAML\"); assert d.version==\"6.0.3\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34\"; print(\"PyYAML 6.0.3 verified\")'",
+          "requested_range": ">=6",
+          "resolved_version": "6.0.3",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:03c3b415ed38d09faedc49360e930769b40c58f68585e6de00e2e4916a858d34"
+        },
+        {
+          "dependency_id": "dep_cursor_sdk",
+          "version": "1.0.37",
+          "source": "file:///opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA",
+          "digest": "sha256:dc75c3a3ff6cc938311b3186a2c46794acb3a4d4fbe2521722cfda69f86548b4",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing Python distribution; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"cursor-sdk\"); assert d.version==\"1.0.37\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"dc75c3a3ff6cc938311b3186a2c46794acb3a4d4fbe2521722cfda69f86548b4\"; print(\"cursor-sdk 1.0.37 verified\")'",
+          "requested_range": ">=0.1",
+          "resolved_version": "1.0.37",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages/cursor_sdk-1.0.37.dist-info/METADATA",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:dc75c3a3ff6cc938311b3186a2c46794acb3a4d4fbe2521722cfda69f86548b4"
+        },
+        {
+          "dependency_id": "dep_langgraph",
+          "version": "1.2.14",
+          "source": "file:///opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA",
+          "digest": "sha256:41883360994797eb0e7b0fe8d8255af7cb95253c6f43e30829fd001ca904c833",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing Python distribution; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"langgraph\"); assert d.version==\"1.2.14\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"41883360994797eb0e7b0fe8d8255af7cb95253c6f43e30829fd001ca904c833\"; print(\"langgraph 1.2.14 verified\")'",
+          "requested_range": ">=0.2",
+          "resolved_version": "1.2.14",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages/langgraph-1.2.14.dist-info/METADATA",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:41883360994797eb0e7b0fe8d8255af7cb95253c6f43e30829fd001ca904c833"
+        },
+        {
+          "dependency_id": "dep_langgraph_checkpoint_sqlite",
+          "version": "3.1.1",
+          "source": "file:///opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA",
+          "digest": "sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing Python distribution; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"langgraph-checkpoint-sqlite\"); assert d.version==\"3.1.1\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f\"; print(\"langgraph-checkpoint-sqlite 3.1.1 verified\")'",
+          "requested_range": ">=2",
+          "resolved_version": "3.1.1",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages/langgraph_checkpoint_sqlite-3.1.1.dist-info/METADATA",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:cc9f7bdb2671a5ed31209d2d83c85a9314cab1fac7a163339348933c7602b93f"
+        },
+        {
+          "dependency_id": "dep_pytest",
+          "version": "9.0.3",
+          "source": "file:///opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA",
+          "digest": "sha256:c3966f28791686477bae35e518736d4cbea5b626d3a79011215854e2bc670207",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing Python distribution; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"pytest\"); assert d.version==\"9.0.3\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"c3966f28791686477bae35e518736d4cbea5b626d3a79011215854e2bc670207\"; print(\"pytest 9.0.3 verified\")'",
+          "requested_range": ">=8",
+          "resolved_version": "9.0.3",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages/pytest-9.0.3.dist-info/METADATA",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:c3966f28791686477bae35e518736d4cbea5b626d3a79011215854e2bc670207"
+        },
+        {
+          "dependency_id": "dep_setuptools",
+          "version": "80.9.0",
+          "source": "file:///opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info/METADATA",
+          "digest": "sha256:7f890ca8dbc16b63b568c89312ed6a7f9f0a79d0b2b7f3c83bf796ac3d930615",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing Python distribution; verification only",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "/opt/conda/bin/python3.12 -c 'import importlib.metadata as m, hashlib, pathlib; d=m.distribution(\"setuptools\"); assert d.version==\"80.9.0\"; assert hashlib.sha256((pathlib.Path(d._path)/\"METADATA\").read_bytes()).hexdigest()==\"7f890ca8dbc16b63b568c89312ed6a7f9f0a79d0b2b7f3c83bf796ac3d930615\"; print(\"setuptools 80.9.0 verified\")'",
+          "requested_range": ">=68",
+          "resolved_version": "80.9.0",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/opt/conda/lib/python3.12/site-packages/setuptools-80.9.0.dist-info/METADATA",
+          "lock_references": [
+            "pyproject.toml",
+            "README.md"
+          ],
+          "integrity_reference": "sha256:7f890ca8dbc16b63b568c89312ed6a7f9f0a79d0b2b7f3c83bf796ac3d930615"
+        },
+        {
+          "dependency_id": "dep_structurizr",
+          "version": "2026.09.19-playwright",
+          "source": "docker.io/structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "target_environment": {
+            "environment_id": "ip-172-31-37-14",
+            "kind": "host",
+            "platform": "linux",
+            "architecture": "x86_64",
+            "runner": "ip-172-31-37-14",
+            "repository": "/home/ubuntu/dev/CascadeCode",
+            "worktree": "/home/ubuntu/dev/CascadeCode",
+            "sandbox": "host",
+            "runtime": "/opt/conda/bin/python3.12",
+            "container_digest": "not_applicable"
+          },
+          "install_scope": "existing local Docker image; no pull",
+          "operation": "false",
+          "cleanup_plan": "Read-only verification; leave existing installation unchanged.",
+          "verification_recipe": "docker image inspect 'structurizr/structurizr@sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c' >/dev/null",
+          "requested_range": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+          "resolved_version": "2026.09.19-playwright",
+          "expected_verification_result": "succeeded",
+          "feasibility_proof_requirements": [],
+          "feasibility_proof_references": [],
+          "install_destination": "/var/lib/docker",
+          "lock_references": [
+            "cascade/workspace/c4_render.py:STRUCTURIZR_IMAGE_DIGEST"
+          ],
+          "integrity_reference": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c"
+        }
+      ]
     }
   ]
 }
