@@ -46,7 +46,8 @@
     "Read-only accepted-lineage inspection found no accepted epic lineage or pending promotion; expected_generation remains null. No accepted snapshots or canonical runtime ledgers were edited.",
     "85 Markdown heading anchors across the nine reviewed designs resolve. AST comparison finds no removed/renamed top-level source declarations in the integrated diff; existing modeled component ownership is unchanged.",
     "Final rendered source declarations/kinds and all component-to-Code owners passed; all three new component edges appear in both supervisor/team views. Six publication refs match Git digests and checkout bytes; confined materialized closure matches browser artifact; accepted lineage and promotion remain empty.",
-    "Final real pinned render ready in 85.30s; seven complete context/container/component/Code journeys, selected-node deep-link reloads, pinned-source opening and Level up passed. Total 223.10s; render operations remained 6 -> 6 during navigation/reloads. These are measured results, not latency guarantees."
+    "Final real pinned render ready in 85.30s; seven complete context/container/component/Code journeys, selected-node deep-link reloads, pinned-source opening and Level up passed. Total 223.10s; render operations remained 6 -> 6 during navigation/reloads. These are measured results, not latency guarantees.",
+    "Final canonical read confirmed plan 7b5e3881 unchanged. publish_architecture_review admitted the committed request with expected_generation=null and returned durable pending. Earlier saved requests/receipts remain intact; no completed publication or accepted promotion is claimed."
   ],
   "publication_replay": {
     "request": "docs/epic_artifacts/epic_051_architecture_review_06667792.json",
@@ -56,7 +57,7 @@
   "handoffs": {
     "feature_4": "Tasks 001/002 own passive coherent UI and explicit authenticated request flow; Task 003 owns full real-Git repair journey, split roots, meaningful baseline fixture setup, current normalized CI evidence and integration-required dependency cases from dec_008; Task 004 owns final source/design/model/browser reconciliation including Epic Code and updated component edges. Preserve authority gates and bounded Recovery selection.",
     "architecture_runtime": "Earlier terminal failed publication remains a separate supported recovery/reconciliation obligation. Preserve saved identity/history and accepted-lineage guards; no direct ledger repair was performed.",
-    "epic_architect": "Replay the newly saved exact publication request on a later turn if pending; recheck current-plan guard if plan changes. Do not poll while child work waits for parent-turn completion."
+    "epic_architect": "On a later Architect turn replay docs/epic_artifacts/epic_051_architecture_review_7b5e3881.json unchanged through publish_architecture_review. Durable pending is not acceptance; preserve exact references. Reconcile the current-plan guard explicitly if the plan changes. Do not poll within this planning turn."
   },
   "limitations": [
     "Feature 2 historical architecture record is staged at f834c5c3 with no returned acceptance/promotion receipt; source PR 271 alone is not architecture acceptance.",
@@ -76,7 +77,7 @@
       "cpus": "2",
       "memory": "1536m",
       "pids_limit": 256,
-      "timeout_seconds": 180.0,
+      "timeout_seconds": 180,
       "tmpfs_size": "512m"
     },
     "revision": "e2d9b4894b8f32f7a868e5895e9b975919d23b68",
@@ -113,6 +114,17 @@
   "browser_receipt": "docs/epic_artifacts/epic_051_repair_architecture_browser.json",
   "publication": {
     "request": "docs/epic_artifacts/epic_051_architecture_review_7b5e3881.json",
-    "submitted": false
+    "submitted": true,
+    "receipt": {
+      "operation_id": "architecture-publication-d2953d66cc37e0ae96d438d5acf8e4d0a5d2adce136523a826e80b778f2bae2f",
+      "status": "pending",
+      "render_operation_id": "c4-render-262f1d7ac56fc2debb0a236f9497cf7b72a17761402756ad196036043dfb6e38",
+      "baseline_render_operation_id": null,
+      "review_unit_id": null,
+      "reviewed_tuple_digest": "2a56fdfd5988064409d137f6373c016325d5d4d97ca800dcfe55bb8f0363ee74",
+      "amendment_id": null,
+      "reason_code": null,
+      "message": "bounded architecture render is pending"
+    }
   }
 }
