@@ -4121,12 +4121,21 @@ code_watchdog_review_health = element "reconcile_open_review_health" "Function" 
     }
 }
 
-code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Read forge review state, source revision, branch refs and mergeability through the configured CLI." {
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, mergeability, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-snapshot"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/tracking.py"
         "cascade.sourceSymbol" "merge_request_snapshot"
+    }
+}
+
+code_watchdog_review_evidence_health = element "_review_health" "Function" "Classify normalized current-generation evidence as green, failed, pending, missing, stale, approval-only, actionable feedback, conflict, unavailable or terminal." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.review-evidence-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "_review_health"
     }
 }
 
@@ -4193,9 +4202,15 @@ code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_works
     }
 }
 
-code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads fresh forge facts before conflict admission" {
+code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads authoritative review identity, head, policy, check-generation and feedback facts before routing" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_watchdog_snapshot_to_evidence_health = code_watchdog_review_snapshot -> code_watchdog_review_evidence_health "Classifies only normalized evidence bound to the observed head pair" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-snapshot-to-review-evidence-health"
     }
 }
 
