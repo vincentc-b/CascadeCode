@@ -23,6 +23,7 @@ reasoning:
   feature_lead: high
   feature_architect: high
   swe: medium
+approved_at: '2026-11-27T16:40:56.431058+00:00'
 ---
 # Separate durable Feature approval from execution dependency gates
 
