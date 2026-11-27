@@ -1373,12 +1373,21 @@ code_boss_merge = element "merge_task_branch" "Function" "Integrates an approved
     }
 }
 
-code_boss_feature = element "try_complete_feature" "Function" "Evaluates child completion and Feature closeout gates." {
+code_boss_feature = element "try_complete_feature" "Function" "Refreshes scoped-review verification, then evaluates child completion and Feature closeout gates." {
     properties {
         "cascade.semanticId" "element.code.boss.feature"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/boss/rollup.py"
         "cascade.sourceSymbol" "try_complete_feature"
+    }
+}
+
+code_boss_repair_postcheck_gate = element "_current_open_review_postcheck_matches" "Function" "Require the fresh postcheck result to name the greatest scoped repair action before closeout side effects." {
+    properties {
+        "cascade.semanticId" "element.code.boss.repair-postcheck-gate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/rollup.py"
+        "cascade.sourceSymbol" "_current_open_review_postcheck_matches"
     }
 }
 
@@ -2307,12 +2316,21 @@ code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Functio
     }
 }
 
-code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Observe the original forge review and normalized required checks outside the lifecycle lock, then fence exact current-generation verification before closeout." {
+code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Refresh the original review, target and normalized check generations, then fence exact current-generation verification before every closeout." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-postcheck"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
         "cascade.sourceSymbol" "reconcile_open_review_repair"
+    }
+}
+
+code_watchdog_required_checks = element "_required_checks" "Function" "Require current-target policy and a source-bound, generation-bearing green result for every required check." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.required-checks"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "_required_checks"
     }
 }
 
@@ -2940,6 +2958,18 @@ code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_rep
 code_boss_feature_to_repair_postcheck = code_boss_feature -> code_watchdog_repair_postcheck "Requests fresh verification before the lifecycle critical section" {
     properties {
         "cascade.semanticId" "relationship.code-boss-feature-to-watchdog-repair-postcheck"
+    }
+}
+
+code_boss_feature_to_repair_postcheck_gate = code_boss_feature -> code_boss_repair_postcheck_gate "Consumes only the matching fresh receipt before closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-repair-postcheck-gate"
+    }
+}
+
+code_watchdog_repair_postcheck_to_required_checks = code_watchdog_repair_postcheck -> code_watchdog_required_checks "Validates current policy and check generations" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-repair-postcheck-to-required-checks"
     }
 }
 

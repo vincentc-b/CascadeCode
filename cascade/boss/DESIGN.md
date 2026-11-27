@@ -19,9 +19,11 @@ heads, or an accepted merge that is absent from the target cannot authorize the
 completion event. Open-review repair first asks Watchdog for a fresh independent
 postcheck outside the lifecycle critical section; only the resulting exact action,
 generation, corrected-head, required-check and Epic-integration receipt can make
-that repair historical. Review-disabled delivery retains its supervised local
-merge proof. This predicate runs before the completed fast path and its result
-gates both `FeatureCompleted` and checkout retirement.
+that repair historical. Boss consumes the fresh return value instead of trusting
+the action's prior verified phase, so a later failed run, target drift or
+unavailable policy blocks completion. Review-disabled delivery retains its
+supervised local merge proof. This predicate runs before the completed fast path
+and its result gates both `FeatureCompleted` and checkout retirement.
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and
@@ -57,6 +59,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [reconcile_open_review_repair](../watchdog/incident_postcheck.py) | Collect fresh forge/check evidence before the lifecycle lock and persist an unchanged exact-generation verification receipt. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
+| [_current_open_review_postcheck_matches](rollup.py) | Bind the fresh postcheck result to the greatest scoped repair action before any closeout side effect. |
 | [feature_delivery_view](../review.py) | Derive retained Feature ownership and delivery phase from current local review, repair, completion, and target evidence without polling the forge. |
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
 | [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |

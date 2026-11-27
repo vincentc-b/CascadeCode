@@ -94,9 +94,7 @@ def _reviewed_completed_feature(tmp_path: Path) -> tuple[Path, str, str]:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    subprocess.run(
-        ["git", "branch", "feat/feat_001", accepted], cwd=root, check=True
-    )
+    subprocess.run(["git", "branch", "feat/feat_001", accepted], cwd=root, check=True)
     return root, base, accepted
 
 
@@ -320,12 +318,15 @@ def test_completed_open_original_review_retains_closeout_and_owner(
     assert review.review_record_for_feature("feat_001", root=root)["url"] == (
         "https://example.test/pulls/1"
     )
-    assert subprocess.run(
-        ["git", "show-ref", "--verify", "refs/heads/feat/feat_001"],
-        cwd=root,
-        check=False,
-        capture_output=True,
-    ).returncode == 0
+    assert (
+        subprocess.run(
+            ["git", "show-ref", "--verify", "refs/heads/feat/feat_001"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
 
 def test_closeout_requires_exact_acceptance_and_intended_target_then_emits_once(
@@ -346,6 +347,37 @@ def test_closeout_requires_exact_acceptance_and_intended_target_then_emits_once(
     assert try_complete_feature("feat_001", root=root, review_merged=True) is True
     assert try_complete_feature("feat_001", root=root, review_merged=True) is True
     assert len(_feature_completed_events(root)) == 1
+
+
+def test_closeout_rereads_verified_open_review_and_refuses_new_failed_run(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root, base, accepted = _reviewed_completed_feature(tmp_path)
+    _store_review(root, base=base, source=accepted, generation=1, accepted=True)
+    subprocess.run(
+        ["git", "branch", "-f", "epic/epic_001", accepted], cwd=root, check=True
+    )
+    action = {
+        "repair_route": "open_review",
+        "action_id": "repair:1",
+        "generation": 1,
+        "phase": "verified",
+    }
+    monkeypatch.setattr(
+        "cascade.feature.repair.feature_repair_actions",
+        lambda *_args, **_kwargs: [action],
+    )
+    monkeypatch.setattr(
+        "cascade.watchdog.incident_postcheck.reconcile_open_review_repair",
+        lambda *_args, **_kwargs: {
+            "verified": False,
+            "reason": "required_checks_not_green",
+        },
+    )
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+
+    assert try_complete_feature("feat_001", root=root, review_merged=True) is False
+    assert _feature_completed_events(root) == []
 
 
 def _feature_completed_events(root: Path) -> list[Event]:

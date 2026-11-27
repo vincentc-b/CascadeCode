@@ -400,6 +400,7 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
 | [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts, then require a fresh host inspection of the reviewed worker receipt and capability generation. |
 | [reconcile_open_review_repair](incident_postcheck.py) | Observe the original forge review and normalized required-check policy/results outside lifecycle critical sections, then re-read the exact action, review generation and evidence digest under the owner fence before recording verification. |
+| [_required_checks](incident_postcheck.py) | Require current-target policy and a green, source-bound, generation-bearing result for every required name. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
@@ -441,6 +442,11 @@ published generation and corrected source head, and an accepted merge reachable
 from the intended Epic target. The postcheck consumes authoritative normalized
 `required_check_policy` and `required_check_results` evidence for that same head;
 missing, unavailable, stale or non-green evidence returns a typed prerequisite.
+Each required result names its current forge run or pipeline generation and
+corrected source head. A persisted green result is not reused: every Boss
+closeout rereads the original review, current target head, authoritative policy
+and newest normalized results. The local intended Epic ref equals that fresh
+target head and contains the forge-accepted merge object.
 It does not infer success from mergeability, Feature/Task status, queue
 acknowledgement, publication, or validation of an older head.
 
@@ -451,15 +457,15 @@ sequenceDiagram
     participant Forge
     participant Ledger as action/review stores
     Boss->>Watchdog: pre-closeout verification request
-    Watchdog->>Ledger: read current generation and normalized check evidence
-    Watchdog->>Forge: fresh original-review observation outside lock
+    Watchdog->>Ledger: read current action, review generation and corrected source
+    Watchdog->>Forge: fresh original review, target policy and check generations
     alt identity, head, policy, checks and Epic integration agree
         Watchdog->>Ledger: re-read digest under owner/lifecycle fence
         Watchdog->>Ledger: persist exact verified receipt
     else missing, stale or changed evidence
         Watchdog-->>Boss: verification pending + typed prerequisite
     end
-    Note over Watchdog,Ledger: Restart reuses a verified receipt; pending attempts retain claim and budgets
+    Note over Watchdog,Ledger: Restart retains the receipt; closeout still refreshes forge and target evidence
 ```
 
 The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,

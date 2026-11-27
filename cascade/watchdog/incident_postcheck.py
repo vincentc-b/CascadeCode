@@ -45,12 +45,6 @@ def reconcile_open_review_repair(
     if not candidates:
         return _pending("repair_generation_missing", "restore_repair_generation")
     action = max(candidates, key=lambda row: int(row.get("generation") or 0))
-    if action.get("phase") == "verified":
-        receipt = action.get("verification_postcheck")
-        return dict(receipt) if isinstance(receipt, Mapping) else _pending(
-            "verification_receipt_missing", "rerun_independent_postcheck"
-        )
-
     record = review_record_for_feature(feature_id, root=repo)
     if not isinstance(record, Mapping):
         return _pending("review_evidence_missing", "restore_review_registry")
@@ -76,8 +70,22 @@ def reconcile_open_review_repair(
             return _pending("repair_generation_changed", "rerun_independent_postcheck")
         if _evidence_digest(current, current_record, observed) != evidence_digest:
             return _pending("repair_generation_changed", "rerun_independent_postcheck")
-        if not _repair_owner_and_claim_current(repo, current):
-            return _pending("repair_owner_or_claim_changed", "join_current_repair_owner")
+        if (
+            _intended_target_contains(
+                repo,
+                str(current.get("target_ref") or ""),
+                str(observed.get("target_head") or ""),
+                str(observed.get("accepted_merge_sha") or ""),
+            )
+            is not True
+        ):
+            return _pending("intended_target_changed", "rerun_independent_postcheck")
+        if current.get("phase") != "verified" and not _repair_owner_and_claim_current(
+            repo, current
+        ):
+            return _pending(
+                "repair_owner_or_claim_changed", "join_current_repair_owner"
+            )
 
         stamped = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         postcheck = {
@@ -90,6 +98,9 @@ def reconcile_open_review_repair(
             "repair_generation": current.get("generation"),
             "evidence_digest": evidence_digest,
         }
+        if current.get("phase") == "verified":
+            return postcheck
+
         from cascade.feature.repair import mark_feature_repair_verified
 
         if not mark_feature_repair_verified(
@@ -102,9 +113,7 @@ def reconcile_open_review_repair(
         return postcheck
 
 
-def _repair_owner_and_claim_current(
-    repo: Path, action: Mapping[str, Any]
-) -> bool:
+def _repair_owner_and_claim_current(repo: Path, action: Mapping[str, Any]) -> bool:
     """Recheck the registered mutation owner and retained incident claim."""
 
     from cascade.task.action_recovery import ActionRecoveryUnavailable, _read_payload
@@ -141,7 +150,9 @@ def _repair_owner_and_claim_current(
     if not isinstance(budget, Mapping) or budget.get("status") != "active":
         return False
     claim = budget.get("live_claim")
-    return isinstance(claim, Mapping) and claim.get("claim_id") == action.get("claim_id")
+    return isinstance(claim, Mapping) and claim.get("claim_id") == action.get(
+        "claim_id"
+    )
 
 
 def _observe_repair_review(
@@ -172,7 +183,9 @@ def _observe_repair_review(
         or record.get("action_id") != action.get("action_id")
         or record.get("publication_action_id") != action.get("action_id")
     ):
-        return _pending("review_generation_changed", "refresh_current_review_generation")
+        return _pending(
+            "review_generation_changed", "refresh_current_review_generation"
+        )
     source_head = record.get("source_head")
     if not isinstance(source_head, str) or not source_head:
         return _pending("corrected_source_head_missing", "refresh_review_observation")
@@ -197,44 +210,43 @@ def _observe_repair_review(
         or snapshot.get("source_revision") != source_head
     ):
         return _pending("forge_evidence_stale", "refresh_review_observation")
+    target_head = snapshot.get("target_revision")
+    if not isinstance(target_head, str) or not target_head:
+        return _pending("target_head_unavailable", "refresh_review_observation")
+    check_result = _required_checks(snapshot, source_head, target_head)
+    if check_result.get("verified") is not True:
+        return check_result
     if snapshot.get("state") != "merged":
         return _pending("review_acceptance_pending", "wait_for_review_acceptance")
 
-    check_result = _required_checks(
-        record, source_head, str(record.get("target_head") or "")
-    )
-    if check_result.get("verified") is not True:
-        return check_result
-    merge_sha = record.get("accepted_merge_sha") or snapshot.get("merge_sha")
+    merge_sha = snapshot.get("merge_sha")
     if (
         record.get("closed") is not True
         or record.get("reconciliation_status") != "accepted"
         or record.get("accepted_source_head") != source_head
         or record.get("accepted_target_head") != record.get("target_head")
+        or record.get("accepted_merge_sha") != merge_sha
         or not isinstance(merge_sha, str)
         or not merge_sha
     ):
         return _pending("accepted_generation_missing", "reconcile_review_acceptance")
-    try:
-        integrated = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", merge_sha, str(action["target_ref"])],
-            cwd=repo,
-            capture_output=True,
-            check=False,
-            timeout=5,
-        ).returncode == 0
-    except (OSError, subprocess.SubprocessError):
+    integrated = _intended_target_contains(
+        repo, str(action["target_ref"]), target_head, merge_sha
+    )
+    if integrated is None:
         return _pending(
             "target_integration_evidence_unavailable",
             "retry_epic_target_observation",
         )
     if not integrated:
-        return _pending("intended_target_not_integrated", "integrate_review_into_epic_target")
+        return _pending(
+            "intended_target_not_integrated", "integrate_review_into_epic_target"
+        )
     return {
         "verified": True,
         "source_head": source_head,
         "checked_source_head": check_result["checked_source_head"],
-        "target_head": record.get("target_head"),
+        "target_head": target_head,
         "accepted_merge_sha": merge_sha,
         "required_check_policy": check_result["required_check_policy"],
         "required_check_results": check_result["required_check_results"],
@@ -242,15 +254,50 @@ def _observe_repair_review(
     }
 
 
-def _required_checks(
-    record: Mapping[str, Any], source_head: str, target_head: str
-) -> dict[str, Any]:
-    """Validate normalized policy/results without guessing forge semantics."""
+def _intended_target_contains(
+    repo: Path, target_ref: str, target_head: str, merge_sha: str
+) -> bool | None:
+    """Bind the accepted object to the exact locally synchronized target head."""
 
-    policy = record.get("required_check_policy")
-    results = record.get("required_check_results")
+    if not target_ref or not target_head or not merge_sha:
+        return False
+    try:
+        target = subprocess.run(
+            ["git", "rev-parse", "--verify", target_ref],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=5,
+        )
+        if target.returncode != 0 or target.stdout.strip() != target_head:
+            return False
+        return (
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", merge_sha, target_ref],
+                cwd=repo,
+                capture_output=True,
+                check=False,
+                timeout=5,
+            ).returncode
+            == 0
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _required_checks(
+    snapshot: Mapping[str, Any], source_head: str, target_head: str
+) -> dict[str, Any]:
+    """Validate one fresh normalized policy/result generation fail closed."""
+
+    policy = snapshot.get("required_check_policy")
+    results = snapshot.get("required_check_results")
     if not isinstance(policy, Mapping) or policy.get("available") is not True:
-        return _pending("required_check_policy_unavailable", "refresh_required_check_policy")
+        return _pending(
+            "required_check_policy_unavailable", "refresh_required_check_policy"
+        )
     required = policy.get("required")
     if (
         policy.get("source_head") != source_head
@@ -258,15 +305,36 @@ def _required_checks(
         or not target_head
         or not isinstance(required, list)
         or any(not isinstance(name, str) or not name for name in required)
+        or (not required and policy.get("confirmed_empty") is not True)
     ):
         return _pending("required_check_policy_stale", "refresh_required_check_policy")
     if not isinstance(results, Mapping) or results.get("available") is not True:
-        return _pending("required_check_results_unavailable", "refresh_required_check_results")
+        return _pending(
+            "required_check_results_unavailable", "refresh_required_check_results"
+        )
     statuses = results.get("statuses")
-    if results.get("source_head") != source_head or not isinstance(statuses, Mapping):
-        return _pending("required_check_results_stale", "refresh_required_check_results")
-    if any(statuses.get(name) not in {"success", "passed"} for name in required):
-        return _pending("required_checks_not_green", "wait_for_required_checks")
+    checks = results.get("checks")
+    if (
+        results.get("source_head") != source_head
+        or results.get("target_head") != target_head
+        or not isinstance(statuses, Mapping)
+        or not isinstance(checks, Mapping)
+    ):
+        return _pending(
+            "required_check_results_stale", "refresh_required_check_results"
+        )
+    for name in required:
+        check = checks.get(name)
+        generation = check.get("generation") if isinstance(check, Mapping) else None
+        if (
+            statuses.get(name) not in {"success", "passed"}
+            or not isinstance(check, Mapping)
+            or check.get("status") not in {"success", "passed"}
+            or check.get("source_head") != source_head
+            or generation is None
+            or generation == ""
+        ):
+            return _pending("required_checks_not_green", "wait_for_required_checks")
     return {
         "verified": True,
         "checked_source_head": source_head,
@@ -282,21 +350,43 @@ def _evidence_digest(
         "action": {
             key: action.get(key)
             for key in (
-                "action_id", "generation", "phase", "feature_id", "epic_id", "review_url",
-                "review_forge", "source_ref", "target_ref", "claim_id",
-                "claim_owner", "owner_fingerprint", "incident_budget_id",
-                "reserved_task_id", "final_validation",
+                "action_id",
+                "generation",
+                "phase",
+                "feature_id",
+                "epic_id",
+                "review_url",
+                "review_forge",
+                "source_ref",
+                "target_ref",
+                "claim_id",
+                "claim_owner",
+                "owner_fingerprint",
+                "incident_budget_id",
+                "reserved_task_id",
+                "final_validation",
             )
         },
         "review": {
             key: record.get(key)
             for key in (
-                "current_generation", "generation", "action_id",
-                "publication_action_id", "url", "forge", "source_branch",
-                "target_branch", "source_head", "target_head", "closed",
-                "reconciliation_status", "accepted_source_head",
-                "accepted_target_head", "accepted_merge_sha",
-                "required_check_policy", "required_check_results",
+                "current_generation",
+                "generation",
+                "action_id",
+                "publication_action_id",
+                "url",
+                "forge",
+                "source_branch",
+                "target_branch",
+                "source_head",
+                "target_head",
+                "closed",
+                "reconciliation_status",
+                "accepted_source_head",
+                "accepted_target_head",
+                "accepted_merge_sha",
+                "required_check_policy",
+                "required_check_results",
             )
         },
         "observed": dict(observed),
@@ -355,9 +445,7 @@ def reconcile_parent_lifecycle_incident(
 
     feature_id = evidence.get("feature_id")
     acknowledgement = adapter.get("acknowledgement")
-    acknowledgement = (
-        acknowledgement if isinstance(acknowledgement, Mapping) else {}
-    )
+    acknowledgement = acknowledgement if isinstance(acknowledgement, Mapping) else {}
     repair_generation = adapter.get("generation")
     if repair_generation is None:
         repair_generation = acknowledgement.get("repair_generation")
@@ -471,9 +559,7 @@ def reconcile_parent_lifecycle_incident(
             "review_generation_accepted": review_current,
             "loaded_runtime_current": runtime.get("state") == "current",
             "execution_lease_retired": not execution_lease_is_live(task_id, root=repo),
-            "task_worktree_retired": get_integration_worktree(
-                repo, "task", task_id
-            )
+            "task_worktree_retired": get_integration_worktree(repo, "task", task_id)
             is None,
             "feature_worktree_retired": get_integration_worktree(
                 repo, "feature", feature_id

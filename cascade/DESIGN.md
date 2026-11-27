@@ -472,6 +472,10 @@ a follow-up. Legacy accepted-review follow-up remains a distinct route and canno
 be selected by this scoped action. Reconciliation binds callbacks to their
 immutable generation and exact accepted source/target heads, while independent
 target integration remains a separate closeout obligation.
+Independent repair verification obtains policy and check results from the same
+fresh normalized snapshot as the observed original review. Registry-cached check
+facts and a prior verified phase cannot satisfy Boss closeout; the accepted merge
+remains on the fresh intended Epic target.
 `REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
 derive a Feature's delivery phase from the canonical board row, current immutable
 review generation, admitted repair action, completion event, and local
