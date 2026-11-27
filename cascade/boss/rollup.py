@@ -123,7 +123,10 @@ def _try_complete_feature(
         and feature_meta.path.parent.name == "3_completed"
     ):
         if not obligation.satisfied:
-            if not review_merged and obligation.reason == "review_not_published":
+            if not review_merged and obligation.reason in {
+                "review_not_published",
+                "repair_delivery_incomplete",
+            }:
                 from cascade.review import ensure_feature_review, review_enabled
 
                 if review_enabled(repo):
@@ -209,10 +212,13 @@ def _try_complete_feature(
 
     if review_merged:
         # The forge merge already landed the source tree, including the completed
-        # feature plan, on the epic branch. Polling records the terminal event but
-        # must not create another source commit after review.
+        # feature plan, on the epic branch. A generation-bound repair is the one
+        # exception on the retained source checkout: publication deliberately
+        # keeps its Feature document active, so verified acceptance must persist
+        # that document as terminal before the checkout can pass retirement proof.
         if doc.meta.parent:
             _record_satisfied_repair(feature_id, obligation, repo)
+            _complete_verified_repair_source(feature_id, repo)
             _emit_feature_completed(feature_id, doc.meta.parent, repo)
             _retire_feature_worktree(
                 feature_id,
@@ -273,6 +279,31 @@ def _try_complete_feature(
         current_obligation=obligation,
     )
     return True
+
+
+def _complete_verified_repair_source(feature_id: str, repo: Path) -> None:
+    """Close the retained repair owner only after independent verification."""
+
+    from cascade.feature.repair import feature_repair_actions
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    repairs = [
+        action
+        for action in feature_repair_actions(feature_id, root=repo)
+        if action.get("repair_route") == "open_review"
+    ]
+    if not repairs:
+        return
+    current = max(repairs, key=lambda action: int(action.get("generation") or 0))
+    if current.get("phase") != "verified":
+        return
+    entry = get_integration_worktree(repo, "feature", feature_id)
+    if entry is None or not entry.path.is_dir():
+        return
+    source = list_board(entry.path).by_id.get(feature_id)
+    if source is None or source.status != "active":
+        return
+    move_doc(feature_id, "completed", root=entry.path)
 
 
 def _current_open_review_postcheck_matches(

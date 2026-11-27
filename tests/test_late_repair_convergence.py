@@ -35,6 +35,7 @@ from cascade.feature.mint import mint_task
 from cascade.feature.repair import (
     FeatureRepairError,
     admit_feature_repair,
+    current_feature_repair_record,
     inspect_feature_repair,
 )
 from cascade.agent.types import RoleResult
@@ -50,6 +51,7 @@ from cascade.task.incident_budget import (
 )
 from cascade.task_rollup import retry_pending_task_merges
 from cascade.task.worktree import clear_task_runs, get_task_run
+from cascade.team_supervision import request_feature_review_repair
 from cascade.tracking import MergeRequest
 from cascade.watchdog import activate_epic, dispatch_feature, dispatch_task
 from cascade.watchdog.events import read_events
@@ -121,10 +123,12 @@ def _signed_runtime_receipt(
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _completed_feature(tmp_path: Path) -> tuple[Path, object, str]:
+def _completed_feature(
+    tmp_path: Path, *, role_skills: bool = False
+) -> tuple[Path, object, str]:
     """Run the normal mint, dispatch, validation, and queued-delivery path."""
 
-    root = make_repo(tmp_path)
+    root = make_repo(tmp_path, role_skills=role_skills)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Feature", tier="feature", parent="epic_001")
     _select_roles(
@@ -181,19 +185,32 @@ def _completed_feature(tmp_path: Path) -> tuple[Path, object, str]:
 class DeterministicForge:
     """Contract-shaped forge boundary with observable publication count."""
 
-    def __init__(self, historical: MergeRequest, state: str) -> None:
+    def __init__(
+        self,
+        historical: MergeRequest,
+        state: str,
+        *,
+        historical_is_current: bool = False,
+    ) -> None:
         self.historical = historical
         self.state = state
+        self.historical_is_current = historical_is_current
         self.created: list[MergeRequest] = []
         self.current_source_head: str | None = None
         self.current_target_head: str | None = None
         self.current_merge_sha: str | None = None
         self.current_state = "open"
+        self.comments: list[dict[str, object]] = []
+        self.required_check_policy: dict[str, object] | None = None
+        self.required_check_results: dict[str, object] | None = None
 
     def snapshot(self, _root: Path, mr: MergeRequest) -> dict[str, object]:
-        current = bool(self.created and mr == self.created[0])
+        current = bool(
+            (self.created and mr == self.created[0])
+            or (not self.created and self.historical_is_current and mr == self.historical)
+        )
         assert current or mr == self.historical
-        return {
+        snapshot: dict[str, object] = {
             "state": self.current_state if current else self.state,
             "url": mr.url,
             "source_branch": mr.source_branch,
@@ -206,8 +223,13 @@ class DeterministicForge:
                 self.current_merge_sha if current and self.current_state == "merged" else
                 "historical-merge" if not current and self.state == "merged" else None
             ),
-            "comments": [],
+            "comments": list(self.comments),
         }
+        if current and self.required_check_policy is not None:
+            snapshot["required_check_policy"] = self.required_check_policy
+        if current and self.required_check_results is not None:
+            snapshot["required_check_results"] = self.required_check_results
+        return snapshot
 
     def find(self, *_args, **_kwargs) -> MergeRequest | None:
         return self.created[0] if self.created else None
@@ -247,6 +269,351 @@ def _assert_same_incident_budget(
     current_charged = dict(current["charged"])
     assert all(current_charged[key] >= original_charged[key] for key in original_charged)
     assert set(dict(original["operations"])) <= set(dict(current["operations"]))
+
+
+def test_parent_requested_open_review_repair_reuses_identity_until_verified_retirement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Follow one real Feature repair from parent request through retirement.
+
+    Git repositories, queue/checkpoint delivery, Task tools, publication,
+    merge observation, and the independent postcheck are production code.  The
+    only scripted seams are planning/SWE provider output and forge/check
+    transport.
+    """
+
+    from cascade.feature.checkpoint import thread_config as feature_thread_config
+    from cascade.feature.graph import clear_feature_graph_sessions, ensure_feature_graph
+    from cascade.feature.repair import feature_repair_actions
+    from cascade.task import invoke_tool
+    from cascade.task.graph import set_task_run_role_fn
+    from cascade.watchdog.incident_postcheck import reconcile_open_review_repair
+    from cascade.workspace.kickoff import deferred_kickoffs, wait_for_background_kickoffs
+    from cascade.workspace.integration_worktree import retire_terminal_registered_worktrees
+
+    root, feature_entry, original_task_id = _completed_feature(
+        tmp_path, role_skills=True
+    )
+    exclude = root / ".git" / "info" / "exclude"
+    exclude.write_text(
+        exclude.read_text(encoding="utf-8")
+        + ".cascade/\ndocs/_comments/\ndocs/_queue/\ndocs/_war_room/\n"
+    )
+    epic_entry = get_integration_worktree(root, "epic", "epic_001")
+    assert epic_entry is not None
+    remote = tmp_path / "review-remote.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+    )
+    _git(root, "remote", "add", "origin", str(remote))
+    _git(root, "push", "-u", "origin", "HEAD:main")
+    _git(epic_entry.path, "push", "-u", "origin", "epic/epic_001")
+    move_doc("feat_001", "completed", root=feature_entry.path)
+    original_source = _git(feature_entry.path, "rev-parse", "HEAD")
+    original_target = _git(epic_entry.path, "rev-parse", "HEAD")
+    original_review = MergeRequest(
+        "https://forge.example/pulls/original",
+        "1",
+        "github",
+        "feat/feat_001",
+        "epic/epic_001",
+        False,
+    )
+    review._store_review_generation(
+        root,
+        "feat_001",
+        {
+            "url": original_review.url,
+            "number": original_review.number,
+            "forge": original_review.forge,
+            "source_branch": original_review.source_branch,
+            "target_branch": original_review.target_branch,
+            "source_head": original_source,
+            "target_head": original_target,
+            "draft": False,
+            "closed": False,
+            "state": "open",
+            "seen_comments": ["review-thread-7"],
+            "toast_notified": True,
+        },
+        generation=0,
+        action_id=None,
+    )
+    provider_turns: list[str] = []
+
+    async def scripted_planning_provider(role: str, *_args: object, **_kwargs: object) -> str:
+        provider_turns.append(role)
+        return f"{role} acknowledged the durable repair request"
+
+    clear_feature_graph_sessions()
+    monkeypatch.setattr(
+        "cascade.feature.graph.run_planning_role_turn", scripted_planning_provider
+    )
+    request = {
+        "reason": "Repair the current failed check without replacing the review",
+        "evidence": {"comment_id": "review-thread-7", "check": "product"},
+        "approval_reference": "approved-feature-plan",
+        "scope_reference": "review-comment:review-thread-7",
+        "review_url": original_review.url,
+        "review_forge": original_review.forge,
+        "source_ref": original_review.source_branch,
+        "target_ref": original_review.target_branch,
+        "observed_source_head": original_source,
+        "observed_target_head": original_target,
+        "observed_review_generation": 0,
+    }
+    admitted = request_feature_review_repair(
+        "feat_001",
+        "review-fix:thread-7",
+        root=root,
+        requesting_parent_id="epic_001",
+        **request,
+    )
+    assert admitted["admitted"] is True
+    assert admitted["wakeup_acknowledged"] is True
+    assert admitted["verified"] is False
+    assert provider_turns == ["feature_lead", "feature_architect"]
+    checkpoint_after_admission = ensure_feature_graph("feat_001", root=root).get_state(
+        feature_thread_config("feat_001")
+    )
+    admitted_history = list((checkpoint_after_admission.values or {}).get("messages", []))
+
+    replay = request_feature_review_repair(
+        "feat_001",
+        "review-fix:thread-7",
+        root=root,
+        requesting_parent_id="epic_001",
+        **request,
+    )
+    assert replay["action_id"] == admitted["action_id"]
+    assert replay["generation"] == admitted["generation"] == 1
+    assert provider_turns == ["feature_lead", "feature_architect"]
+    checkpoint = ensure_feature_graph("feat_001", root=root).get_state(
+        feature_thread_config("feat_001")
+    )
+    assert list((checkpoint.values or {}).get("messages", [])) == admitted_history
+
+    def mint_repair() -> str:
+        return mint_task(
+            "Repair current review checks",
+            body_stub="Change product.py to VALUE = 2 and validate test_product.py.",
+            repair_request_id="review-fix:thread-7",
+            feature_id="feat_001",
+            root=root,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        repair_task_ids = list(pool.map(lambda _index: mint_repair(), range(2)))
+    assert repair_task_ids[0] == repair_task_ids[1]
+    repair_task_id = repair_task_ids[0]
+    feature = read_doc("feat_001", root=feature_entry.path)
+    assert feature.meta.children.count(repair_task_id) == 1
+    assert original_task_id in feature.meta.children
+
+    validations: list[dict[str, object]] = []
+    physical_task_turns: list[str] = []
+
+    async def scripted_swe_provider(_turn: object) -> RoleResult:
+        physical_task_turns.append(repair_task_id)
+        invoke_tool(
+            repair_task_id,
+            "swe_write",
+            {
+                "path": "test_product.py",
+                "content": "from product import VALUE\n\ndef test_value():\n    assert VALUE == 2\n",
+            },
+            root=root,
+            feature_id="feat_001",
+        )
+        invoke_tool(
+            repair_task_id,
+            "swe_commit",
+            {"message": "add current repair check"},
+            root=root,
+            feature_id="feat_001",
+        )
+        red = invoke_tool(
+            repair_task_id,
+            "swe_run_tests",
+            {"cmd": ["pytest", "test_product.py", "-q"]},
+            root=root,
+            feature_id="feat_001",
+        )
+        validations.append(red)
+        assert red["exit_code"] == 1
+        invoke_tool(
+            repair_task_id,
+            "swe_write",
+            {"path": "product.py", "content": "VALUE = 2  # repaired review\n"},
+            root=root,
+            feature_id="feat_001",
+        )
+        invoke_tool(
+            repair_task_id,
+            "swe_commit",
+            {"message": "repair current review check"},
+            root=root,
+            feature_id="feat_001",
+        )
+        green = invoke_tool(
+            repair_task_id,
+            "swe_run_tests",
+            {"cmd": ["pytest", "test_product.py", "-q"]},
+            root=root,
+            feature_id="feat_001",
+        )
+        validations.append(green)
+        assert green["exit_code"] == 0
+        return RoleResult(text="repair committed and validated", status="finished")
+
+    from cascade.task import boot, wiring, worktree
+    from cascade.watchdog import hooks
+
+    monkeypatch.setitem(hooks._boot, "task", [])
+    monkeypatch.setitem(hooks._teardown, "task", [])
+    monkeypatch.setattr(boot, "_boot_root", None)
+    monkeypatch.setattr(wiring, "_wiring_root", None)
+    monkeypatch.setattr(worktree, "_root", None)
+    wiring.install_task_wiring(root)
+    set_task_run_role_fn(scripted_swe_provider)
+    with deferred_kickoffs():
+        assert dispatch_task(repair_task_id, "human", root=root).ok
+        repair_run = get_task_run(repair_task_id)
+        assert repair_run is not None and repair_run.state != "booting"
+    assert wait_for_background_kickoffs(20)
+    if physical_task_turns != [repair_task_id]:
+        from cascade.task.execution import execution_view
+
+        pytest.fail(
+            repr(
+                {
+                    "run": repair_run,
+                    "execution": execution_view(repair_task_id, root=root),
+                    "events": read_events(repair_task_id, 0, root=root)[0],
+                }
+            )
+        )
+    assert [row["exit_code"] for row in validations] == [1, 0]
+    old_validation = validations[0]["final_validation"]
+    current_validation = validations[1]["final_validation"]
+    assert old_validation["deliverable_sha"] != current_validation["deliverable_sha"]
+    assert merge_task_branch(repair_task_id, root=root).ok
+
+    repair_action = current_feature_repair_record("feat_001", root=root)
+    assert repair_action is not None
+    assert repair_action["action_id"] == admitted["action_id"]
+    assert repair_action["reserved_task_id"] == repair_task_id
+    assert repair_action["final_validation"] == current_validation
+    assert repair_action["approval_reference"] == "approved-feature-plan"
+
+    forge = DeterministicForge(
+        original_review, "open", historical_is_current=True
+    )
+    forge.current_source_head = original_source
+    forge.current_target_head = original_target
+    monkeypatch.setattr(review, "review_enabled", lambda _root: True)
+    monkeypatch.setattr(review, "merge_request_snapshot", forge.snapshot)
+    monkeypatch.setattr("cascade.tracking.merge_request_snapshot", forge.snapshot)
+    monkeypatch.setattr(review, "find_merge_request", forge.find)
+    monkeypatch.setattr(review, "create_merge_request", forge.create)
+    published = review.ensure_feature_review("feat_001", root=root)
+    assert published is not None and published.url == original_review.url
+    current_review = review.review_record_for_feature("feat_001", root=root)
+    assert current_review is not None
+    corrected_source = str(current_review["source_head"])
+    assert corrected_source != original_source
+    assert current_review["action_id"] == admitted["action_id"]
+    assert len(forge.created) == 0
+    forge.comments = [
+        {
+            "id": "review-thread-7",
+            "body": "Keep this review discussion attached to the original PR.",
+            "author": {"login": "reviewer"},
+        }
+    ]
+    review.poll_feature_reviews(root)
+    current_review = review.review_record_for_feature("feat_001", root=root)
+    assert current_review is not None
+    assert current_review["seen_comments"] == ["review-thread-7"]
+
+    forge.current_source_head = corrected_source
+    forge.required_check_policy = {
+        "available": True,
+        "source_head": original_source,
+        "target_head": original_target,
+        "required": ["product"],
+    }
+    forge.required_check_results = {
+        "available": True,
+        "source_head": original_source,
+        "target_head": original_target,
+        "statuses": {"product": "success"},
+        "checks": {
+            "product": {
+                "status": "success",
+                "source_head": original_source,
+                "generation": 1,
+            }
+        },
+    }
+    stale = reconcile_open_review_repair("feat_001", root=root)
+    assert stale["verified"] is False
+    assert stale["reason"] == "required_check_policy_stale"
+
+    _git(epic_entry.path, "merge", "--no-ff", corrected_source, "-m", "merge repaired review")
+    forge.current_state = "merged"
+    forge.current_merge_sha = _git(epic_entry.path, "rev-parse", "HEAD")
+    forge.current_target_head = forge.current_merge_sha
+    forge.required_check_policy = {
+        "available": True,
+        "source_head": corrected_source,
+        "target_head": forge.current_target_head,
+        "required": ["product"],
+    }
+    forge.required_check_results = {
+        "available": True,
+        "source_head": corrected_source,
+        "target_head": forge.current_target_head,
+        "statuses": {"product": "success"},
+        "checks": {
+            "product": {
+                "status": "success",
+                "source_head": corrected_source,
+                "generation": 2,
+            }
+        },
+    }
+    _git(epic_entry.path, "push", "origin", "epic/epic_001")
+    assert _git(epic_entry.path, "status", "--porcelain") == ""
+    # The first forge observation persists acceptance.  That write is not
+    # retroactive authority for the postcheck that preceded it.
+    assert review.reconcile_feature_review_completions(root) == []
+    accepted_pending = review.review_record_for_feature("feat_001", root=root)
+    assert accepted_pending is not None and accepted_pending["closed"] is True
+    # Acceptance synchronization may add the completed lifecycle copy on the
+    # intended target.  The next forge/check observation names that current
+    # target while retaining the human-accepted merge object.
+    forge.current_target_head = _git(epic_entry.path, "rev-parse", "HEAD")
+    forge.required_check_policy["target_head"] = forge.current_target_head
+    forge.required_check_results["target_head"] = forge.current_target_head
+    _git(epic_entry.path, "push", "origin", "epic/epic_001")
+    verified = reconcile_open_review_repair("feat_001", root=root)
+    assert verified["verified"] is True, verified
+    assert verified["repair_action_id"] == admitted["action_id"]
+    assert verified["checked_source_head"] == corrected_source
+    assert verified["target_head"] == forge.current_target_head
+    assert review.reconcile_feature_review_completions(root) == ["feat_001"]
+
+    retire_terminal_registered_worktrees(root)
+    assert get_integration_worktree(root, "feature", "feat_001") is None
+    assert len(feature_repair_actions("feat_001", root=root)) == 1
+    assert current_feature_repair_record("feat_001", root=root) is None
+    accepted = review.review_record_for_feature("feat_001", root=root)
+    assert accepted is not None and accepted["closed"] is True
+    assert accepted["url"] == original_review.url
+    assert accepted["seen_comments"] == ["review-thread-7"]
+    assert provider_turns == ["feature_lead", "feature_architect"]
+    assert physical_task_turns == [repair_task_id]
 
 
 @pytest.mark.parametrize("split_roots", [True, False], ids=["split-roots", "colocated"])

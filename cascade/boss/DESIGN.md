@@ -24,6 +24,14 @@ the action's prior verified phase, so a later failed run, target drift or
 unavailable policy blocks completion. Review-disabled delivery retains its
 supervised local merge proof. This predicate runs before the completed fast path
 and its result gates both `FeatureCompleted` and checkout retirement.
+Repair publication deliberately retains an active Feature document in its source
+checkout. After the independent receipt verifies the accepted merge on the
+intended Epic target, Boss moves that exact source document to completed before
+retirement proof. Admission, green checks, publication, or forge acceptance alone
+cannot perform this terminal source mutation.
+In split-root operation, a completed tracking projection with an exact
+delivery-pending repair can still enter guarded review publication; it is not
+mistaken for terminal delivery merely because the tracking copy is completed.
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and
@@ -79,7 +87,8 @@ flowchart TD
     Review --> Accept[Observe forge acceptance]
     Accept --> Target{Accepted merge on intended Epic target?}
     Target -->|no| Preserve
-    Target -->|yes| Event[Emit FeatureCompleted once]
+    Target -->|yes| Source[Persist verified repair source as terminal]
+    Source --> Event[Emit FeatureCompleted once]
     Event --> Proof[Workspace delivery recheck + descendant persistence + canonical readback]
     Proof -->|complete| Close[Attempt retirement]
     Proof -->|refused| Preserve
@@ -112,6 +121,10 @@ Verification: [merge tests](../../tests/boss/test_merge.py),
 [rollup tests](../../tests/boss/test_rollup.py),
 [queue tests](../../tests/task/test_rollup_queue.py), and
 [completion integration](../../tests/test_completion_rollup_integration.py).
+The [late-repair convergence journey](../../tests/test_late_repair_convergence.py)
+exercises parent admission, one reserved repair Task, current-head publication,
+fresh checks, human merge, independent postcheck, terminal source persistence,
+and retirement against real temporary Git repositories.
 
 ## Feature approval and dispatch
 
