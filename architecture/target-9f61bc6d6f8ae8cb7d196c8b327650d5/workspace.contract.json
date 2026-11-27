@@ -1,5 +1,9 @@
 {
   "elements": [
+    {"dsl_identifier": "code_teams_board_scan", "semantic_id": "element.code.teams.board-scan", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_boss_merged_epic", "semantic_id": "element.code.boss.merged-epic", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_verified_trunk", "semantic_id": "element.code.workspace.verified-trunk", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_fast_forward", "semantic_id": "element.code.workspace.fast-forward", "fragment": "model.dsl"},
     {"dsl_identifier": "approval_component", "semantic_id": "element.component.approval", "fragment": "model.dsl"},
     {"dsl_identifier": "code_approval_feature", "semantic_id": "element.code.approval.feature", "fragment": "model.dsl"},
     {"dsl_identifier": "code_approval_epic", "semantic_id": "element.code.approval.epic", "fragment": "model.dsl"},
@@ -308,6 +312,10 @@
     {"path": "views.dsl", "owner": "epic_056"}
   ],
   "relationships": [
+    {"dsl_identifier": "code_teams_publish_to_board_scan", "semantic_id": "relationship.code.teams.publish-board-scan", "fragment": "model.dsl", "source": "code_teams_validate_publish", "destination": "code_teams_board_scan"},
+    {"dsl_identifier": "code_teams_scan_to_parse", "semantic_id": "relationship.code.teams.scan-parse", "fragment": "model.dsl", "source": "code_teams_board_scan", "destination": "code_board_parse"},
+    {"dsl_identifier": "code_boss_epic_to_landed", "semantic_id": "relationship.code.boss.epic-landed", "fragment": "model.dsl", "source": "code_boss_epic", "destination": "code_boss_merged_epic"},
+    {"dsl_identifier": "code_boss_landed_to_workspace", "semantic_id": "relationship.code.boss.landed-workspace", "fragment": "model.dsl", "source": "code_boss_merged_epic", "destination": "code_workspace_verified_trunk"},
     {"dsl_identifier": "rel_http_approval", "semantic_id": "relationship.http-approval", "fragment": "model.dsl", "source": "war_room_http", "destination": "approval_component"},
     {"dsl_identifier": "rel_approval_board", "semantic_id": "relationship.approval-board", "fragment": "model.dsl", "source": "approval_component", "destination": "board_component"},
     {"dsl_identifier": "rel_approval_feature", "semantic_id": "relationship.approval-feature", "fragment": "model.dsl", "source": "approval_component", "destination": "feature_team"},

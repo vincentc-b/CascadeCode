@@ -20,6 +20,45 @@ See [Epic preparation](../epic/DESIGN.md#initial-activation-checkout-preparation
 and [Watchdog provisioning](../watchdog/DESIGN.md#interrupted-epic-provisioning).
 
 
+## Remote trunk inspection and synchronization
+
+Under `REQ-WORKSPACE-001`,
+[`create_verified_trunk_workspace`](closeout.py) resolves the configured product
+trunk, fetches its remote ref and creates a private detached Git worktree at the
+resolved commit. `VerifiedTrunkWorkspace` owns only that temporary directory and
+its Git registration. Context-manager cleanup removes those resources; it does
+not change the operator checkout's branch, index or files. Fetch, target mismatch
+and worktree creation failures raise `GitError` without admitting a workspace.
+The name identifies a fetched revision, not successful board validation or CI.
+
+[`fast_forward_trunk`](../tracking.py) is a separate mutation adapter: it requires
+the configured branch to be checked out, fetches, returns immediately for equal
+heads, and otherwise uses `git merge --ff-only`. Git rejects divergence and edits
+that the merge would overwrite. Non-overlapping local edits can remain; this
+adapter does not enforce a completely clean checkout, board integrity or exact
+merged-revision CI. It has no independent receipt store. Retrying observes Git
+again rather than treating an earlier fetch as completion.
+
+```mermaid
+flowchart TD
+    Target[Configured product trunk] --> Fetch[Fetch remote and resolve exact commit]
+    Fetch -->|inspection| Detached[Private detached worktree]
+    Detached --> Caller[Boss checks forge acceptance and document identity]
+    Caller --> Cleanup[Remove only private worktree]
+    Target -->|separate sync request| Branch{Operator on requested branch?}
+    Branch -->|yes| SyncFetch[Fetch remote target]
+    SyncFetch --> FF[Equal head or Git fast-forward only]
+    Branch -->|no| Refuse[GitError; preserve operator work]
+    FF -->|divergence or overlapping edit| Refuse
+```
+
+These functions are source-linked in `cascade-workspace-code` in the
+[model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl) and
+[views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
+[Boss](../boss/DESIGN.md#epic-remote-acceptance) owns acceptance decisions.
+[Closeout workspace tests](../../tests/workspace/test_closeout_workspace.py)
+exercise detached inspection and preservation of the operator checkout.
+
 ## Worker lifecycle and runtime identity
 
 `REQ-WORKSPACE-RUNTIME-001`: A reviewed runtime repair is current only when an

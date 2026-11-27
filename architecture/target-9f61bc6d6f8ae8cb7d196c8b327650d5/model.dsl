@@ -4909,3 +4909,63 @@ rel_dashboard_feature_readiness = code_dashboard_feature_readiness -> code_featu
         "cascade.semanticId" "relationship.dashboard-feature-readiness"
     }
 }
+
+code_teams_board_scan = element "validate_publication_board" "Function" "Parse all physical lifecycle columns and refuse malformed documents, symlinks and duplicate IDs before source publication." {
+    properties {
+        "cascade.semanticId" "element.code.teams.board-scan"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "validate_publication_board"
+    }
+}
+
+code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry and matching Epic document in a detached fetched trunk checkout." {
+    properties {
+        "cascade.semanticId" "element.code.boss.merged-epic"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/epic_complete.py"
+        "cascade.sourceSymbol" "_merged_epic_review_landed"
+    }
+}
+
+code_workspace_verified_trunk = element "create_verified_trunk_workspace" "Function" "Fetch product trunk and create a private detached checkout at its exact revision without changing operator files or HEAD." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.verified-trunk"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/closeout.py"
+        "cascade.sourceSymbol" "create_verified_trunk_workspace"
+    }
+}
+
+code_workspace_fast_forward = element "fast_forward_trunk" "Function" "Fetch and fast-forward the checked-out trunk; Git refuses divergence and overlapping tracked edits. This does not establish board or CI health." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.fast-forward"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "fast_forward_trunk"
+    }
+}
+
+code_teams_publish_to_board_scan = code_teams_validate_publish -> code_teams_board_scan "Refuses malformed physical source before checks" {
+    properties {
+        "cascade.semanticId" "relationship.code.teams.publish-board-scan"
+    }
+}
+
+code_teams_scan_to_parse = code_teams_board_scan -> code_board_parse "Parses every discovered physical document" {
+    properties {
+        "cascade.semanticId" "relationship.code.teams.scan-parse"
+    }
+}
+
+code_boss_epic_to_landed = code_boss_epic -> code_boss_merged_epic "Requires accepted remote document before closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.epic-landed"
+    }
+}
+
+code_boss_landed_to_workspace = code_boss_merged_epic -> code_workspace_verified_trunk "Reads a freshly fetched detached trunk" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.landed-workspace"
+    }
+}

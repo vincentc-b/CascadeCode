@@ -28,6 +28,14 @@ merge result; accepted target trees must retain a unique terminal record and
 any matching cancellation feedback. Board consistency is separate from the
 operator trunk synchronization and review acceptance gates.
 
+Schema parsing is visible in `cascade-board-code`; the calling publication
+scan is owned by Teams in
+[cascade-teams-code](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
+and [the package publication contract](../DESIGN.md#publication-implementation-and-recovery).
+The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
+links `validate_publication_board` to `parse_doc`; neither projection ranking
+nor that parse-only scan grants lifecycle mutation authority.
+
 ## Safe frontmatter scan performance
 
 Worktree board scans may read thousands of records during a cold War Room request.

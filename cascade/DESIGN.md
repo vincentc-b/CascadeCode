@@ -247,6 +247,13 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
 | [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
 | [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
+| [validate_publication_board](review_validation.py) | Parse every physical lifecycle-column document in the publication checkout and reject symlinks, malformed records and duplicate IDs before validation. Board owns schema invariants; Teams owns this publication gate. |
+
+The `cascade-teams-code` node `element.code.teams.board-scan` links this gate
+to the [Board parser](board/parse.py). It reads the source checkout, not a
+prospective forge merge tree, and does not prove terminal-history preservation
+or cross-root hierarchy. Its failure prevents validator execution and push;
+it does not repair or select among conflicting records.
 
 ```mermaid
 flowchart TD
