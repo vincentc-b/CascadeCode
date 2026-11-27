@@ -1777,7 +1777,7 @@ code_dashboard_lifecycle_ui = element "lifecycleActionButton" "Function" "Shows 
     }
 }
 
-code_dashboard_board_refresh = element "loadBoardView" "Function" "Shares reads, fetches after writes, and defers row replacement during a button press." {
+code_dashboard_board_refresh = element "loadBoardView" "Function" "Shares bounded board reads, fetches after writes, and defers row replacement during a button press." {
     properties {
         "cascade.semanticId" "element.code.dashboard.board-refresh"
         "cascade.parent" "element.component.dashboard"

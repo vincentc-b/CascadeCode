@@ -210,6 +210,7 @@
   }
 
   const LOAD_DEADLINE_MS = 10000;
+  const BOARD_LOAD_DEADLINE_MS = 50000;
   const EPIC_CLOSE_DEADLINE_MS = 60000;
   // Lifecycle writes include worktree setup, provider checks and dispatch reconciliation.
   const LIFECYCLE_ACTION_DEADLINE_MS = 120000;
@@ -228,7 +229,7 @@
 
   function reportBoardLoadFailure(err) {
     const timedOut = err && (err.name === "TimeoutError" || err.name === "AbortError");
-    const msg = timedOut ? "Timed out after 10s" : (err && err.message) || "Load failed";
+    const msg = timedOut ? "Board timed out after 50s" : (err && err.message) || "Load failed";
     if (el.board && !el.board.querySelector(".load-deadline")) {
       const note = document.createElement("p");
       note.className = "load-deadline";
@@ -367,8 +368,8 @@
     return auditStatusInFlight;
   }
 
-  async function apiGet(path) {
-    const resp = await fetch(path, { signal: deadlineSignal(), cache: "no-store" });
+  async function apiGet(path, timeoutMs) {
+    const resp = await fetch(path, { signal: deadlineSignal(timeoutMs), cache: "no-store" });
     const text = await resp.text();
     let body;
     try {
@@ -3263,7 +3264,7 @@
     // Cancellation state controls destructive-action availability; load it
     // alongside the board rather than adding a second serial network round trip.
     boardRefreshInFlight = Promise.all([
-      apiGet("/api/board?_=" + Date.now()),
+      apiGet("/api/board?_=" + Date.now(), BOARD_LOAD_DEADLINE_MS),
       refreshPendingBriefCancels(!!forceFresh),
     ])
       .then(function (results) {

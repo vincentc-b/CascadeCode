@@ -822,3 +822,8 @@ selection details, revision-side routing, refresh preservation and Fit.
 [Navigation scenarios](../../tests/war_room/test_project_c4_colors.py) cover drill
 and parent selection in the combined canvas. [Viewport regression scenarios](../../tests/war_room/paired_c4_review_cases.mjs)
 cover rapid rerenders and new pinned revisions.
+
+The board is a larger bounded read than ordinary sidecar GETs: allow 45 seconds
+server-side and 50 seconds in the browser, retaining single-flight polling. A
+cold scan under startup recovery can exceed the generic ten-second read limit.
+Other request deadlines and lifecycle admission remain unchanged.

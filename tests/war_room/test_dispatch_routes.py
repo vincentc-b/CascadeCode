@@ -129,6 +129,21 @@ def test_activation_schema_failure_is_a_json_conflict(dispatch_board, monkeypatc
     assert json.loads(exc.value.read())["error"] == "Duplicate historical child document"
 
 
+def test_board_read_can_finish_after_generic_request_deadline(dispatch_board, monkeypatch):
+    base, _root = dispatch_board
+    from cascade.war_room.server import WarRoomRequestHandler
+
+    def slow_board(handler):
+        time.sleep(0.1)
+        handler._json_response(HTTPStatus.OK, {"ok": True})
+
+    monkeypatch.setattr("cascade.war_room.server.REQUEST_DEADLINE_S", 0.05)
+    monkeypatch.setattr("cascade.war_room.server.BOARD_READ_DEADLINE_S", 0.5)
+    monkeypatch.setattr(WarRoomRequestHandler, "_handle_board", slow_board)
+    with urllib.request.urlopen(f"{base}/api/board", timeout=2) as response:
+        assert json.load(response) == {"ok": True}
+
+
 def test_activation_api_can_finish_after_generic_request_deadline(dispatch_board, monkeypatch):
     from cascade.watchdog.types import DispatchResult
 

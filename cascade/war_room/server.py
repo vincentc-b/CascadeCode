@@ -137,6 +137,7 @@ from cascade.workspace.c4_threads import (
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 _SKILLS_INVALID = object()
 REQUEST_DEADLINE_S = 10.0
+BOARD_READ_DEADLINE_S = 45.0
 EPIC_CLOSE_DEADLINE_S = 60.0
 APPROVAL_DEADLINE_S = 60.0
 ACTIVATION_DEADLINE_S = 60.0
@@ -493,7 +494,9 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 return
             path = getattr(self, "path", "").split("?", 1)[0]
             deadline = REQUEST_DEADLINE_S
-            if getattr(self, "command", "") == "POST":
+            if getattr(self, "command", "") == "GET" and path == "/api/board":
+                deadline = BOARD_READ_DEADLINE_S
+            elif getattr(self, "command", "") == "POST":
                 if path == "/api/confirm_epic_complete":
                     deadline = EPIC_CLOSE_DEADLINE_S
                 elif path == "/api/activate_epic":

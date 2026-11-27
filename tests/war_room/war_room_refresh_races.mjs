@@ -101,6 +101,7 @@ async function testActionRefreshFetchesAfterPendingPoll() {
     document: { hidden: false },
   };
   const script = `
+    const BOARD_LOAD_DEADLINE_MS = 50000;
     ${section("  let boardPointerDown = false;", "  function epicIdForFlightLens()")}
     ({ pollBoard, refreshBoard });
   `;
@@ -188,6 +189,7 @@ async function testBoardAndCancellationLookupRunInParallel() {
     document: { hidden: false },
   };
   const board = vm.runInNewContext(`
+    const BOARD_LOAD_DEADLINE_MS = 50000;
     ${section("  let boardPointerDown = false;", "  function epicIdForFlightLens()")}
     ({ pollBoard });
   `, context);
@@ -245,7 +247,7 @@ async function testAuditRefreshIsVisibleAndSingleFlight() {
     },
   };
   const audit = vm.runInNewContext(`
-    ${section("  const auditUiState = {};", "  async function apiGet(path)")}
+    ${section("  const auditUiState = {};", "  async function apiGet(path, timeoutMs)")}
     ({ pollAuditStatus, auditPagePath });
   `, context);
 
@@ -290,6 +292,7 @@ await testAuditRefreshIsVisibleAndSingleFlight();
 async function testBoardPointerGestureSurvivesPoll() {
   const rendered = [];
   const board = vm.runInNewContext(`
+    const BOARD_LOAD_DEADLINE_MS = 50000;
     ${section("  let boardPointerDown = false;", "  function epicIdForFlightLens()")}
     ({ renderLoadedBoard, releaseBoardPointer, pressBoardPointer });
   `, { renderBoard(view) { rendered.push(view); }, setTimeout, clearTimeout });
