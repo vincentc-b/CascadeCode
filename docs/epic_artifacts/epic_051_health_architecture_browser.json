@@ -1,0 +1,65 @@
+{
+  "paths": [
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.review-evidence-health",
+      "symbol": "_review_health",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.08077207300812
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.actionable-review-health",
+      "symbol": "_route_actionable_review_health",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 12.645251031965017
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.required-checks",
+      "symbol": "_required_checks",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 15.467159366933629
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.repair-postcheck-gate",
+      "symbol": "_current_open_review_postcheck_matches",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.504478556104004
+    },
+    {
+      "component": "task-team",
+      "view": "cascade-task-code",
+      "node": "element.code.task.upstream-review-fence",
+      "symbol": "record_upstream_review_observation",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 16.948676774976775
+    }
+  ],
+  "http_errors": [],
+  "source_revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2",
+  "initial_ready_seconds": 84.50785615388304,
+  "render_operations_before": 7,
+  "visible_observation_views": [
+    "cascade-supervisor-components",
+    "cascade-team-components"
+  ],
+  "render_operations_after": 7,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_051\nCode revision\n7cf8ff15e5dc9a229567385bb04a57da4b7a68a2\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\n7cf8ff15e5dc9a229567385bb04a57da4b7a68a2\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 161.01948829903267
+}

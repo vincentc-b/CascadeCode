@@ -13,7 +13,7 @@
   ],
   "source_traces": {
     "normal": "tracking.merge_request_snapshot obtains target policy and source-bound check generations through fixed gh/glab argument vectors. review_health._route_actionable_review_health fingerprints original review, heads and actionable evidence, then calls request_feature_review_repair through the existing parent authority and Feature admission boundary. The same observation attaches a blocker/generation to affected queued Task actions. Boss now consumes the fresh reconcile_open_review_repair result, which checks normalized policy/results, original accepted review and exact local intended-target head/ancestry before the locked current-action gate permits closeout.",
-    "failure_resume": "Unknown policy, missing/pending/stale results, approval waits and snapshot outages retain typed waits without provider admission. Identical material evidence rejoins a persisted repair identity. Task retry compares persisted observation and evaluated generation before claiming another attempt; changed evidence permits ordinary gated reevaluation. A matching independent repair receipt releases the fence, while unrelated merge failures keep their ordinary classification. A saved verified phase alone no longer authorizes Boss completion: the postcheck refreshes forge evidence and rechecks current action/registry digest and local target under the lifecycle lock.",
+    "failure_resume": "Unknown policy, missing/pending/stale results, approval waits and snapshot outages retain typed waits without provider admission. Identical material evidence rejoins a persisted repair identity. Task retry compares persisted observation and evaluated generation before claiming another attempt; changed evidence permits ordinary gated reevaluation. A matching independent repair receipt releases the fence, while unrelated merge failures keep their ordinary classification. A saved verified phase alone no longer authorizes Boss completion: the postcheck refreshes forge evidence and rechecks current action/registry digest and local target under the lifecycle lock. Same-Feature selection is explicit in the Task design; no cross-Feature dependency coverage is inferred.",
     "verification_limit": "The integrated downstream scripted-transport test uses production tracking normalization but substitutes repair admission/action enumeration. It is useful boundary evidence, not the complete real-Git, guarded admission-to-retirement journey. Feature 4's existing acceptance remains responsible for that journey and the integration-required dependency consumers. The current queued-action observation selector covers Tasks owned by the observed Feature; cross-Feature dependency behavior must be demonstrated by final integration evidence rather than inferred from these tests."
   },
   "baseline_failures": [
@@ -26,27 +26,89 @@
   "role": "epic_architect",
   "trigger": "FeatureCompleted feat_051_003",
   "reviewed_implementation_base": "e4c465dd",
-  "status": "verification_in_progress",
+  "status": "reviewed_publication_required",
+  "historical_publication_replay": {"request":"docs/epic_artifacts/epic_051_architecture_review_7b5e3881.json","receipt":{"operation_id":"architecture-publication-d2953d66cc37e0ae96d438d5acf8e4d0a5d2adce136523a826e80b778f2bae2f","status":"pending","render_operation_id":"c4-render-262f1d7ac56fc2debb0a236f9497cf7b72a17761402756ad196036043dfb6e38","baseline_render_operation_id":null,"review_unit_id":null,"reviewed_tuple_digest":"2a56fdfd5988064409d137f6373c016325d5d4d97ca800dcfe55bb8f0363ee74","amendment_id":null,"reason_code":null,"message":"bounded architecture render is pending"},"interpretation":"Replayed unchanged once this turn. Pending receipt remains historical; its model pins predate Feature 3 and cannot establish current acceptance."},
   "scope": "Integrated Feature 3 architecture reconciliation; approved plan and Feature scope unchanged.",
   "design_result": "Root health summary now covers failed checks, actionable feedback and confirmed conflicts. Watchdog flow exposes Task observation; Task design explicitly bounds selection to queued Tasks owned by the observed Feature and links focused verification. Shared, Boss, Feature, Epic and Workspace ownership, execution, persistence and recovery descriptions remain consistent with inspected source.",
   "diagram_impact": {
     "cascade-landscape / cascade-context": "No actor or external system changes: GitHub/GitLab remain existing forge dependencies. No structural update required for this integrated diff.",
     "cascade-containers": "No runtime, persistent store or isolation boundary changes. Additional normalized facts and observation/evaluation metadata use the existing review/action stores and supervisor. No container update required.",
     "cascade-supervisor-components / cascade-team-components": "Added watchdog_records_task_review_evidence with synchronized semantic contract. Both views include Watchdog and Task; the edge describes observation metadata without granting Task retry authority. Component drilldown reaches each owning Code view.",
-    "cascade-watchdog-code": "Adds Function nodes for tracking._review_health, review_health._route_actionable_review_health and incident_postcheck._required_checks; updates snapshot/observer/postcheck descriptions. Normalization, routing and verification source declarations and contract entries resolve. Current-revision pinned rendering and actual browser navigation remain Architect verification work.",
-    "cascade-boss-code": "Adds _current_open_review_postcheck_matches and its relationship from try_complete_feature. The source verifies the fresh result's action and generation before closeout side effects. Source declaration/kind and native Code inclusion verified; rendered navigation remains outstanding.",
+    "cascade-watchdog-code": "Integrated _review_health, _route_actionable_review_health and _required_checks Function nodes show normalization, actionable routing and fresh postcheck. Existing reconcile_open_review_repair and snapshot nodes retain their owners. No node is moved across components.",
+    "cascade-boss-code": "Integrated _current_open_review_postcheck_matches Function node and try_complete_feature relationship bind fresh verification to the current action before closeout. Browser/source verification targets that node.",
     "cascade-task-code": "Integrated record_upstream_review_observation persists metadata on existing queued actions. The cross-component collaboration is exposed at component level; native Code views retain one component owner. Actual Task Code navigation/source verification follows.",
     "cascade-epic-code / cascade-feature-code / cascade-workspace-code / cascade-teams-code": "Existing parent adapter, guarded Feature admission, retained queue and provider boundaries are reused, with no source changes in those modules in this integrated slice. They remain consumers to trace during the final production-adapter journey; no additional node is justified by this diff alone.",
     "cascade-war-room-components / cascade-dashboard-code / cascade-war-room-http-code": "No War Room production source changed in Feature 3. The integrated UI test assertion accepts merged review states. Feature 4 integration must supply passive projection, explicit authenticated action and operational browser evidence already required by its Tasks.",
-    "supplementary_behavior": "Shared normalization, Watchdog observation/postcheck and Task observation/evaluation Mermaid flows match the inspected boundaries. Boss documents fresh postcheck consumption. Existing Feature/Epic/Workspace admission and restart flows remain applicable. Complete repair and cross-Feature dependency scenarios remain final acceptance obligations."
+    "supplementary_behavior": "Shared normalization, Watchdog observation/postcheck and Task observation/evaluation flows match source. Added Watchdog flow branch for persistence through the Task observation interface. Boss, Feature, Epic and Workspace retain exact-action verification, durable admission, queue and restart ownership. Complete repair and cross-Feature dependency scenarios remain final acceptance obligations."
   },
   "verification": [
     "40 bounded C4 source/review/documentation/render-guard checks passed; actual pinned renderer/browser verification follows on the committed revision.",
-    "378 local design file links resolve."
+    "378 local design file links resolve.",
+    "73 focused lifecycle tests passed in 23.60s: tracking normalization, review health, parent lifecycle postcheck, queued Task delivery and Boss rollup.",
+    "Canonical read_doc reconfirmed approved plan 7b5e38818f284add8b9c6aa4523f1478f7d77d48; read_architecture_amendments returned [].",
+    "Read-only ArchitectureReviewStore inspection found no accepted epic lineage or pending promotion; expected_generation remains null.",
+    "Validated final source contract: 266 elements, 330 relationships, 24 views. Five integrated Function nodes, eight additional relationships including this review edge; no removed semantic IDs or changed existing source symbols, paths or component owners.",
+    "80 Markdown heading links resolve; each of seven new review-evidence, Watchdog-review and Task-delivery requirement/decision IDs has exactly one owning design declaration.",
+    "Real pinned render passed; rendered source kinds and all native Code/component owners passed. New observation relationship appears in both component views. Six proposal references match committed bytes and SHA-256 digests.",
+    "Actual pinned render ready in 84.51s; all five new Function nodes passed context/container/component/Code navigation, selected-node deep-link reload, pinned source opening and Level up. Observation edge visible in both component views. Total 161.02s; warm path times 12.65\u201316.95s; render operations stayed 7 -> 7. Measurements are not latency promises."
   ],
   "limitations": [
     "Feature 4 is not integrated into this checkout. Complete repair/retirement, operational UI and cross-Feature dependency acceptance remain outstanding.",
     "Five historical architecture failures reproduced by Manager remain assigned to the architecture test owner; no accepted snapshots changed.",
-    "Earlier baseline lifecycle failures are not cleared by this focused review."
-  ]
+    "Earlier baseline lifecycle failures are not cleared by this focused review.",
+    "Browser isolates unrelated operational panels; it establishes architecture navigation only. Cancelled navigation requests emitted BrokenPipe diagnostics, while all asserted architecture responses and source previews succeeded.",
+    "Approved plan remains unchanged; no redundant post-approval sign-off, installation, child dispatch, runtime mutation, trunk edit or accepted-snapshot rewrite. Epic completion is not recommended."
+  ],
+  "handoffs": {
+    "supervisor": "Integrate validated Feature 4 between parent turns; board completion alone does not establish checkout integration.",
+    "final_acceptance_owner": "Assess the full real-Git same-review red-to-green repair and retirement journey, split roots, passive UI/authenticated action, integration-required dependency consumers and meaningful activation/approval fixtures after Feature 4 integration. The scripted-normalization test with substituted admission is not the complete journey.",
+    "architecture_test_owner": "Reconcile the five historical architecture expectations against revision-pinned fixtures without rewriting accepted snapshots or reverting current design to historical attribution.",
+    "architecture_runtime": "Earlier terminal failed publication recovery and reconciliation remain separate from the pending/current requests. Preserve supported recovery and accepted-lineage guards."
+  },
+  "reviewed_implementation_revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2",
+  "render": {
+    "operation_id": "c4-render-aa6d292bbc3f1522150f49f00265091c9dacfdab6f079fa8e4c4a7f236ab18f3",
+    "render_identity": "aa6d292bbc3f1522150f49f00265091c9dacfdab6f079fa8e4c4a7f236ab18f3",
+    "status": "ready",
+    "attempts": 1,
+    "recovery_attempts": 0,
+    "settings": {
+      "cpus": "2",
+      "memory": "1536m",
+      "pids_limit": 256,
+      "timeout_seconds": 180.0,
+      "tmpfs_size": "512m"
+    },
+    "revision": "7cf8ff15e5dc9a229567385bb04a57da4b7a68a2",
+    "closure_digest": "6404a35d6e76ade12b5f8d8e21b21a5cb29843e75838fbf1ad74b0e1014d76ad",
+    "semantic_workspace_sha256": "e5b88c262a40873e501f3369e240791d6bbfae7dd10bb052eaffbe1cc081b9b3",
+    "image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+    "view_keys": [
+      "cascade-agent-code",
+      "cascade-architecture-browser-code",
+      "cascade-board-code",
+      "cascade-boss-code",
+      "cascade-cli-components",
+      "cascade-collaboration-code",
+      "cascade-comparison-render-code",
+      "cascade-containers",
+      "cascade-context",
+      "cascade-dashboard-code",
+      "cascade-diagnostics-code",
+      "cascade-diagram-review-code",
+      "cascade-epic-code",
+      "cascade-feature-code",
+      "cascade-landscape",
+      "cascade-supervisor-components",
+      "cascade-task-code",
+      "cascade-team-components",
+      "cascade-teams-code",
+      "cascade-war-room-components",
+      "cascade-war-room-http-code",
+      "cascade-watchdog-code",
+      "cascade-workspace-code",
+      "cascade-workspace-commands-code"
+    ]
+  },
+  "browser_receipt": "docs/epic_artifacts/epic_051_health_architecture_browser.json"
 }
