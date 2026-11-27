@@ -585,7 +585,10 @@
     {"dsl_identifier": "code_task_budget_settle_to_reserve", "semantic_id": "relationship.code-task-incident-budget-settle-to-reserve", "source": "code_task_budget_settle", "destination": "code_task_budget_reserve", "fragment": "model.dsl"},
     {"dsl_identifier": "boss_uses_workspace", "semantic_id": "relationship.boss-uses-workspace", "source": "boss_component", "destination": "workspace_component", "fragment": "model.dsl"},
     {"dsl_identifier": "workspace_uses_boss_delivery", "semantic_id": "relationship.workspace-uses-boss-delivery", "source": "workspace_component", "destination": "boss_component", "fragment": "model.dsl"},
-    {"dsl_identifier": "watchdog_uses_boss", "semantic_id": "relationship.watchdog-uses-boss", "source": "watchdog_component", "destination": "boss_component", "fragment": "model.dsl"}
+    {"dsl_identifier": "watchdog_uses_boss", "semantic_id": "relationship.watchdog-uses-boss", "source": "watchdog_component", "destination": "boss_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "epic_uses_workspace_queue", "semantic_id": "relationship.epic-uses-workspace-queue", "source": "epic_team", "destination": "workspace_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "boss_uses_watchdog_postcheck", "semantic_id": "relationship.boss-uses-watchdog-postcheck", "source": "boss_component", "destination": "watchdog_component", "fragment": "model.dsl"},
+    {"dsl_identifier": "watchdog_verifies_feature_repair", "semantic_id": "relationship.watchdog-verifies-feature-repair", "source": "watchdog_component", "destination": "feature_team", "fragment": "model.dsl"}
   ],
   "renames": [],
   "version": 1,
