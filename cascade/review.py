@@ -1525,6 +1525,18 @@ def feature_delivery_view(feature_id: str, *, root: Path) -> dict[str, object]:
     return feature_delivery_views([feature_id], root=root)[feature_id]
 
 
+def feature_delivery_satisfies_integration(
+    delivery: Mapping[str, object],
+) -> bool:
+    """True only when current evidence permits integration-required execution."""
+
+    return delivery.get("phase") in {
+        "verified_integrated",
+        "terminal_cancelled",
+        "terminal_closed",
+    }
+
+
 def feature_delivery_views(
     feature_ids: list[str] | tuple[str, ...] | set[str],
     *,

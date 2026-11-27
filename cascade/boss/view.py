@@ -89,14 +89,23 @@ def _parent_cancellation_gated(board: BoardIndex, meta: WorkMeta) -> bool:
 def _deps_met(board: BoardIndex, meta: WorkMeta, *, root: Path) -> bool:
     if not evaluate_dependencies(meta, root=root, board=board).satisfied:
         return False
-    for dep_id in meta.depends_on:
-        dep = board.by_id[dep_id]
-        if dep.tier == "feature":
-            from cascade.review import feature_review_pending
+    feature_ids = [
+        dep_id
+        for dep_id in meta.depends_on
+        if board.by_id[dep_id].tier == "feature"
+    ]
+    if not feature_ids:
+        return True
+    from cascade.review import (
+        feature_delivery_satisfies_integration,
+        feature_delivery_views,
+    )
 
-            if feature_review_pending(dep_id, root=root):
-                return False
-    return True
+    deliveries = feature_delivery_views(feature_ids, root=root)
+    return all(
+        feature_delivery_satisfies_integration(deliveries[feature_id])
+        for feature_id in feature_ids
+    )
 
 
 def _active_task_count(board: BoardIndex) -> int:

@@ -194,6 +194,12 @@ evidence leaves the action, owner claim, child reservation and finite budget
 identities intact across restart. The completed-parent Task-mismatch route keeps
 its existing terminal incident postcheck after retirement. Feature recovery
 cannot clear the shared incident or substitute an older accepted review generation.
+[`retry_task`](recovery.py) does not own a parallel dependency decision. It
+claims an eligible retry and calls canonical Task dispatch, which rechecks the
+current delivery projection for every Feature dependency. Closed-unverified,
+missing, stale-generation and wrong-target evidence therefore retain the
+blocked Task and its recovery history; verified intended-target integration
+continues through the ordinary one-execution admission gates.
 Both entries appear in `cascade-feature-code`, linked from the scoped registry.
 The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
 [Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)

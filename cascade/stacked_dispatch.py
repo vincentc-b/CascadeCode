@@ -164,8 +164,6 @@ def epic_blocks_feature_dispatch(
 ) -> bool:
     """True when this sibling feature prevents another feature dispatch in the epic."""
 
-    from cascade.review import feature_review_pending
-
     if blocking_meta.tier != "feature" or blocking_meta.parent != epic_id:
         return False
     if blocking_meta.path.parent.name == "2_active" and blocking_meta.status != "completed":
@@ -173,7 +171,7 @@ def epic_blocks_feature_dispatch(
     pending = (
         blocking_meta.id in pending_review_ids
         if pending_review_ids is not None
-        else feature_review_pending(blocking_meta.id, root=root)
+        else _feature_delivery_blocks_execution(blocking_meta, root=root)
     )
     if pending:
         candidate = dispatching_feature_id or blocking_meta.id
@@ -242,12 +240,20 @@ def feature_dispatch_blockers(
             candidates.setdefault(dep.id, dep)
 
     if pending_review_ids is None:
-        from cascade.review import feature_review_pending
+        from cascade.review import (
+            feature_delivery_satisfies_integration,
+            feature_delivery_views,
+        )
 
+        deliveries = feature_delivery_views(set(candidates), root=root)
         review_ids = {
             feature_id
-            for feature_id in candidates
-            if feature_review_pending(feature_id, root=root)
+            for feature_id, candidate in candidates.items()
+            if not feature_delivery_satisfies_integration(deliveries[feature_id])
+            and (
+                candidate.status in {"completed", "cancelled"}
+                or deliveries[feature_id].get("phase") != "implementation_ready"
+            )
         }
     else:
         review_ids = set(candidates).intersection(pending_review_ids)
@@ -260,6 +266,21 @@ def feature_dispatch_blockers(
         active_execution_ids=active_ids,
         pending_review_ids=tuple(sorted(review_ids)),
         pending_sibling_review_ids=tuple(sorted(review_ids.intersection(sibling_ids))),
+    )
+
+
+def _feature_delivery_blocks_execution(meta: WorkMeta, *, root: Path) -> bool:
+    """Project the serial gate without changing the explicit stacked exception."""
+
+    from cascade.review import (
+        feature_delivery_satisfies_integration,
+        feature_delivery_view,
+    )
+
+    delivery = feature_delivery_view(meta.id, root=root)
+    return not feature_delivery_satisfies_integration(delivery) and (
+        meta.status in {"completed", "cancelled"}
+        or delivery.get("phase") != "implementation_ready"
     )
 
 

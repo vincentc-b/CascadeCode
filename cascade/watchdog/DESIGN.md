@@ -60,6 +60,46 @@ parent integration. The existing supervisor component and Watchdog code views
 remain accurate: the change does not add a runtime boundary, persistent store,
 public interface or new implementation symbol.
 
+## Feature delivery dependency gate
+
+`REQ-WATCHDOG-DISPATCH-001`: Integration-required execution starts only when
+each completed Feature dependency has current evidence of integration on its
+intended Epic target, or an explicit supported terminal disposition.
+`DEC-WATCHDOG-DISPATCH-001`: Keep lifecycle planning readiness in
+[`evaluate_dependencies`](../dependency_evaluation.py) and apply the shared
+read-only [Feature delivery projection](../review.py) as a separate action gate.
+
+[`_dependency_review_pending`](dispatch.py) reads one bulk delivery projection
+for the Task's Feature dependencies. Missing review evidence, a closed review
+without accepted current-generation heads, a later generation than the accepted
+one, or an accepted commit absent from the intended target returns
+`feature_awaiting_merge`. [`dispatch_task`](dispatch.py) performs this check for
+ordinary and recovery dispatch because [`retry_task`](../feature/recovery.py)
+re-enters the same canonical boundary. Planning status is unchanged and does not
+claim that delivery is verified.
+
+Serial Feature admission uses
+[`feature_dispatch_blockers`](../stacked_dispatch.py) with the same delivery
+predicate. When stacked dispatch is explicitly enabled, a dependent Feature may
+instead use the supported predecessor branch as its base; this is an execution
+contract exception, not fabricated Epic-target integration. Current verified
+intended-target evidence releases an eligible consumer through the normal
+approval, capacity, provider and lifecycle gates, which admit only one active
+execution.
+
+```mermaid
+flowchart TD
+    Ready[Lifecycle dependencies complete] --> Delivery[Read current Feature delivery]
+    Delivery -->|missing, closed-unverified, stale, wrong target| Wait[feature_awaiting_merge]
+    Delivery -->|verified intended target| Gates[Ordinary execution gates]
+    Ready -->|stacking explicitly enabled| Stack[Select supported predecessor base]
+    Gates --> Start[One execution admission]
+```
+
+Verification is in
+[`tests/test_feature_delivery_consumer_gates.py`](../../tests/test_feature_delivery_consumer_gates.py),
+using temporary Git repositories and normal activation and approval.
+
 
 
 ## Publication-owner liveness

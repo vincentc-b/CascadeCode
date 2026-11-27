@@ -497,10 +497,22 @@ integration. Review-disabled delivery uses the same completion-event and local
 ancestry proof. These reads do not poll the forge, publish a review, admit repair,
 or mutate lifecycle stores.
 
+`DEC-REVIEW-DELIVERY-001`: Integration-required execution consumers use
+[`feature_delivery_satisfies_integration`](review.py) over one current projection
+per decision. Watchdog Task dispatch, Feature recovery dispatch, Boss Task
+visibility and serial Feature dispatch wait on every nonterminal delivery phase.
+The separate lifecycle dependency evaluator remains a planning-readiness
+projection. Explicit stacked Feature dispatch may execute from its selected
+predecessor branch while the predecessor is not yet integrated into the Epic;
+no other consumer treats that exception as verified target delivery.
+
 Verification for `REQ-REVIEW-DELIVERY-001` is in the
 [review-generation tests](../tests/feature/test_review_generations.py), including
 missing and closed-unmerged evidence, active versus published generations,
 intended-target ancestry and read-only projection behavior.
+The real-Git [delivery consumer tests](../tests/test_feature_delivery_consumer_gates.py)
+verify Watchdog, recovery, Boss and serial/stacked Feature decisions against the
+same current evidence.
 
 ```mermaid
 flowchart TD
