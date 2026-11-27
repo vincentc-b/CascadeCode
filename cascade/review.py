@@ -1267,6 +1267,9 @@ def _delivery_projection(
         "phase": phase,
         "review_url": review_url,
         "generation": generation,
+        # The active repair generation can advance before its review receipt.
+        # Keep publication evidence separate from the projected obligation.
+        "published_generation": record_generation if record is not None else None,
         "evidence_status": evidence_status,
         "blocker": blocker,
         "next_prerequisite": next_prerequisite,

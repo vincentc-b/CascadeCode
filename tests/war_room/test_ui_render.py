@@ -193,7 +193,9 @@ def test_war_room_js_renders_toast_body():
     assert "appendPlanEntryStatusToRow" in source
     assert "approvePlanDisabledReason" in source
     assert '"Awaiting review"' in source
-    assert '"Open review", item.review.url' in source
+    assert 'item.review.state === "awaiting_integration"' in source
+    assert 'item.review.state === "awaiting_closeout"' in source
+    assert '"View merged review" : "Open review", item.review.url' in source
     assert "EPIC_CLOSE_DEADLINE_MS = 60000" in source
     assert 'setStatus("Closing epic " + epicId + "…", false)' in source
     assert '"Epic close timed out after 60s"' in source

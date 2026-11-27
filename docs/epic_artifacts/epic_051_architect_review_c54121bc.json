@@ -1,0 +1,48 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "c54121bc64cc7db5fcf9a285641e1df633d68e13",
+  "reviewed_feature_plan_revision": "10d438825ab70a9ce716630824013c1c4c6d7237",
+  "review": "Read the canonical Epic and Feature 2 plans and the complete Epic diff since c56a8efa. The added handoff and dec_006 preserve approved scope and assign admission, replay, human/parent adapters, guarded children and independent postchecks to the four Feature 2 Tasks. No architecture amendment is open. Feature 2 must verify its inherited Feature 1 interface; this Epic checkout does not establish that child implementation or delivery.",
+  "reviewed_designs": [
+    "DESIGN.md: product workflow and integrated architecture contract",
+    "cascade/feature/DESIGN.md: generation-bound late repair and child admission",
+    "cascade/epic/DESIGN.md: immediate-child recovery",
+    "cascade/boss/DESIGN.md: delivery and closeout",
+    "cascade/workspace/DESIGN.md: work ownership and retirement",
+    "cascade/watchdog/DESIGN.md: open-review observation and recovery admission"
+  ],
+  "source_traces": {
+    "normal": "recover_feature verifies immediate parentage and calls supervise_child; the exact Task lifecycle-mismatch route selects recover_task and feature_repair. Existing admission/reservation state and independent postcheck remain distinct responsibilities. The open-review request adapter remains proposed Feature work in this checkout.",
+    "failure_resume": "_recover_feature_lifecycle_mismatch requires current Task, owner and authoritative generation; malformed, stale or unrelated incidents cannot select that repair. feature_repair inspect/admit/resume and repair_action_for_mint require the current durable generation. recover_feature still overrides durable_result with false, matching the compatibility issue assigned to Feature 2. Unknown review-health evidence does not establish CI success."
+  },
+  "diagram_impact": {
+    "cascade-landscape / cascade-context": "No actor or external system changes in this handoff-only diff; existing operator/forge/supervisor boundaries stand.",
+    "cascade-containers": "No runtime, ledger or persistence changes; existing action/review/queue/checkpoint stores stand.",
+    "cascade-supervisor-components / cascade-team-components": "No component or interface implementation changes. Feature 2 assigns reconciliation of parent admission, queue, guarded Task and postcheck collaborators to its Tasks.",
+    "cascade-feature-code / cascade-epic-code / cascade-workspace-code / cascade-watchdog-code / affected cascade-task-code and cascade-teams-code": "No source symbols or ownership changed since the reviewed baseline. Feature 2's inventory assigns real-symbol and declaration-kind updates to Tasks 001-004 and requires contract validation, pinned rendering, Explore/Code, Level up, deep links, source opening and warm artifact reuse.",
+    "supplementary_behavior": "Existing normal/refusal/restart design flows remain current for this checkout. Each Feature 2 Task owns its implemented flow changes and evidence; proposed request semantics remain in work records."
+  },
+  "verification": [
+    "All six prepared publication references match committed SHA-256 digests and current checkout bytes.",
+    "git diff c56a8efa..HEAD -- cascade architecture DESIGN.md is empty; no implementation/model render or browser rerun is justified for this handoff-only diff. Prior baseline evidence remains in epic_051_architecture_evidence.json and epic_051_architecture_browser.json.",
+    "Changed Epic and Feature plan text contains the proposed behavior and delivery attribution; no DESIGN.md edits or new requirement owners are introduced.",
+    "Canonical sign_off_plan(c54121bc) declined because the Epic is already approved; no refreshed sign-off is claimed.",
+    "python3 -m pytest -q tests/workspace/test_c4_scheduler.py::test_scheduler_bounds_active_plus_pending_and_retry_keeps_identity tests/workspace/test_c4_scheduler.py::test_startup_reclaims_interruption_once_then_requires_explicit_retry --tb=short: 2 passed in 0.17s. These temporary-repository tests verify the supported recovery primitive, not recovery of the canonical publication operation.",
+    "git diff --check and JSON parsing passed for both new review artifacts."
+  ],
+  "publication": {
+    "prepared_request": "docs/epic_artifacts/epic_051_architecture_review_c54121bc.json",
+    "submitted": false,
+    "last_receipt": "docs/epic_artifacts/epic_051_publication_recovery.json",
+    "last_recorded_status": "failed",
+    "render_operation_id": "c4-render-516e3cbc08e02b339eea510e082945e49d6e4664e3d46fde3018a5eca7749eed",
+    "recovery_findings": "C4RenderScheduler.retry preserves operation identity, checks exact source availability and queue bounds, then records explicit_retries and wakes the worker. reconcile permits one automatic recovery before terminal internal_error. Architecture publication only reopens superseded/artifact_changed operations, not failed operations. No exposed Cascade board tool provides explicit render retry. The owned Epic worktree ledger contains three ready browser renders, not the failed publication render; those artifacts do not prove publication recovery.",
+    "handoff": "Architecture/runtime owner must use the canonical scheduler's supported explicit retry for the exact failed operation and keep its worker alive through completion, preserving source pins and bounds. Do not edit ledgers, accepted snapshots or another worktree. Once recovery is confirmed, Epic Architect re-reads the current plan and lineage, then submits the prepared request only if those pins remain current. The separate c54121bc request preserves all baseline/design/model pins and expected generation null; it has not been submitted. Old terminal publication requests are not retry mechanisms. If publication returns pending, save the receipt and replay that identical request on a later turn."
+  },
+  "limitations": [
+    "No runtime recovery or architecture acceptance was performed; publication remains incomplete based on the last canonical receipt.",
+    "No child implementation, final repair journey, new browser navigation or general renderer performance is verified by this review.",
+    "No board scope or plan body was changed; the approved Feature sequence can continue while the runtime owner handles publication recovery."
+  ]
+}

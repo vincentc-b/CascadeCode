@@ -32,6 +32,15 @@ cannot perform this terminal source mutation.
 In split-root operation, a completed tracking projection with an exact
 delivery-pending repair can still enter guarded review publication; it is not
 mistaken for terminal delivery merely because the tracking copy is completed.
+For the legacy repair route, the active delivery generation may exist before its
+review is published.
+Once the exact repair child is delivered and all current gates pass, a missing
+or older published generation is `review_not_published`, selecting idempotent
+review publication/recovery even for a completed-path Feature (including split
+tracking/product roots). An open current review or newer mismatched publication
+cannot authorize closeout or trigger a replacement review; scoped open-review
+repairs still use the independent postcheck and original-review publication path.
+
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and

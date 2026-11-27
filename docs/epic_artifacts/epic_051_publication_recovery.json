@@ -1,0 +1,40 @@
+{
+  "work_id": "epic_051",
+  "role": "epic_architect",
+  "reviewed_plan_revision": "c56a8efafc12e4181a16d686b1ef685559765818",
+  "original_publication_request": "docs/epic_artifacts/epic_051_architecture_review.json",
+  "original_replay_result": {
+    "code": "stale_revision",
+    "message": "plan revision changed before architecture publication"
+  },
+  "publication_request": "docs/epic_artifacts/epic_051_architecture_review_c56a8efa.json",
+  "review": "Canonical read and complete diff against c4a9ef25 show only dec_005, a sequencing and acceptance handoff within the approved scope. No implementation, design or model changed. Reviewed the Boss closeout, Workspace queue/restart and Watchdog observation designs and package shared review boundary; their source-linked current-behavior descriptions and normal/failure flows remain applicable. No new requirement owner or architectural boundary is introduced.",
+  "reviewed_designs": [
+    "DESIGN.md",
+    "cascade/DESIGN.md#delivery-and-review-boundaries",
+    "cascade/boss/DESIGN.md#delivery-and-closeout",
+    "cascade/workspace/DESIGN.md#queue-eligibility-and-restart",
+    "cascade/watchdog/DESIGN.md#open-review-observation"
+  ],
+  "diagram_impact": "Existing inventory in the reviewed plan and epic_051_architecture_evidence.json remains applicable at all levels: context/container boundaries, component ownership, integrated Code nodes and supplementary flows are unchanged by dec_005. Features retain their assigned source-contract, navigation and lifecycle acceptance obligations. No diagram update is justified for this handoff-only diff.",
+  "verification": [
+    "All six saved references match pinned SHA-256 digests. The five design/model references still match current checkout bytes; only the plan differs by dec_005. Earlier evidence described seven references; the saved request actually contains six (plan, design, contract and three DSL sources).",
+    "git diff c4a9ef25..HEAD -- cascade architecture DESIGN.md is empty.",
+    "read_architecture_amendments returned an empty list.",
+    "Reviewed prior focused test, source-contract, pinned render and browser evidence; no new tests or browser runs for the unchanged implementation/model.",
+    "Inspected architecture_publication.py::_require_current_plan: it rejects the old plan revision before durable operation lookup. Created a separate request for the reviewed current plan; preserved original request and all design/model/baseline/render pins.",
+    "sign_off_plan(c56a8efa) declined: epic plan is already approved. No new sign-off or approval is claimed."
+  ],
+  "publication_receipt": {
+    "operation_id": "architecture-publication-1e5e680239049d8dc0b20125d1a21fc3d13b2549760bca2cfb1ea971cfdaf22f",
+    "status": "failed",
+    "render_operation_id": "c4-render-516e3cbc08e02b339eea510e082945e49d6e4664e3d46fde3018a5eca7749eed",
+    "baseline_render_operation_id": null,
+    "review_unit_id": null,
+    "reviewed_tuple_digest": "efcf921eacd90b9b64eae1995e6586810243de1c8d7f7eced9c1d8fb759230e9",
+    "amendment_id": null,
+    "reason_code": "internal_error",
+    "message": "render worker was interrupted after its automatic recovery attempt"
+  },
+  "handoff": "Architecture publication is failed, not pending. The architecture render/runtime owner must investigate c4-render-516e3cbc08e02b339eea510e082945e49d6e4664e3d46fde3018a5eca7749eed and restore a supported retry after the automatic recovery attempt was interrupted. Do not repeatedly replay the terminal failure or bypass renderer bounds/accepted-lineage guards. Epic Architect must reconcile publication through the supported tool after recovery; the separately saved current-plan request is the reviewed proposal. Human approval has already occurred and Feature 1 is planning. No implementation completion or architecture acceptance is claimed."
+}

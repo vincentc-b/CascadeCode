@@ -65,7 +65,7 @@ flowchart LR
   COMMITS --> DRAFT[Draft feature MR]
   DRAFT -->|review comment| TEAM[Feature Team + fixer tasks]
   TEAM --> DRAFT
-  DRAFT -->|merged| CLOSE[Feature closes; Epic continues]
+  DRAFT -->|current acceptance and intended Epic integration proved| CLOSE[Feature closes; Epic continues]
 ```
 
 After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. That approval is durable in `.cascade/approvals.json` and releases automatic, dependency-ordered Feature execution.
@@ -77,8 +77,9 @@ Feature completion first pushes the target `epic/{epic_id}` branch and source
 `MergeRequestComment` events for the persistent Feature Team, including the MR
 URL and comment identity. The team evaluates the comment against the whole
 Feature plan, mints fixer Tasks when code must change, and can answer through
-`reply_merge_request_comment`. A merged MR releases the feature closeout gate
-and informs the Epic Team.
+`reply_merge_request_comment`. Exact current-generation review acceptance and
+independent integration proof on the intended Epic branch release the Feature
+closeout gate and inform the Epic Team.
 
 A completed-path Feature can still have an open review, so its Feature ID,
 original review, checkout, branch, queue and checkpoint remain registered.
@@ -480,7 +481,7 @@ The Epic Manager mints Feature files into `/docs/features/1_backlog/`. The watch
 
 | | |
 |---|---|
-| **Lifecycle** | Medium-lived. Booted when a Feature is `ready_to_plan` (then moved to `2_active`). Dies when every child Task is in `3_completed` and the Feature itself is moved to completed. |
+| **Lifecycle** | Booted when a Feature is `ready_to_plan` (then moved to `2_active`). Completed-source staging can retain an idle, wakeable team while delivery is nonterminal. Retirement requires the [shared delivery proof](cascade/DESIGN.md#delivery-and-review-boundaries) and descendant cleanup gates. |
 | **Roster** | Feature Lead, Feature Architect. |
 | **Reads** | Parent Epic at `parent_rev` (git SHA) plus that commit's decision log, own Feature doc, own decision log, own comment threads, own Task list. |
 | **Does not read** | Other Features' planning transcripts or comments, Task implementation chats, unrelated Epics, the Epic War Room transcript. |
@@ -975,7 +976,7 @@ A path sandbox enforces the above. Prompting alone is not sufficient.
 | Object | Completes when |
 |---|---|
 | Task | `task/{id}` is merged into `feat/{parent}` (tests green) and the file is in `3_completed` |
-| Feature | Every `children` Task is completed, **no open human comment threads**, the Feature Architect writes a one-paragraph closeout, and the draft feature MR is merged (forge-backed mode) |
+| Feature | Child delivery and governing comment gates pass, the Feature Architect records closeout, and current-generation acceptance plus independent intended-Epic integration proof satisfy the [shared delivery contract](cascade/DESIGN.md#delivery-and-review-boundaries). Review-disabled delivery requires local integration proof. Completed-source staging alone is nonterminal. |
 | Epic | Every `children` Feature is completed, **no open human comment threads**, and the human confirms in the War Room |
 
 Orphans are illegal: a Feature without `parent`, a Task whose Feature is completed, a completed Epic with an active child. The watchdog flags these; it does not auto-repair strategy.
