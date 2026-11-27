@@ -1,0 +1,81 @@
+{
+  "paths": [
+    {
+      "component": "epic-team",
+      "view": "cascade-epic-code",
+      "node": "element.code.epic.review-repair-request",
+      "symbol": "request_feature_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 20.384788875002414
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.open-review-repair",
+      "symbol": "admit_open_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.523661214858294
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.inspect-open-review-repair",
+      "symbol": "inspect_open_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 26.714957665186375
+    },
+    {
+      "component": "feature-team",
+      "view": "cascade-feature-code",
+      "node": "element.code.feature.repair-verify",
+      "symbol": "mark_feature_repair_verified",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 25.036749521968886
+    },
+    {
+      "component": "boss",
+      "view": "cascade-boss-code",
+      "node": "element.code.boss.open-review-repair-identity",
+      "symbol": "_require_open_review_repair_identity",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 25.785439071943983
+    },
+    {
+      "component": "watchdog",
+      "view": "cascade-watchdog-code",
+      "node": "element.code.watchdog.repair-postcheck",
+      "symbol": "reconcile_open_review_repair",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 14.364614696009085
+    },
+    {
+      "component": "workspace",
+      "view": "cascade-workspace-code",
+      "node": "element.code.workspace.queue-kickoff",
+      "symbol": "kickoff_graph_queue_event",
+      "deep_link_restored": true,
+      "pinned_source_opened": true,
+      "level_up": true,
+      "elapsed_seconds": 10.4804333220236
+    }
+  ],
+  "http_errors": [],
+  "source_revision": "e2d9b4894b8f32f7a868e5895e9b975919d23b68",
+  "initial_ready_seconds": 85.30105888983235,
+  "render_operations_before": 6,
+  "render_operations_after": 6,
+  "provenance": "Context\nSession target\nCode repository\nrepository-874164fe0f964e347c1e9926\nBranch\nepic/epic_051\nCode revision\ne2d9b4894b8f32f7a868e5895e9b975919d23b68\nWorking tree\nClean\nDocumentation repository\nrepository-874164fe0f964e347c1e9926\nDocumentation revision\ne2d9b4894b8f32f7a868e5895e9b975919d23b68\nArchitecture destination\ntarget\nAssociation provenance\ncolocated\nAssociation evidence\nUnavailable",
+  "total_seconds": 223.0984211449977
+}

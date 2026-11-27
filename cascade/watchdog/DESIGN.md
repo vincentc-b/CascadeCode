@@ -467,6 +467,13 @@ target head and contains the forge-accepted merge object.
 It does not infer success from mergeability, Feature/Task status, queue
 acknowledgement, publication, or validation of an older head.
 
+Verification for `REQ-WATCHDOG-REPAIR-POSTCHECK-001` is in
+[the parent-lifecycle postcheck tests](../../tests/watchdog/test_parent_lifecycle_postcheck.py):
+`test_open_review_postcheck_marks_only_exact_current_green_generation` checks
+the original review, corrected head and intended-target proof;
+`test_open_review_postcheck_retains_generation_when_check_policy_is_missing`
+checks the retained pending generation when authoritative policy is unavailable.
+
 ```mermaid
 sequenceDiagram
     participant Boss

@@ -3098,6 +3098,24 @@ watchdog_uses_boss = watchdog_component -> boss_component "Retries delivery and 
     }
 }
 
+epic_uses_workspace_queue = epic_team -> workspace_component "Schedules durable repair input after admission and defers to a live graph owner" {
+    properties {
+        "cascade.semanticId" "relationship.epic-uses-workspace-queue"
+    }
+}
+
+boss_uses_watchdog_postcheck = boss_component -> watchdog_component "Requests independent open-review repair verification before closeout" {
+    properties {
+        "cascade.semanticId" "relationship.boss-uses-watchdog-postcheck"
+    }
+}
+
+watchdog_verifies_feature_repair = watchdog_component -> feature_team "Fences and persists the exact repair verification receipt" {
+    properties {
+        "cascade.semanticId" "relationship.watchdog-verifies-feature-repair"
+    }
+}
+
 code_agent_result = element "RoleResult" "Dataclass" "Text, status, tool effects, recovery report and optional normalized invocation receipt." {
     properties {
         "cascade.semanticId" "element.code.agent.result"
