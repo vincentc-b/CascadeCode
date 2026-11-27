@@ -2,7 +2,7 @@
 id: feat_051_003
 title: Route actionable review health without idle or downstream retry loops
 tier: feature
-status: active
+status: completed
 parent: epic_051
 children:
 - task_051_003_001
