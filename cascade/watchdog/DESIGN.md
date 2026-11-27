@@ -378,6 +378,7 @@ delivery consumer. War Room consumes the bounded projection described above.
 | [_bind_original_incident](audit_recovery.py) | Bind the queued delivery action and its canonical generation to the sole Task-owned incident allowance before owner work. |
 | [_execute_reservation](audit_recovery.py) | Invoke the selected owning-team adapter after exact claim acceptance and record its structured result. |
 | [reconcile_parent_lifecycle_incident](incident_postcheck.py) | Re-read the exact owner, delivery, repair/review generation from the adapter acknowledgement, accepted heads, lease, descendant and retirement facts, then require a fresh host inspection of the reviewed worker receipt and capability generation. |
+| [reconcile_open_review_repair](incident_postcheck.py) | Observe the original forge review and normalized required-check policy/results outside lifecycle critical sections, then re-read the exact action, review generation and evidence digest under the owner fence before recording verification. |
 | [verify_incident_postcheck](reservations.py) | Atomically close only the matching generation and retain its deferred attempt in history. |
 | [_incident_projection](audit_projection.py) | Serialize bounded typed lifecycle evidence into immutable pages. |
 
@@ -406,7 +407,39 @@ capability. The active-path scanner accepts
 for Epics, checking introduction timestamps. For a generation-bound repair,
 [repair_event_authorizes](../feature/repair.py) joins `FeatureRepairAuthorized`
 to the live action, exact owner/path/ref bindings, and the committed introduction
-blob. An arbitrary active-path move therefore lacks recovery authority.
+blob. Open-review repair authority additionally binds the canonical request
+digest, original review URL and generation, observed head pair, and retained
+claim/budget identities. An arbitrary active-path move or replay for changed
+review evidence therefore lacks recovery authority. Only the greatest live
+generation is eligible; mutation-owner changes and an introduction commit/blob
+that is no longer on the current owner head also refuse the event.
+
+`REQ-WATCHDOG-REPAIR-POSTCHECK-001`: An open-review repair remains verification
+pending until fresh forge evidence names the original URL and route, the current
+published generation and corrected source head, and an accepted merge reachable
+from the intended Epic target. The postcheck consumes authoritative normalized
+`required_check_policy` and `required_check_results` evidence for that same head;
+missing, unavailable, stale or non-green evidence returns a typed prerequisite.
+It does not infer success from mergeability, Feature/Task status, queue
+acknowledgement, publication, or validation of an older head.
+
+```mermaid
+sequenceDiagram
+    participant Boss
+    participant Watchdog as reconcile_open_review_repair
+    participant Forge
+    participant Ledger as action/review stores
+    Boss->>Watchdog: pre-closeout verification request
+    Watchdog->>Ledger: read current generation and normalized check evidence
+    Watchdog->>Forge: fresh original-review observation outside lock
+    alt identity, head, policy, checks and Epic integration agree
+        Watchdog->>Ledger: re-read digest under owner/lifecycle fence
+        Watchdog->>Ledger: persist exact verified receipt
+    else missing, stale or changed evidence
+        Watchdog-->>Boss: verification pending + typed prerequisite
+    end
+    Note over Watchdog,Ledger: Restart reuses a verified receipt; pending attempts retain claim and budgets
+```
 
 The parent-lifecycle postcheck treats missing, unverified, dead, stale, dirty,
 mixed-root, unintegrated or capability-mismatched runtime evidence as pending.

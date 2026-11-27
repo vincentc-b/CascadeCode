@@ -413,12 +413,14 @@ compatibility projection. Only a callback matching the current generation,
 URL and source/target route can satisfy closeout; historical acceptance remains
 inspectable but cannot approve later repair code.
 `REQ-REVIEW-REPAIR-002`: Repair publication observes the recorded review at the
-forge before selecting a route. A confirmed open review can be refreshed at the
-same URL; a confirmed merged review requires a linked follow-up from the retained
-Feature branch to its owning Epic branch. Unknown or conflicting state fails
-closed. Reconciliation binds callbacks to their immutable generation and exact
-accepted source/target heads, while independent target integration remains a
-separate closeout obligation.
+forge before selecting a route. A scoped open-review repair can refresh only its
+admitted original URL, forge and source/target route; its observed generation and
+heads must match before the first push, and replay joins the checkpointed action.
+Merged, closed, missing or changed original reviews fail closed without creating
+a follow-up. Legacy accepted-review follow-up remains a distinct route and cannot
+be selected by this scoped action. Reconciliation binds callbacks to their
+immutable generation and exact accepted source/target heads, while independent
+target integration remains a separate closeout obligation.
 `REQ-REVIEW-DELIVERY-001`: [feature_delivery_view](review.py) and its bulk form
 derive a Feature's delivery phase from the canonical board row, current immutable
 review generation, admitted repair action, completion event, and local
@@ -486,8 +488,16 @@ refusal and authoritative verification as separate fields.
 Feature-child recovery otherwise inspects incidents and queues a deduplicated
 team wakeup.
 [epic/recovery.py::recover_feature](epic/recovery.py) exposes that immediate-parent
-adapter. Epic supervision verifies the registered Feature owner and direct Task
-relationship, then invokes the same generation-bound Feature repair adapter;
+adapter. An exact open-review request is routed through
+[request_feature_review_repair](team_supervision.py), which admits the shared
+Feature action before asking Workspace to deliver its stable queue event. Direct
+Epic authority must match the Feature parent; authenticated-human authority must
+be minted by the human boundary. The projection keeps requested, admitted,
+acknowledged, executing/executed, waiting/refused and verification
+pending/verified states distinct and binds the action ID and generation. Queue
+acknowledgement never claims execution or verification. Epic supervision also
+verifies the registered Feature owner and direct Task relationship, then invokes
+the same generation-bound Feature repair adapter;
 other incidents retain the deduplicated handoff path. Audit recovery resolves a
 `feature.feature_repair` capability for the exact Task/Feature pair, reserves and
 accepts one claim, and only then invokes that adapter. Missing capability creates
@@ -519,6 +529,11 @@ the same delivery projection before its completed-document fast path: only exact
 current-generation acceptance whose merge is reachable from the intended Epic
 target can emit normal completion or release retirement. Callback flags, green
 checks, closed-unmerged rows and stale source/target heads remain nonterminal.
+For an admitted open-review repair, Watchdog additionally binds the original
+review identity, current corrected source head, authoritative normalized required
+check policy/results and Epic-target integration before Boss may record the
+generation verified or retire its owner checkout. Unavailable policy, check or
+forge evidence remains a typed prerequisite in the existing repair action.
 
 Implementation ownership and integrated Code views are in
 [Workspace](workspace/DESIGN.md#work-ownership-and-retirement),

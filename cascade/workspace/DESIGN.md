@@ -82,6 +82,15 @@ of launcher upgrades are not implemented.
 Durable queues, graph checkpoints, action claims and registered worktrees belong to their existing
 owners; restart does not reset delivery or grant authority. Drain cancellation
 uses the [Agent registry](../agent/DESIGN.md#state-failure-and-isolation).
+[kickoff_graph_queue_event](kickoff.py) compares the durable queue byte cursor
+with the graph checkpoint and schedules only pending delivery.
+[graph_turn_owner_is_live](kickoff.py) detects the process-local serialized owner;
+the Feature review-repair adapter defers to that owner instead of launching a
+competing turn. Admission remains in `executions.json`, the stable event remains
+in the existing queue, and restart delivery reuses the same checkpoint path—no
+repair scheduler or wakeup store is introduced. A scheduled job acknowledges
+delivery intent only; `_run_queue_delivery_locked` advances the cursor and the
+Feature graph owns subsequent execution.
 The operator first obtains a signed deployment receipt and trust key from the
 separate installation authority. `runtime-bootstrap` authenticates that receipt,
 requires exact clean accepted-review and guarded-integration checkouts, proves

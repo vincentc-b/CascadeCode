@@ -2091,7 +2091,7 @@ code_boss_retire = element "_retire_feature_worktree" "Function" "Calls the Work
     }
 }
 
-code_boss_review = element "ensure_feature_review" "Function" "Publish through review safeguards." {
+code_boss_review = element "ensure_feature_review" "Function" "Refresh an admitted scoped repair on the same open review; terminal or changed review identity fails before push or creation." {
     properties {
         "cascade.semanticId" "element.code.boss.review"
         "cascade.parent" "element.component.boss"
@@ -2100,12 +2100,21 @@ code_boss_review = element "ensure_feature_review" "Function" "Publish through r
     }
 }
 
-code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused or followed up." {
+code_boss_review_route = element "_require_repair_review_route" "Function" "Require fresh forge URL and source/target facts before a repair review is reused." {
     properties {
         "cascade.semanticId" "element.code.boss.review-route"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/review.py"
         "cascade.sourceSymbol" "_require_repair_review_route"
+    }
+}
+
+code_boss_open_review_identity = element "_require_open_review_repair_identity" "Function" "Bind publication to the admitted original review observation or its checkpointed repair action." {
+    properties {
+        "cascade.semanticId" "element.code.boss.open-review-repair-identity"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_require_open_review_repair_identity"
     }
 }
 
@@ -2298,6 +2307,15 @@ code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Functio
     }
 }
 
+code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Observe the original forge review and normalized required checks outside the lifecycle lock, then fence exact current-generation verification before closeout." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.repair-postcheck"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/incident_postcheck.py"
+        "cascade.sourceSymbol" "reconcile_open_review_repair"
+    }
+}
+
 code_watchdog_verify = element "verify_incident_postcheck" "Function" "Atomically convert one exact deferred incident to verified history while preserving prior attempts." {
     properties {
         "cascade.semanticId" "element.code.watchdog.verify"
@@ -2316,7 +2334,7 @@ code_watchdog_incident_projection = element "_incident_projection" "Function" "S
     }
 }
 
-code_feature_mint = element "mint_task" "Function" "Admit scoped child specification under lifecycle lock." {
+code_feature_mint = element "mint_task" "Function" "Under the lifecycle lock, join one admitted repair reservation and idempotently repair Task, parent and dispatch event persistence." {
     properties {
         "cascade.semanticId" "element.code.feature.mint"
         "cascade.parent" "element.component.feature-team"
@@ -2343,7 +2361,7 @@ code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedD
     }
 }
 
-code_feature_repair = element "feature_repair" "Function" "Persist and authorize one exact late-repair generation." {
+code_feature_repair = element "feature_repair" "Function" "Persist, recheck and authorize one exact late-repair generation." {
     properties {
         "cascade.semanticId" "element.code.feature.repair"
         "cascade.parent" "element.component.feature-team"
@@ -2352,7 +2370,25 @@ code_feature_repair = element "feature_repair" "Function" "Persist and authorize
     }
 }
 
-code_feature_reserve = element "reserve_repair_child" "Function" "Persist the idempotent Task identity and rendered-spec digest before child and parent writes." {
+code_feature_open_review_repair = element "admit_open_review_repair" "Function" "Admit a content-addressed parent or authenticated-human request against the existing open Feature review." {
+    properties {
+        "cascade.semanticId" "element.code.feature.open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "admit_open_review_repair"
+    }
+}
+
+code_feature_inspect_open_review_repair = element "inspect_open_review_repair" "Function" "Read the canonical live-owner action and refuse a replay whose complete request digest changed under the same request identity." {
+    properties {
+        "cascade.semanticId" "element.code.feature.inspect-open-review-repair"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "inspect_open_review_repair"
+    }
+}
+
+code_feature_reserve = element "reserve_repair_child" "Function" "Persist one Task identity, mint-request digest and rendered-spec digest before child and parent writes; changed replay refuses." {
     properties {
         "cascade.semanticId" "element.code.feature.reserve-repair-child"
         "cascade.parent" "element.component.feature-team"
@@ -2376,6 +2412,15 @@ code_epic_supervise = element "supervise_child" "Function" "Inspect incidents an
         "cascade.parent" "element.component.epic-team"
         "cascade.sourcePath" "cascade/team_supervision.py"
         "cascade.sourceSymbol" "supervise_child"
+    }
+}
+
+code_epic_review_repair_request = element "request_feature_review_repair" "Function" "Authorize one direct-parent or authenticated-human request, admit its exact Feature repair action, and acknowledge wakeup separately from execution." {
+    properties {
+        "cascade.semanticId" "element.code.epic.review-repair-request"
+        "cascade.parent" "element.component.epic-team"
+        "cascade.sourcePath" "cascade/team_supervision.py"
+        "cascade.sourceSymbol" "request_feature_review_repair"
     }
 }
 
@@ -2586,6 +2631,12 @@ code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks f
     }
 }
 
+code_boss_review_to_open_identity = code_boss_review -> code_boss_open_review_identity "Joins the admitted original review" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-review-to-open-review-identity"
+    }
+}
+
 code_boss_queue_to_task_revalidation = code_boss_queue -> code_task_revalidation "Queues replacement final validation when either head moves" {
     properties {
         "cascade.semanticId" "relationship.code-boss-queue-to-task-revalidation"
@@ -2694,7 +2745,7 @@ code_feature_registry_to_mint = code_feature_registry -> code_feature_mint "Uses
     }
 }
 
-code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves before persistence" {
+code_feature_mint_to_reserve = code_feature_mint -> code_feature_reserve "Reserves exact child and content before persistence" {
     properties {
         "cascade.semanticId" "relationship.code-feature-mint-to-reserve-repair-child"
     }
@@ -2724,6 +2775,12 @@ code_feature_registry_to_repair = code_feature_registry -> code_feature_repair "
     }
 }
 
+code_feature_open_review_to_repair = code_feature_open_review_repair -> code_feature_repair "Uses the shared durable admission and introduction state machine" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-open-review-to-repair"
+    }
+}
+
 code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-registry-to-recover"
@@ -2733,6 +2790,24 @@ code_epic_registry_to_recover = code_epic_registry -> code_epic_recover "Uses" {
 code_epic_recover_to_supervise = code_epic_recover -> code_epic_supervise "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-epic-recover-to-supervise"
+    }
+}
+
+code_epic_supervise_to_review_repair_request = code_epic_supervise -> code_epic_review_repair_request "Routes exact open-review requests without requiring a Task mismatch" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-supervise-to-review-repair-request"
+    }
+}
+
+code_epic_review_repair_request_to_feature_admission = code_epic_review_repair_request -> code_feature_open_review_repair "Uses the shared content-addressed admission contract" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-feature-admission"
+    }
+}
+
+code_epic_review_repair_request_to_feature_inspection = code_epic_review_repair_request -> code_feature_inspect_open_review_repair "Joins a live owner only after the canonical request digest still matches" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-feature-inspection"
     }
 }
 
@@ -2838,7 +2913,7 @@ code_task_budget_settle_to_reserve = code_task_budget_settle -> code_task_budget
     }
 }
 
-code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event to the live action and committed active-document introduction." {
+code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "Join repair event, request/review/claim bindings, current live action, mutation owner and committed active-document introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-authority"
         "cascade.parent" "element.component.watchdog"
@@ -2847,9 +2922,30 @@ code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "J
     }
 }
 
+code_feature_repair_verify = element "mark_feature_repair_verified" "Function" "Persist only an independently verified receipt naming the exact current action, repair generation and corrected checked source head." {
+    properties {
+        "cascade.semanticId" "element.code.feature.repair-verify"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/repair.py"
+        "cascade.sourceSymbol" "mark_feature_repair_verified"
+    }
+}
+
 code_watchdog_authority_to_repair = code_watchdog_authority -> code_watchdog_repair_authority "Checks generation-bound Feature repair" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-authority-to-repair-authority"
+    }
+}
+
+code_boss_feature_to_repair_postcheck = code_boss_feature -> code_watchdog_repair_postcheck "Requests fresh verification before the lifecycle critical section" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-feature-to-watchdog-repair-postcheck"
+    }
+}
+
+code_watchdog_repair_postcheck_to_feature_verify = code_watchdog_repair_postcheck -> code_feature_repair_verify "Fences the unchanged action and evidence digest before marking verified" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-repair-postcheck-to-feature-repair-verify"
     }
 }
 
@@ -3585,6 +3681,27 @@ code_workspace_owner_live = element "graph_turn_owner_is_live" "Function" "Obser
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/kickoff.py"
         "cascade.sourceSymbol" "graph_turn_owner_is_live"
+    }
+}
+
+code_workspace_queue_kickoff = element "kickoff_graph_queue_event" "Function" "Schedule delivery only when the durable queue is ahead of its checkpoint cursor." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.queue-kickoff"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/kickoff.py"
+        "cascade.sourceSymbol" "kickoff_graph_queue_event"
+    }
+}
+
+code_epic_review_repair_request_to_owner_live = code_epic_review_repair_request -> code_workspace_owner_live "Defers to a live Feature graph owner" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-owner-live"
+    }
+}
+
+code_epic_review_repair_request_to_queue_kickoff = code_epic_review_repair_request -> code_workspace_queue_kickoff "Schedules the already-durable event after admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-epic-review-repair-request-to-queue-kickoff"
     }
 }
 

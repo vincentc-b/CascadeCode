@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -332,6 +333,98 @@ def test_late_mint_resumes_after_reserved_child_write_failure(
         == reserved
     )
     assert read_doc(reserved, root=root).meta.parent == "feat_001"
+
+
+def test_late_mint_resumes_after_parent_write_checkpoint_gap(
+    feature_board: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = feature_board["root"]
+    _admitted_late_mint(root, "mint:parent-gap")
+    real_write = cascade.feature.mint.feature_write_doc
+    failed = False
+
+    def write_then_interrupt(*args, **kwargs):
+        nonlocal failed
+        result = real_write(*args, **kwargs)
+        if not failed:
+            failed = True
+            raise OSError("injected parent checkpoint gap")
+        return result
+
+    monkeypatch.setattr(cascade.feature.mint, "feature_write_doc", write_then_interrupt)
+    with pytest.raises(OSError, match="parent checkpoint gap"):
+        mint_task(
+            "Parent-gap repair",
+            feature_id="feat_001",
+            repair_request_id="mint:parent-gap",
+            root=root,
+        )
+
+    replay = mint_task(
+        "Parent-gap repair",
+        feature_id="feat_001",
+        repair_request_id="mint:parent-gap",
+        root=root,
+    )
+    feature = read_doc("feat_001", root=root)
+    assert feature.meta.children.count(replay) == 1
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "TasksMinted" for event in events) == 1
+
+
+def test_late_mint_changed_content_after_reservation_refuses(
+    feature_board: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = feature_board["root"]
+    _admitted_late_mint(root, "mint:changed")
+    real_write = cascade.feature.mint.write_doc
+
+    def interrupt_task_write(doc, *, root):
+        if doc.meta.tier == "task":
+            raise OSError("injected reserved gap")
+        return real_write(doc, root=root)
+
+    monkeypatch.setattr(cascade.feature.mint, "write_doc", interrupt_task_write)
+    with pytest.raises(OSError, match="reserved gap"):
+        mint_task(
+            "Original repair",
+            feature_id="feat_001",
+            repair_request_id="mint:changed",
+            root=root,
+        )
+    monkeypatch.setattr(cascade.feature.mint, "write_doc", real_write)
+
+    with pytest.raises(FeatureToolDenied, match="specification changed"):
+        mint_task(
+            "Changed repair",
+            feature_id="feat_001",
+            repair_request_id="mint:changed",
+            root=root,
+        )
+
+
+def test_concurrent_late_mint_joins_one_reserved_child(
+    feature_board: dict[str, object],
+) -> None:
+    root = feature_board["root"]
+    _admitted_late_mint(root, "mint:concurrent")
+
+    def mint() -> str:
+        return mint_task(
+            "Concurrent repair",
+            feature_id="feat_001",
+            repair_request_id="mint:concurrent",
+            root=root,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        task_ids = list(pool.map(lambda _: mint(), range(2)))
+
+    assert task_ids[0] == task_ids[1]
+    feature = read_doc("feat_001", root=root)
+    assert feature.meta.children.count(task_ids[0]) == 1
+    events, _ = read_events("feat_001", 0, root=root)
+    assert sum(event.type == "TasksMinted" for event in events) == 1
 
 
 def test_repair_generation_requires_its_request_identity(

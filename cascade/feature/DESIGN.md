@@ -75,6 +75,36 @@ and document digest. [Watchdog authorization](../watchdog/loop.py) admits the
 active introduction only while all of those bindings and, after checkpointing,
 the introducing commit and blob still agree.
 
+[admit_open_review_repair](repair.py) admits a scoped parent or authenticated
+human request against the original open Feature review without manufacturing a
+Task delivery mismatch. Before queue authority, its action records the stable
+request ID and canonical content digest, reason and evidence, accountable
+Feature, authority, approval and scope references, review URL/forge/route,
+observed source and target heads, immutable review generation, and any existing
+claim and incident-budget identities. The lifecycle transaction re-reads the
+mutation owner, Feature and parent status, approval, dependencies, governing
+comments, review registry, heads, claim and finite budget. The review request's
+own governing comment may remain open only when its root identity agrees across
+the stable request ID, scope reference and request evidence; caller-supplied
+comment lists cannot exempt unrelated blocking comments, which remain waiting.
+Changed content under the same request ID is a terminal typed refusal; stale or
+missing prerequisites return a typed next prerequisite without emitting queue
+authority. A current repair writer is joined or deferred to instead of creating
+a competing generation. Completed/open review records without an explicit
+current generation use generation zero as their observed identity and follow
+the same admission path.
+[The shared request adapter](../team_supervision.py) supplies either the exact
+direct Epic parent or an `AuthenticatedHuman`, then schedules the already-durable
+event through Workspace. It does not infer work from acknowledgement: the
+action projection independently reports admission, queue acknowledgement,
+execution and authoritative verification. Replay after an adapter crash reuses
+this action ID, generation and event. When the Feature graph already owns the
+turn, [inspect_open_review_repair](repair.py) reads the canonical action under
+the lifecycle read lock and compares the complete request digest before the
+adapter joins that owner. An identical request reuses the action; changed
+content under the same request ID returns the terminal
+`request_content_changed` prerequisite without enqueueing or mutating it.
+
 ```mermaid
 sequenceDiagram
     participant Feature as feature_repair
@@ -86,10 +116,21 @@ sequenceDiagram
     Feature->>Queue: append FeatureRepairAuthorized once (exact bindings)
     Feature->>Board: commit exact active document
     Feature->>Ledger: checkpoint commit and blob
+    alt live owner replay
+        Feature->>Ledger: inspect canonical request digest
+        Ledger-->>Feature: join identical action or refuse changed content
+    end
     Watchdog->>Ledger: rejoin live generation
     Watchdog->>Board: verify path, digest, commit and blob
     Note over Ledger,Queue: Restart joins the stable event ID before appending
 ```
+
+The `FeatureRepairAuthorized` payload also binds the open-review request digest,
+review identity and generation, observed heads, claim and budget identity.
+[repair_event_authorizes](repair.py) joins those fields back to the greatest
+live action, current registered mutation owner and exact committed introduction;
+the event is not independently executable authority. A stale event cannot
+authorize an older generation even when its marker and commit remain in history.
 
 The two roles run sequentially within each invocation. Their durable context survives child work turnover; the graph does not spawn a parallel role process for each node.
 
@@ -119,6 +160,11 @@ document is written. Restart reuses that reservation, verifies an existing Task
 against the digest, and idempotently repairs the parent child list and
 `TasksMinted` event. A completed Feature cannot mint without first passing the
 generation-bound repair admission and becoming the exact authorized active copy.
+The lifecycle lock covers reservation, Task/parent repair and event replay, so
+concurrent callers join the reserved identity rather than allocating another
+child or advertising another dispatch. The normal Task team remains responsible
+for provider admission and final validation; replay does not create a parallel
+repair executor or reset either finite operation identity.
 [recover_task](recovery.py) delegates ordinary Task failures to
 [supervisor_recover_task_delivery](../task/supervisor_recovery.py). For a
 completed-parent delivery mismatch it instead verifies the queued action's exact
@@ -129,10 +175,16 @@ the execution lease under the lifecycle lock. Its typed projection keeps
 selection, request/admission, acknowledgement, execution, refusal and verified
 postcheck evidence distinct; parent reactivation alone is never verified
 delivery.
-After closeout marks the exact repair generation verified, Watchdog separately
-checks the canonical completed Feature, current accepted review heads, surviving
-completed Task and retired owner checkouts. Feature recovery cannot clear the
-shared incident or substitute an older accepted review generation.
+For open-review repair, [Watchdog](../watchdog/DESIGN.md#recovery-admission-and-active-path-authority)
+marks the exact generation verified before closeout after independently checking
+the original review identity, corrected head, normalized current required checks
+and intended Epic integration. [mark_feature_repair_verified](repair.py) accepts
+only that generation-bound receipt and persists it in the existing action; Boss
+cannot synthesize verification from delivery or publication. Missing or stale
+evidence leaves the action, owner claim, child reservation and finite budget
+identities intact across restart. The completed-parent Task-mismatch route keeps
+its existing terminal incident postcheck after retirement. Feature recovery
+cannot clear the shared incident or substitute an older accepted review generation.
 Both entries appear in `cascade-feature-code`, linked from the scoped registry.
 The [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) and
 [Workspace ownership](../workspace/DESIGN.md#work-ownership-and-retirement)
@@ -152,3 +204,10 @@ sequenceDiagram
     Team->>Action: checkpoint child persistence
     Note over Action,Parent: A crash at either write resumes from the reservation
 ```
+
+Publication reuses the admitted review's exact URL, forge and source/target
+route. Before the first refresh, the immutable observed review generation and
+heads must still match the action; after the refresh checkpoint, replay joins
+the same publication action and current repair generation. A merged, closed,
+missing or replaced original review is outside this scoped route and fails
+before push or review creation.
