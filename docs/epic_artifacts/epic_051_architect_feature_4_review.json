@@ -1,6 +1,17 @@
 {
   "work_id": "epic_051",
   "role": "epic_architect",
+  "publication_receipt": {
+    "operation_id": "architecture-publication-ef5da9cc52fd4dfd259b1acd7667c45fd400bc436b920e6d49b24deb77af0e77",
+    "status": "pending",
+    "render_operation_id": "c4-render-e0e31ce98ee3413fbed9540ba54e38a7069a64cf2b48a6422f98770e257f310d",
+    "baseline_render_operation_id": null,
+    "review_unit_id": null,
+    "reviewed_tuple_digest": "ce0b8b2591dff8019acbd710f6bd4794f446b8578a7a9fdd25b38cef1556fefb",
+    "amendment_id": null,
+    "reason_code": null,
+    "message": "bounded architecture render is pending"
+  },
   "trigger": "FeatureCompleted feat_051_004",
   "reviewed_initial_plan_revision": "c4a7d4a9e72dde65103e04905a45f9cf99eda9c8",
   "reviewed_plan_revision": "62dcc64af14bab9a50524ad74bcb1493bf64e400",
