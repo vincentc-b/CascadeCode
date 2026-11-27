@@ -25,7 +25,14 @@
     ]
   },
   "design_closeout": {
-    "reviewed_paths": ["DESIGN.md", "cascade/DESIGN.md", "cascade/task/DESIGN.md", "cascade/workspace/DESIGN.md", "cascade/boss/DESIGN.md", "cascade/board/DESIGN.md"],
+    "reviewed_paths": [
+      "DESIGN.md",
+      "cascade/DESIGN.md",
+      "cascade/task/DESIGN.md",
+      "cascade/workspace/DESIGN.md",
+      "cascade/boss/DESIGN.md",
+      "cascade/board/DESIGN.md"
+    ],
     "review_basis": "Existing design ownership/interface sections, approved epic inventory, canonical Feature spec and unchanged implementation/design/model diff.",
     "diagram_impact": {
       "context": "No actor, external system or authority edge changes in this work-evidence-only handoff.",
@@ -45,5 +52,48 @@
       "No runtime/design/model change warrants repeating tests, renders or browser journeys; no new implementation verification is claimed.",
       "Epic architecture publication remains failed in the last recorded receipt. Available manager tools expose no supported publication recovery. The exact request and failure evidence remain preserved; runtime-owner recovery followed by Epic Architect verification is still required."
     ]
+  },
+  "architect_review": {
+    "role": "epic_architect",
+    "reviewed_integration_revision": "f5d8b206",
+    "reviewed_plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+    "reviewed_feature_revision": "718330a763605af10fdc91010fff9bb6d62fd6e1",
+    "outcome": "Concur with the existing manager handoff. The Feature contract preserves the approved architecture and sequencing; no epic amendment or replacement sign-off is needed. The reported primary Task acceptance gap remains open. This review does not sign off the Feature or its Tasks.",
+    "acceptance_boundary": [
+      "Task-specific findings remain attributed to the Feature Architect. The prior manager evidence records content_access_denied for the Task; this review did not attempt alternate-path access.",
+      "Feature 1 owns supported reconciliation of the canonical Task acceptance section and delivery evidence for each existing candidate/validator/C4 requirement. A message or closeout cannot substitute for canonical reconciliation. Preserve the active-task edit guard; report the exact refusal and owner prerequisite if reconciliation is unavailable.",
+      "Feature Architect must review the final exact Feature revision after reconciliation and publish matching architecture evidence. The reported e164a8bd no_diagram_change result does not cover 718330a7 or later revisions."
+    ],
+    "design_closeout": {
+      "reviewed_paths": [
+        "DESIGN.md",
+        "cascade/DESIGN.md",
+        "cascade/task/DESIGN.md",
+        "cascade/workspace/DESIGN.md",
+        "cascade/boss/DESIGN.md",
+        "cascade/board/DESIGN.md"
+      ],
+      "basis": "Read current scoped ownership, publication, allowance, board and closeout interfaces alongside canonical epic/Feature plans and the unchanged source/design/model diff. No new implementation is integrated into this owned branch.",
+      "diagram_impact": {
+        "context": "No actor, external system or authority edge changes in this work-evidence-only handoff.",
+        "containers": "No runtime, communication or persistence boundary changes.",
+        "components": "Existing Teams, Task, Workspace, Board and Boss ownership remains unchanged.",
+        "code": "No source symbol, declaration kind, source contract or integrated Code relationship changes; Feature 1 retains the approved implementation inventory.",
+        "behavior": "No execution or recovery flow changes; this handoff tracks an acceptance-document gap and required revision-specific review."
+      },
+      "updates": "No design/model edits: this evidence-only review changes no runtime contract, implementation symbol, ownership or flow. Existing Feature 1 inventory remains required at implementation closeout.",
+      "verification": [
+        "Canonical read_doc confirmed the epic and Feature revisions above; list_children confirmed Feature 1 active and Features 2/3 sequenced in backlog.",
+        "read_architecture_amendments returned no amendments; both existing epic role sign-offs match bb26a5c8.",
+        "All six saved publication references match committed SHA-256 digests and current checkout bytes.",
+        "git diff --exit-code 5abe8b2d HEAD -- cascade DESIGN.md architecture passed.",
+        "Evidence JSON parsed and git diff --check passed."
+      ],
+      "limitations": [
+        "No direct Task-body review or new implementation tests, rendering or browser verification is claimed. Unchanged code and model do not warrant rerunning those checks for this handoff.",
+        "The last authoritative epic architecture publication receipt remains failed/internal_error. No recovery event or supported publication-recovery tool is available; the terminal request was not replayed or replaced."
+      ]
+    },
+    "handoff": "The manager has already queued the acceptance reconciliation requirements to Feature 1; no duplicate dispatch is needed. Continue child execution under supervisor sequencing and return canonical reconciliation plus final revision-specific architecture evidence. Publication runtime owner still must recover the exact saved epic request before Epic Architect can verify publication."
   }
 }
