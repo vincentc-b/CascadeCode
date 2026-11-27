@@ -65,7 +65,7 @@ flowchart LR
   COMMITS --> DRAFT[Draft feature MR]
   DRAFT -->|review comment| TEAM[Feature Team + fixer tasks]
   TEAM --> DRAFT
-  DRAFT -->|merged| CLOSE[Feature closes; Epic continues]
+  DRAFT -->|current acceptance and intended Epic integration proved| CLOSE[Feature closes; Epic continues]
 ```
 
 After activation the Epic Team starts planning immediately. Its Feature documents remain queued until the human selects **Approve plan** on the active Epic. That approval is durable in `.cascade/approvals.json` and releases automatic, dependency-ordered Feature execution.
@@ -77,8 +77,9 @@ Feature completion first pushes the target `epic/{epic_id}` branch and source
 `MergeRequestComment` events for the persistent Feature Team, including the MR
 URL and comment identity. The team evaluates the comment against the whole
 Feature plan, mints fixer Tasks when code must change, and can answer through
-`reply_merge_request_comment`. A merged MR releases the feature closeout gate
-and informs the Epic Team.
+`reply_merge_request_comment`. Exact current-generation review acceptance and
+independent integration proof on the intended Epic branch release the Feature
+closeout gate and inform the Epic Team.
 
 A completed-path Feature can still have an open review, so its Feature ID,
 original review, checkout, branch, queue and checkpoint remain registered.
