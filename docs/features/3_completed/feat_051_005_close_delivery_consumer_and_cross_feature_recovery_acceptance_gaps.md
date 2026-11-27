@@ -2,7 +2,7 @@
 id: feat_051_005
 title: Close delivery-consumer and cross-Feature recovery acceptance gaps
 tier: feature
-status: active
+status: completed
 parent: epic_051
 children:
 - task_051_005_001
