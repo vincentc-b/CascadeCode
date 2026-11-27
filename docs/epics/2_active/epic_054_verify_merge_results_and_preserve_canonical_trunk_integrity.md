@@ -48,7 +48,70 @@ Make a review merge a verifiable delivery boundary rather than treating a clean 
 
 ## Macro-architecture
 
-To be developed by the Epic Manager and Epic Architect after activation.
+### Delivery boundary and shared contracts
+
+This is a proposal for implementation after normal plan approval. Current behavior and durable architecture remain authoritative in [package design](../../../cascade/DESIGN.md#review-publication-safeguards), [Workspace](../../../cascade/workspace/DESIGN.md#work-ownership-and-retirement), [Board](../../../cascade/board/DESIGN.md#lifecycle-mutation-owner-interface) and [Boss](../../../cascade/boss/DESIGN.md#delivery-and-closeout). Extend those owners; do not create parallel services or ledgers.
+
+The minimum delivery unit is one review generation with exact source, freshly observed target, prospective result tree/commit, approved validator profile and dependency/runtime identity. Prospective validation establishes only that candidate. Forge acceptance supplies a distinct actual merge SHA; required CI must name that exact revision. If remote trunk advances further, record its identity separately and validate that candidate before local sync/new checkout admission. A later green remote head cannot erase failed CI on the accepted merge.
+
+| Boundary | Existing implementation entry points | Proposed contract and owner |
+|---|---|---|
+| Admission and candidate validation | `review_validation.approved_review_validation_profile/reserve_review_validation/run_review_validation`; `team_review_recovery.publish_team_review_resolution`; `review_rebase.check_and_publish_review_rebase` | Feature 1 owns an immutable candidate receipt and disposable exact-tree execution. Preserve coverage, finite budget, authority and fresh head rechecks. |
+| Physical board and provenance | `review_validation.validate_publication_board`; `board.store.list_board`; `integration_worktree.resolve_mutation_owner/prove_terminal_retirement` | Feature 2 owns all-column candidate scan and terminal/hierarchy proof. Read-projection ranking cannot authorize choosing a duplicate. |
+| Guarded merge and checkout | `branch_synchronization.preflight_lifecycle_merge_target/merge_lifecycle_source`; `integration_worktree.create_integration_worktree/resume_unstarted_epic_worktree`; `workspace.closeout.create_verified_trunk_workspace` | Feature 2 gates candidate provisioning before registry publication; Feature 3 uses that proof for actual target and sync. Existing preparation of managed activation pointers remains explicit. |
+| Forge evidence and completion | `tracking.merge_request_snapshot`; `review.poll_feature_reviews/refresh_epic_review_snapshot/feature_delivery_view`; `boss.epic_complete._merged_epic_review_landed` | Feature 3 owns exact merged-revision required CI and a completion predicate that joins independent evidence without conflating it. |
+| Trunk synchronization | `tracking.fast_forward_trunk`; `workspace.branch_synchronization.inspect_branch_synchronization/update_integration_branch` | Feature 3 reconciles freshly fetched remote with clean eligible local trunk; divergent/dirty/wrong-branch cases preserve work and expose bounded preview/owner prerequisites. |
+| Recovery and presentation | `watchdog.incident_postcheck.reconcile_open_review_repair`; `feature.repair.admit_open_review_repair`; `war_room.review_routes` and shared persisted review projection | Feature 3 extends existing owner admission/postcheck and read-only projection. No mutation or forge probing from UI polling. |
+
+### Evidence, lifecycle and failure behavior
+
+Add versioned fields to existing review/action evidence, with explicit unavailable behavior for legacy receipts. Persist repository identity (including product/tracking distinction), review URL/route/generation, source/target/result identities, policy/command/coverage/runtime/dependency fingerprints, operation/claim/budget IDs, result class and bounded diagnostic references. Keep accepted-merge identity, exact check run/pipeline generations, current remote/local heads, board proof, sync outcome and recovery owner as separate facts. Observation timestamps do not establish identity or grant retry budget.
+
+```mermaid
+flowchart TD
+    Observe[Fresh source and target observation] --> Candidate[Materialize isolated exact candidate]
+    Candidate --> Board[Physical board and terminal history proof]
+    Board --> Check[Reserve existing budget and run approved checks]
+    Check --> Fence{Heads, profile and authority still current?}
+    Fence -->|no| Wait[Preserve evidence; bounded owner revalidation]
+    Fence -->|yes| Review[Publish readiness under normal human review]
+    Review --> Merge[Observe actual accepted merge identity]
+    Merge --> CI[Required CI on that exact merged revision]
+    Merge --> Remote[Fresh remote target and physical board proof]
+    Remote --> Sync{Clean eligible local trunk?}
+    Sync -->|yes| FF[Normal guarded fast-forward]
+    Sync -->|no| Preview[Preserve changes; supported preview and owner prerequisite]
+    CI --> Join{All required evidence current?}
+    FF --> Join
+    Preview --> Wait
+    Join -->|no| Repair[Actionable owner repair or evidence wait]
+    Join -->|yes| Verify[Independent postcheck and verified closure]
+```
+
+Restart reloads existing persisted generations/receipts and independently rechecks missing obligations. A crash between forge observation, receipt persistence, sync and completion cannot infer unrecorded success. Duplicate delivery rejoins the same action; changed material receives a new admitted generation within the original cumulative allowance. Unknown source/policy/environment/forge evidence remains unavailable. Deterministic failed material is fenced across A–B–A changes; transient retry uses existing finite backoff. Publication, pending CI, successful sync and repair acknowledgement each remain weaker than verified closure.
+
+Completed-path work with an open review retains its existing owner, review and checkpoint. A closed accepted review requires a supported corrective scope against the current target and its normal approval, with original acceptance/history retained. Missing owner capability produces an explicit prerequisite rather than an unprocessable message or a replacement review.
+
+Disposable worktrees separate validation files/caches from operator work; they are not an OS security sandbox. Fresh effective Python source must not depend on timestamp/size cache invalidation. Do not read shared stale bytecode or generated outputs, delete user caches, weaken assertions or modify product code to accommodate a fixture. Dependencies and effective import roots are evidence inputs.
+
+### Diagram-impact inventory and ownership
+
+Authoritative source: [workspace.dsl](../../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl), [model.dsl](../../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl), [views.dsl](../../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl) and [source contract](../../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json). Code view ownership follows the existing component index in cascade/DESIGN.md. Every Feature planner must copy its rows into Task acceptance criteria and reconcile them against the final diff; source-linked Markdown alone cannot replace integrated Code coverage.
+
+| Level / view keys | Owning designs and implementation | Required work / verification owner |
+|---|---|---|
+| Landscape/context: `cascade-landscape`, `cascade-context` | Root DESIGN.md; operator, local Cascade, existing forge/provider/renderer | No new actor or external dependency is proposed. Epic Architect verifies existing responsibility boundaries before sign-off; all Features report whether the actual diff changes this conclusion. |
+| Containers: `cascade-containers` | Root and package designs; local Service, War Room, repository artifacts | No additional runtime, database or communication channel. Receipts remain in existing stores; isolated validation is workspace lifecycle, not a new deployed service. Feature 3 checks aggregate diff and labels. |
+| Components: `cascade-supervisor-components`, `cascade-team-components` | Package, Boss, Workspace, Task, Feature, Watchdog | Features 1–3 update relationships for candidate validation, physical-board proof, accepted-merge observation and closeout; preserve one owner and local-process boundaries. |
+| Components: `cascade-war-room-components` | War Room DESIGN.md; review routes/shared projection | Feature 3 records producer/consumer boundary; GET cannot invoke recovery or transport. |
+| Code: `cascade-teams-code` | Package design; `publish_team_review_resolution`, `reserve_review_validation`, `ReviewValidationProfile/Operation`, `check_and_publish_review_rebase`, `run_review_validation` | Feature 1 extends the existing `element.component.teams` ownership, not a duplicate Boss-owned validator. Include exact candidate/cache/materialization collaborators and interruption handling. |
+| Code: `cascade-task-code`, `cascade-workspace-code` | Task/Workspace designs; generation admission, budget permits, provisioning, guarded merge, sync | Feature 1 updates budget/materialization links; Feature 2 owns physical admission/history; Feature 3 owns sync consumer. Each resolves actual symbol kinds and persistence/restart gates. |
+| Code: `cascade-board-code`, `cascade-boss-code` | Board/Boss designs; physical records, review orchestration, closeout | Feature 2 supplies scan/provenance nodes; Feature 3 supplies exact merge/check/sync closeout dependencies. |
+| Code: `cascade-watchdog-code`, `cascade-feature-code` | Watchdog/Feature designs; independent postchecks, actionable repair admission | Feature 3 traces closed-review correction versus retained open-review owner; original budget/generation and authority remain visible. |
+| Code: `cascade-dashboard-code`, `cascade-war-room-http-code` | War Room design; review routes and persisted status | Feature 3 shows explicit evidence states, owner prerequisites and read-only GET; no second truth store. |
+| Supplementary behavior | Package, Workspace, Board, Boss, Watchdog, Feature and War Room owning designs | Each Feature adds/updates only its normal, refusal and interruption/resume flows. Feature 3 verifies end-to-end consistency. |
+
+For changed Code views require native custom `cascade.codeComponent`, real `cascade.parent/sourcePath/sourceSymbol`, correct native declaration `element` kind and synchronized semantic/source contract. Verification includes source-contract validation, supported pinned local render, actual context → container → component → Code navigation, Level up, restored deep links and opening representative pinned source. Check renamed/deleted symbols and ownership changes. Measure cold/warm navigation and prove warm artifact reuse without per-view process startup or relaxed render limits. Do not rewrite accepted snapshots or bypass revision-pinned publication. Record exact results and unresolved gaps in work records, not DESIGN.md.
 
 ## Cross-module constraints
 
@@ -56,18 +119,41 @@ Reuse cascade/review_validation.py, review_rebase.py, team_review_recovery.py, r
 
 ## Core dependencies
 
-To be identified during epic planning.
+The required declaration was completed before plan writing or child minting. Canonical manifest revision 2 is ready: Python 3.12.8, Git 2.34.1, Docker 28.0.0, PyYAML 6.0.3, cursor-sdk 1.0.37, langgraph 1.2.14, langgraph-checkpoint-sqlite 3.1.1, pytest 9.0.3, setuptools 80.9.0, and the existing Structurizr 2026.09.19-playwright image pinned to sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c. All ten existing-installation checks succeeded; no installation or upgrade occurred or is authorized. Initial verification-result text was corrected to the checker's supported success marker without weakening version/hash assertions.
+
+The chosen declaration target is local development/test execution on host ip-172-31-37-14, Linux x86_64, /opt/conda/bin/python3.12, repository/check executor root /home/ubuntu/dev/CascadeCode. This is deliberately the local verification target, not proof of remote CI or a deployment environment. Implementation remains in the owned epic/child worktrees; declaration checks only inspect pre-existing software. Installed package metadata hashes identify observed distributions; they are not downloadable wheel hashes or a complete transitive lock. Feature 1 must bind effective dependency/runtime identity and any reproducibility inputs required by the production validator. Any different target or extra software requires an updated complete declaration and separate current installation authority if setup is needed.
+
+Production-adapter tests use temporary local remotes and scripted forge transport, so authenticated live forge/provider CLIs are not prerequisites for those tests. Real remote required CI is observed through the configured forge at runtime; no live remote result or deployment is claimed here. Existing architecture image includes its rendering runtime.
+
+Cross-epic compatibility is an interface constraint, not an invented execution dependency: preserve the checked-out review-owner, canonical cancellation, bounded visibility and incident-budget contracts named in the brief. If implementation requires an unavailable owning-team change, record a scoped amendment/blocker with evidence before depending on it. Do not infer unrelated board content or completion from the dependency projection.
 
 ## Feature breakdown
-- feat_054_003
-- feat_054_002
-- feat_054_001
 
-The Epic Team will create and sequence feature plans here.
+| Order | Feature | Depends on | Success criteria / delivery |
+|---|---|---|---|
+| 1 | feat_054_001 — Validate exact merge results with isolated fresh checks | none | Criteria 1 and 5; candidate evidence, isolated fresh-source validation and changed-target/cache regressions. |
+| 2 | feat_054_002 — Preserve canonical board history across merge and checkout boundaries | feat_054_001 | Criterion 2 and admission part of 3; physical board/hierarchy/history gate, supported repair prerequisite and safe provisioning. |
+| 3 | feat_054_003 — Verify merged revision CI and converge trunk through accountable recovery | feat_054_002 | Criteria 3, 4 and 6; actual-merge checks, clean trunk convergence, actionable owner recovery, read-only UI and integrated incident regressions. |
+
+These are three cohesive deliveries sharing existing modules, sequenced to avoid competing receipt and gate contracts. Each owns its focused tests and actual design updates. The final slice owns the combined real-repository acceptance journey, not a separate test-only platform. No implementation starts before normal approval.
+
+## Validation and planning review
+
+Acceptance uses real temporary Git repositories/remotes/worktrees and production review/sync adapters, with scripted transport at the forge boundary. Mandatory scenarios are the three brief incidents plus target drift during checks/sync, restart between persistence steps, offline/unknown forge policy, dirty/diverged/wrong-branch trunk, split roots, squash/rebase/stacked delivery, stale review receipts, duplicate events, cancellation-history retention and human-only gates. Red-to-green fixtures must independently prove the intended failed assertion and corrected exact source; fixture/environment failure is classified separately. Final evidence must identify accepted merge and exact CI generations, final remote/local head identities, board availability, preserved history and absence of unintended checkout mutation.
+
+Baseline checks run during planning: `python -m pytest -q tests/test_review_publication_safeguards.py --tb=short` passed 18 tests in 7.24 seconds; `validate_c4_workspace` accepted the current authoritative architecture source contract. These are baseline results, not verification of proposed behavior.
+
+Reviewed affected design sections: root DESIGN.md product/review boundary; cascade/DESIGN.md publication safeguards and architecture navigation; Board lifecycle owner interface; Workspace provisioning, ownership/retirement and C4 contract; Boss delivery/closeout; Feature late repair; Watchdog review observation/postcheck; War Room accountable review projection; Task generation/budget ownership. Source inspection traced normal source validation → fresh remote recheck → publication, and duplicate-board refusal before validation; it also traced accepted Epic merge ancestry/document proof and fetched trunk fast-forward. Those current paths explain why candidate validation, exact merged CI and candidate board admission need implementation work.
+
+No DESIGN.md/model edits are included in this planning turn: existing documents accurately limit current source-publication guarantees and code views already link validators under Teams. Proposed behavior is kept in this work record and child acceptance criteria until implemented. Existing source contract passes; no claim of a fresh render, browser navigation/performance run, remote CI, or implemented merge-result protection is made. Changed-view rendering/navigation and all behavior regressions are assigned above. Epic Architect must review boundaries, owner/source coverage, required design/model proposal scope and this inventory before its role sign-off. Material architecture gaps found in that review must be resolved and recorded before approval; a successful baseline contract check alone is insufficient.
 
 ## Open questions
 
-- Which implementation risks should be resolved before the first feature starts?
+- Prospective versus actual commit identity: keep distinct; even equal trees do not satisfy a required check tied to another commit. Unsupported forge result/merge strategy remains unavailable until exact proof is available.
+- History preservation across split roots and managed pointers: use current canonical owner/terminal provenance; unknown or conflicting evidence refuses and names its owner. Do not solve ambiguity with column ranking.
+- Closed review repair: retained open-review ownership is reusable only while that route is legal. Accepted/closed work uses supported corrective scope and normal approval; no silent reopen.
+- Cache contamination: isolated effective source/import/cache inputs, explicit failed-assertion evidence and original validation coverage are required; sleep-based timestamp fixes and write-bytecode disabling alone are not the contract.
+- Remaining planning review: Epic Architect review and revision-bound role sign-off. No product-policy question requires new human clarification at this point.
 
 ## Decision log
 
