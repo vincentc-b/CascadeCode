@@ -323,6 +323,12 @@ Design review covered root, shared, Feature, Epic, Boss, Task, Watchdog, Workspa
 
 Epic Architect owns final architecture reconciliation and revision-pinned publication. The child browser receipt pins `84c7cdd7`; current source differs in review/Boss behavior and four component relationships, so it is supporting evidence rather than final merged-revision acceptance. The saved Feature 3 publication request's six historical hashes remain valid, but its root design/model pins predate Feature 4 and its plan guard predates this follow-up. Preserve it unchanged for historical reconciliation; obtain a separately reviewed current request through the supported publication workflow. Do not rewrite accepted snapshots or treat a pending render as acceptance. Epic closeout remains gated on the follow-up and final architecture evidence.
 
+### Architect review of integrated projection limits
+
+The integrated source leaves part of `REQ-WARROOM-REVIEW-002` unfulfilled: `record_feature_review_evidence` limits check row count but retains arbitrary-length check-name keys and string generations; `_review_evidence_projection` caps displayed names at 80 characters while returning generation strings unchanged. An isolated capture with a 10,000-character name and generation preserved both in the persistence payload and returned the full generation in the response. The capture substituted only the registry write and root resolver; it did not change live state. Row-count limits alone do not establish a bounded response or persisted observation.
+
+Epic Manager owns assigning this existing bounded-evidence requirement to executable follow-up work before closeout, through normal Feature planning/amendment rather than reopening accepted child history. Preserve opaque generation identity and check-name collision safety when selecting refusal or presentation limits; do not truncate authoritative identities into equal values. This is a gap against the existing War Room design contract, not a new product requirement. Current designs and model descriptions now name the actual limits and the gap. Detailed review, diagram inventory and publication receipt are in [the Architect integration review](../../epic_artifacts/epic_051_architect_feature_4_review.json). Feature 5 retains its delivery-consumer/cross-Feature acceptance scope until the Manager assigns any additional work explicitly.
+
 ## Open questions
 
 No product-scope question blocks Feature planning. The following implementation risks have assigned decisions and acceptance rather than an open-ended spike:
