@@ -974,6 +974,43 @@
       "approval_reference": null,
       "bootstrap_revision": null,
       "policy_revision": null
+    },
+    {
+      "type": "completed",
+      "attempt_id": "attempt_resume_921ee3a7d7d2865eb967d1d96a20a8fa2a7328fd9b4887ad16e13ec7ee9d11d8",
+      "dependency_id": "dep_playwright",
+      "manifest_revision": 3,
+      "entry_revision": "sha256:f273a20f514083e5d6807c0f90d7bf4823c7e2940f50a006617f64d1f03ffb1a",
+      "recipe_revision": "sha256:ad80eb0318f3692e9c978be493212f02a4fb56a70c069a8dab325cad1ca1f8ba",
+      "exact_operation": "/opt/conda/bin/python3.12 -c 'import importlib, importlib.metadata as m, hashlib, pathlib; assert m.version('\"'\"'playwright'\"'\"') == '\"'\"'1.64.0'\"'\"'; assert \"sha256:\"+hashlib.sha256(pathlib.Path('\"'\"'/home/ubuntu/.local/lib/python3.12/site-packages/playwright-1.64.0.dist-info/RECORD'\"'\"').read_bytes()).hexdigest() == '\"'\"'sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8'\"'\"'; importlib.import_module('\"'\"'playwright.sync_api'\"'\"'); print('\"'\"'playwright'\"'\"',m.version('\"'\"'playwright'\"'\"'))'",
+      "operation_kind": "read_only",
+      "actual_environment": {
+        "environment_id": "ip-172-31-37-14",
+        "kind": "host",
+        "platform": "linux",
+        "architecture": "x86_64",
+        "runner": "ip-172-31-37-14",
+        "repository": "/home/ubuntu/dev/CascadeCode",
+        "worktree": "/home/ubuntu/dev/CascadeCode",
+        "sandbox": "host",
+        "runtime": "/opt/conda/bin/python3.12",
+        "container_digest": "not_applicable"
+      },
+      "actual_environment_fingerprint": "sha256:034826e779aa5d9ff139e615cbd6801ed240febfbd3e90190441dab0cdd16955",
+      "admitted_at": "2026-11-27T08:22:08.853318+00:00",
+      "completed_at": "2026-11-27T08:22:10.319627+00:00",
+      "result": "succeeded",
+      "redacted_output": "playwright 1.64.0\n",
+      "selected_version": "1.64.0",
+      "integrity_reference": "sha256:aea009c80cf13b128a140e13f21e819a37214dbd09179c62c2a130fbd34010e8",
+      "lock_references": [
+        "pyproject.toml",
+        "tests/war_room/test_feature_attention_api.py"
+      ],
+      "approval_reference": null,
+      "bootstrap_revision": null,
+      "policy_revision": null,
+      "authority_current": true
     }
   ],
   "snapshots": []
