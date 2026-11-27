@@ -6,6 +6,7 @@ import json
 import socket
 import threading
 import urllib.request
+import urllib.error
 from contextlib import contextmanager
 from http import HTTPStatus
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Iterator
 import pytest
 
 from cascade.war_room.server import serve
+from cascade.war_room.human_auth import LocalHumanIdentityVerifier, SESSION_COOKIE
 from cascade.board.context import set_project_context
 from cascade.review import record_feature_review_evidence
 from cascade.workspace.types import ProjectContext
@@ -29,6 +31,24 @@ def _free_port() -> int:
 def _get_json(url: str) -> tuple[int, dict]:
     with urllib.request.urlopen(url) as resp:
         return resp.status, json.loads(resp.read().decode())
+
+
+def _post_json(url: str, payload: dict, *, token: str | None = None) -> tuple[int, dict]:
+    headers = {"Content-Type": "application/json"}
+    if token is not None:
+        headers["Cookie"] = f"{SESSION_COOKIE}={token}"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        response = urllib.request.urlopen(request)
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read().decode())
+    with response:
+        return response.status, json.loads(response.read().decode())
 
 
 def _write_reviews(root: Path, payload: dict) -> None:
@@ -205,6 +225,30 @@ def test_open_review_projects_delivery_unknown_evidence_and_legacy_generation(
     assert row["repair"]["generation"] == 0
     assert row["repair"]["requested"] is False
     assert row["next_prerequisite"] == "await_current_review_acceptance"
+
+
+def test_open_review_projects_exact_repair_identity(war_room_server):
+    base, root = war_room_server
+    reviews = _representative_registry()
+    reviews["feat_001"].update(
+        source_head="a" * 40,
+        target_head="b" * 40,
+        current_generation=7,
+    )
+    _write_reviews(root, reviews)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    row = {item["id"]: item for item in payload["reviews"]}["feat_001"]
+
+    assert row["repair_identity"] == {
+        "review_url": "https://github.example/o/r/pull/1",
+        "review_forge": "github",
+        "source_ref": "feat/feat_001",
+        "target_ref": "epic/epic_001",
+        "observed_source_head": "a" * 40,
+        "observed_target_head": "b" * 40,
+        "observed_review_generation": 7,
+    }
 
 
 def test_open_reviews_preserve_pending_and_unavailable_persisted_health(
@@ -462,3 +506,113 @@ def test_open_reviews_joins_product_review_to_tracking_accountability(tmp_path):
     assert row["context"]["feature_title"] == "Open feature"
     assert row["context"]["epic_title"] == "Root epic"
     assert row["accountable_epic_id"] == "epic_001"
+
+
+def _repair_body() -> dict:
+    return {
+        "feature_id": "feat_001",
+        "request_id": "review-fix:comment-7",
+        "reason": "Address the scoped review finding",
+        "evidence": {"comment_id": "comment-7"},
+        "approval_reference": "authenticated-human:feat_001",
+        "scope_reference": "review-comment:comment-7",
+        "review_url": "https://github.example/o/r/pull/1",
+        "review_forge": "github",
+        "source_ref": "feat/feat_001",
+        "target_ref": "epic/epic_001",
+        "observed_source_head": "a" * 40,
+        "observed_target_head": "b" * 40,
+        "observed_review_generation": 3,
+    }
+
+
+def test_review_repair_post_authenticates_and_returns_adapter_result_unchanged(
+    tmp_path, monkeypatch
+):
+    root = make_repo(tmp_path, git=False)
+    _seed_board(root)
+    _write_reviews(root, _representative_registry())
+    observed = {}
+    expected = {
+        "ok": True,
+        "feature_id": "feat_001",
+        "admitted": True,
+        "acknowledged": True,
+        "wakeup_acknowledged": True,
+        "executing": False,
+        "executed": False,
+        "refused": False,
+        "verification_pending": True,
+        "verified": False,
+        "next_prerequisite": "feature_queue_checkpoint",
+    }
+
+    def request(feature_id, request_id, **kwargs):
+        observed.update(feature_id=feature_id, request_id=request_id, **kwargs)
+        return expected
+
+    monkeypatch.setattr("cascade.war_room.review_routes.request_feature_review_repair", request)
+    token = "review-action-token"
+    port = _free_port()
+    server = serve(
+        root=root,
+        host="127.0.0.1",
+        port=port,
+        human_identity_verifier=LocalHumanIdentityVerifier("local:operator", token),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, payload = _post_json(
+            f"http://127.0.0.1:{port}/api/open-reviews/repair",
+            _repair_body(),
+            token=token,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert status == HTTPStatus.OK
+    assert payload == expected
+    assert observed["feature_id"] == "feat_001"
+    assert observed["request_id"] == "review-fix:comment-7"
+    assert observed["authenticated_human"].subject == "local:operator"
+    assert observed["review_url"] == "https://github.example/o/r/pull/1"
+    assert observed["observed_review_generation"] == 3
+
+
+def test_review_repair_post_rejects_unauthenticated_and_changed_envelopes(
+    tmp_path, monkeypatch
+):
+    root = make_repo(tmp_path, git=False)
+    _seed_board(root)
+    _write_reviews(root, _representative_registry())
+    monkeypatch.setattr(
+        "cascade.war_room.review_routes.request_feature_review_repair",
+        lambda *_args, **_kwargs: pytest.fail("refused request must not reach adapter"),
+    )
+    token = "review-action-token"
+    port = _free_port()
+    server = serve(
+        root=root,
+        host="127.0.0.1",
+        port=port,
+        human_identity_verifier=LocalHumanIdentityVerifier("local:operator", token),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{port}/api/open-reviews/repair"
+        status, _payload = _post_json(base, _repair_body())
+        changed = _repair_body()
+        changed["requesting_parent_id"] = "epic_001"
+        changed_status, changed_payload = _post_json(base, changed, token=token)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert status == HTTPStatus.UNAUTHORIZED
+    assert changed_status == HTTPStatus.BAD_REQUEST
+    assert "unsupported review repair fields" in changed_payload["error"]

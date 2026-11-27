@@ -1495,6 +1495,21 @@ def _accountable_review_projection(
             "delivery": delivery,
             "evidence": _review_evidence_projection(record, repair),
             "repair": repair_view,
+            "repair_identity": {
+                "review_url": _bounded_text(record.get("url"), limit=2048),
+                "review_forge": _bounded_text(record.get("forge"), limit=80),
+                "source_ref": _bounded_text(record.get("source_branch"), limit=256),
+                "target_ref": _bounded_text(record.get("target_branch"), limit=256),
+                "observed_source_head": _bounded_text(
+                    record.get("source_head"), limit=160
+                ),
+                "observed_target_head": _bounded_text(
+                    record.get("target_head"), limit=160
+                ),
+                "observed_review_generation": int(
+                    record.get("current_generation") or 0
+                ),
+            },
             "next_prerequisite": next_prerequisite,
         }
     )

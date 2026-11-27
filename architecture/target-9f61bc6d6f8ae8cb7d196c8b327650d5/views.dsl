@@ -152,7 +152,7 @@ custom "cascade-war-room-http-code" {
     properties {
         "cascade.codeComponent" "element.component.war-room-http"
     }
-    include code_http_serve code_http_handler code_http_identity code_http_local
+    include code_http_serve code_http_handler code_http_identity code_http_local code_http_review_repair
     autoLayout lr
 }
 
@@ -170,7 +170,7 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
     include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_post
     include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr

@@ -1553,6 +1553,15 @@ code_http_local = element "LocalHumanIdentityVerifier" "Dataclass" "Verifies the
     }
 }
 
+code_http_review_repair = element "handle_post_review_repair" "Function" "Authenticates and validates one exact human open-review repair request, delegates to the durable adapter, and preserves its typed result." {
+    properties {
+        "cascade.semanticId" "element.code.http.review-repair"
+        "cascade.parent" "element.component.war-room-http"
+        "cascade.sourcePath" "cascade/war_room/review_routes.py"
+        "cascade.sourceSymbol" "handle_post_review_repair"
+    }
+}
+
 http_serve_to_handler = code_http_serve -> code_http_handler "Installs" {
     properties {
         "cascade.semanticId" "relationship.code-http-serve-to-handler"
@@ -1571,6 +1580,11 @@ http_local_to_identity = code_http_local -> code_http_identity "Implements" {
     }
 }
 
+http_review_repair_to_identity = code_http_review_repair -> code_http_identity "Verifies request-scoped local human authority" {
+    properties {
+        "cascade.semanticId" "relationship.code-http-review-repair-to-identity"
+    }
+}
 
 // Architecture browser — implementation.
 
@@ -1685,6 +1699,15 @@ code_dashboard_review_projection = element "feature_review_views" "Function" "Bu
     }
 }
 
+code_dashboard_review_ui = element "createOpenReviewsPane" "Function" "Renders accountable review state, submits only an explicit repair POST, preserves typed action results, and uses GET for refreshes." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.review-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/open_reviews_pane.js"
+        "cascade.sourceSymbol" "createOpenReviewsPane"
+    }
+}
+
 code_feature_latest_open_review_repair = element "latest_feature_repair_records" "Function" "Reads the canonical action ledger once and retains the latest waiting, active, refused, or verified open-review repair generation for presentation." {
     properties {
         "cascade.semanticId" "element.code.feature.latest-open-review-repair"
@@ -1772,6 +1795,18 @@ dashboard_open_reviews_to_review_projection = code_dashboard_open_reviews -> cod
 dashboard_review_projection_to_repair_projection = code_dashboard_review_projection -> code_feature_latest_open_review_repair "Joins canonical repair generations without creating lifecycle state" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-review-projection-to-repair-projection"
+    }
+}
+
+dashboard_review_ui_to_open_reviews = code_dashboard_review_ui -> code_dashboard_open_reviews "Refreshes accountable state through GET only" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-ui-to-open-reviews"
+    }
+}
+
+dashboard_review_ui_to_repair_post = code_dashboard_review_ui -> code_http_review_repair "Submits one explicit exact repair request" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-ui-to-repair-post"
     }
 }
 
@@ -2484,6 +2519,12 @@ code_epic_review_repair_request = element "request_feature_review_repair" "Funct
         "cascade.parent" "element.component.epic-team"
         "cascade.sourcePath" "cascade/team_supervision.py"
         "cascade.sourceSymbol" "request_feature_review_repair"
+    }
+}
+
+http_review_repair_to_adapter = code_http_review_repair -> code_epic_review_repair_request "Delegates the exact scoped request and returns typed admission state" {
+    properties {
+        "cascade.semanticId" "relationship.code-http-review-repair-to-adapter"
     }
 }
 

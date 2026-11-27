@@ -25,6 +25,16 @@ bounded scalar fields so persisted forge payloads cannot expand a response
 without limit. The open-review endpoint returns at most one hundred rows and
 marks an omitted tail as `truncated`.
 
+`REQ-WARROOM-REVIEW-003`: `POST /api/open-reviews/repair` accepts only a
+request-scoped authenticated local human and one complete, bounded repair
+envelope. The envelope binds a stable request ID, reason and JSON evidence to
+the exact original review URL, forge, source/target refs and observed heads and
+generation. Its response keeps admission, acknowledgement, live-owner join,
+execution, refusal, verification and next-prerequisite fields distinct; HTTP
+success is not completion. Identical content rejoins its durable action while
+changed content, stale evidence, another writer, policy/approval waits and
+closed-unmerged reviews retain the adapter's typed refusal or prerequisite.
+
 `DEC-WARROOM-REVIEW-001`: [`feature_review_views`](../review.py) joins the durable
 review registry and Feature delivery projection with
 [`latest_feature_repair_records`](../feature/repair.py). The latter performs one
@@ -40,11 +50,25 @@ observation through [`record_feature_review_evidence`](../review.py) after its
 forge query; unavailable publication remains a typed health wait rather than
 allowing an action to proceed with evidence that readers cannot inspect.
 
+`DEC-WARROOM-REVIEW-002`: [`handle_post_review_repair`](review_routes.py)
+authenticates through the request verifier, validates the closed HTTP envelope,
+and delegates once to
+[`request_feature_review_repair`](../team_supervision.py). The route does not
+create a launcher, ledger, replacement review or browser authority. Board and
+room rendering and [`createOpenReviewsPane`](static/open_reviews_pane.js) show
+the accountable Feature, original review, implementation/delivery distinction,
+CI/feedback freshness, repair generation and typed next prerequisite. Only the
+explicit form submits POST. Refresh and background reconciliation use the
+read-only open-review GET, and response tokens prevent an older GET or action
+response from replacing newer browser state.
+
 The authoritative [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 represent this path in `cascade-war-room-components` and
 `cascade-dashboard-code` as router → open-review handler → shared review
-projection → canonical repair projection.
+projection → canonical repair projection. `cascade-war-room-http-code` connects
+the authenticated repair handler to the existing operator verifier and durable
+team-supervision adapter.
 
 ```mermaid
 sequenceDiagram
@@ -62,11 +86,36 @@ sequenceDiagram
     Note over UI,A: No forge query, provider start, queue write, or lifecycle mutation
 ```
 
+```mermaid
+sequenceDiagram
+    participant H as Local human
+    participant UI as Open-review pane
+    participant G as Read-only open-review GET
+    participant P as Authenticated repair POST
+    participant V as Request verifier
+    participant A as Durable repair adapter
+    H->>UI: Submit stable ID and reason
+    UI->>P: Exact review identity and bounded evidence
+    P->>V: Verify this request
+    alt Unauthenticated or malformed
+        P-->>UI: Typed HTTP refusal; no adapter call
+    else Authenticated
+        P->>A: AuthenticatedHuman and complete request
+        A-->>P: Admission, acknowledgement, execution, refusal, verification, next prerequisite
+        P-->>UI: Preserve typed result
+        UI->>UI: Ignore stale response tokens
+        UI->>G: Subsequent refresh
+    end
+```
+
 Verification: [open-review API tests](../../tests/war_room/test_open_reviews_api.py)
 cover current repair evidence, missing evidence, completed/open legacy rows,
 split product/tracking roots, shared board/room shapes, and read-only lifecycle
-files. [Board UI coverage](../../tests/war_room/test_ui_render.py) preserves the
-active awaiting-review lane for a completed Feature.
+files, authenticated delegation, malformed and unauthenticated refusal.
+[Board UI coverage](../../tests/war_room/test_ui_render.py) preserves the active
+awaiting-review lane for a completed Feature and drives a real Chromium action
+through pending, failed, admitted, executing, approval-wait and verified
+presentation while refreshes remain GET-only.
 
 ## Recovery summaries and planning transcripts
 
