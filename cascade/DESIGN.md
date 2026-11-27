@@ -447,6 +447,12 @@ cover unavailable policy, a missing required result, stale source evidence and a
 newer failure after an older success. The integrated Watchdog Code view is
 [`cascade-watchdog-code`](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 and its source contract pins both normalization and classification symbols.
+The [Watchdog open-review contract](watchdog/DESIGN.md#open-review-observation)
+owns the next boundary: actionable normalized evidence joins one Feature repair
+generation, while pending, missing, stale, approval-only and unavailable evidence
+remains a non-provider wait. The existing team adapter and Feature action ledger
+own admission and restart deduplication; this package boundary adds no scheduler,
+CI runner, provider launcher or merge authority.
 
 `REQ-CASCADE-RECOVERY-001`: Scoped parent supervision verifies the direct-child
 relationship before delegating recovery. Durable attempts, acknowledgements and

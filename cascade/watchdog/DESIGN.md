@@ -313,32 +313,53 @@ requirement for responsive architecture rendering.
 
 ## Open-review observation
 
+`REQ-WATCHDOG-REVIEW-001`: A registered open review is healthy only when its
+normalized current-head evidence is green. Failed required checks, actionable
+feedback and a confirmed merge conflict are actionable even when the forge
+reports clean mergeability. Pending or missing checks, stale evidence, unknown
+policy, approval-only waits and transient forge failures remain typed waits and
+cannot enqueue a provider turn.
+
+`DEC-WATCHDOG-REVIEW-001`: Route all actionable evidence for one Feature review
+through its existing generation-bound Feature repair owner. The durable request
+evidence binds the original review and route, source/target head pair, failing
+check generation or feedback identity, and repair generation. An identical poll
+or restart rejoins that action and retains its attempts and budgets. Changed
+material evidence receives one new content-addressed request identity, still
+subject to the single-writer and ordinary repair gates.
+
 [reconcile_open_review_health](../review_health.py) reads registered reviews and
-uses [merge_request_snapshot](../tracking.py) for fresh forge state, source
-revision, branch refs and mergeability. Conflict handling fetches source and
-target heads separately before resolution admission. Confirmed conflicts enter the existing resolution-action admission
-and guarded publication path; unknown mergeability, unavailable snapshots and
-missing worktrees retain an explicit recovery prerequisite. Resolution actions
-retain the source/target pair and admission identity so repeated observations
-rejoin existing work. A successful publication can precede forge mergeability
-refresh; target ancestry avoids repeating an already integrated conflict repair.
+uses [merge_request_snapshot](../tracking.py) for the normalized original-review
+identity, exact heads, mergeability, policy, current check generations and human
+feedback. [_route_actionable_review_health](../review_health.py) constructs the
+material identity and calls
+[request_feature_review_repair](../team_supervision.py), whose existing action
+ledger and single-writer gate retain repair ownership across restart. The Feature
+owner creates any repair Task and uses the guarded resolution publication path;
+the observer never reruns CI, executes forge text, opens another review or merges
+the original review.
 
 ```mermaid
-flowchart LR
+flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]
-    Snapshot -->|conflicting| Heads[Fetch and compare exact heads]
-    Heads --> Admission[Resolution action and owner gates]
-    Admission --> Publish[Guarded repair publication]
-    Snapshot -->|missing or unknown| Wait[Recovery prerequisite]
-    Snapshot -->|clean or mergeable| Healthy[Mergeability health restored]
+    Snapshot --> Classify[Normalized evidence classification]
+    Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
+    Identity --> Repair[Join one Feature repair generation]
+    Repair --> Publish[Guarded exact-head publication]
+    Publish --> Pending[New head checks pending]
+    Classify -->|pending, missing, stale, unknown, approval or transient| Wait[Typed wait; no provider]
+    Pending --> Snapshot
+    Classify -->|current green| Human[Human-controlled original review merge]
+    Classify -->|unchanged after restart| Repair
 ```
 
-This observer currently classifies clean mergeability as healthy without
-checking required CI policy or results. That result is not proof of green CI or
-intended-target delivery. The [shared review contract](../DESIGN.md#delivery-and-review-boundaries)
-and [Boss closeout](../boss/DESIGN.md#delivery-and-closeout) retain acceptance
-and integration ownership. Both observation functions are native nodes in
-`cascade-watchdog-code`, below `cascade-supervisor-components` in the
+Green observation does not merge a review or prove intended-target integration.
+The [shared review contract](../DESIGN.md#delivery-and-review-boundaries) and
+[Boss closeout](../boss/DESIGN.md#delivery-and-closeout) retain acceptance and
+integration ownership. Snapshot, classification and actionable routing are
+native nodes in `cascade-watchdog-code`, below `cascade-supervisor-components`;
+the existing direct-parent adapter and Feature action remain visible in their
+owning team Code views in the
 [authoritative views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl).
 Verification: [review-health tests](../../tests/test_review_health.py).
 

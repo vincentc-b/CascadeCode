@@ -554,6 +554,9 @@ def test_github_feedback_distinguishes_approval_wait_and_actionable_change(
         "state": "actionable_human_feedback",
         "reason": "changes_requested",
     }
+    assert actionable["review_feedback"]["actionable_feedback"] == [
+        {"id": "review-2", "reviewer": "reviewer", "submitted_at": None}
+    ]
 
 
 def test_gitlab_latest_pipeline_generation_and_approval_wait(tmp_path: Path) -> None:

@@ -4112,12 +4112,21 @@ code_workspace_retained_feature = element "_retained_feature_delivery" "Function
     }
 }
 
-code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Observe tracked reviews and admit conflict resolution; clean mergeability alone currently yields healthy." {
+code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify normalized open-review evidence, return non-provider typed waits, and route actionable evidence through one Feature repair owner." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-health"
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/review_health.py"
         "cascade.sourceSymbol" "reconcile_open_review_health"
+    }
+}
+
+code_watchdog_actionable_review = element "_route_actionable_review_health" "Function" "Bind original review, exact heads, check-run or feedback identity and repair generation before joining the durable Feature repair action." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.actionable-review-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review_health.py"
+        "cascade.sourceSymbol" "_route_actionable_review_health"
     }
 }
 
@@ -4205,6 +4214,18 @@ code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_works
 code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads authoritative review identity, head, policy, check-generation and feedback facts before routing" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_watchdog_health_to_actionable_review = code_watchdog_review_health -> code_watchdog_actionable_review "Routes only failed checks, actionable feedback and confirmed conflicts" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-actionable-review"
+    }
+}
+
+code_watchdog_actionable_review_to_feature_request = code_watchdog_actionable_review -> code_epic_review_repair_request "Joins the existing direct-parent Feature repair admission and single-writer gate" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-feature-request"
     }
 }
 

@@ -651,6 +651,15 @@ def _github_feedback(raw: Mapping[str, object], comments: object) -> dict[str, o
         for login, review in latest.items()
         if str(review.get("state") or "").upper() == "CHANGES_REQUESTED"
     )
+    actionable_feedback = [
+        {
+            "id": latest[login].get("id"),
+            "reviewer": login,
+            "submitted_at": latest[login].get("submittedAt")
+            or latest[login].get("submitted_at"),
+        }
+        for login in changes
+    ]
     decision = str(raw.get("reviewDecision") or "").lower() or "unknown"
     return {
         "available": True,
@@ -663,6 +672,7 @@ def _github_feedback(raw: Mapping[str, object], comments: object) -> dict[str, o
         "approvals": approvals,
         "actionable": bool(changes),
         "actionable_reviewers": changes,
+        "actionable_feedback": actionable_feedback,
     }
 
 

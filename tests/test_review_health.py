@@ -10,7 +10,6 @@ import pytest
 
 import cascade.review_health as review_health
 import cascade.review_rebase as review_rebase
-import cascade.tracking as tracking
 from cascade.review_health import reconcile_open_review_health
 from cascade.task.action_recovery import load_action
 from cascade.watchdog.events import read_events
@@ -31,38 +30,19 @@ def _conflicting_snapshot(*_args: object, **_kwargs: object) -> dict[str, object
 def test_open_mergeable_github_review_reaches_healthy_path_with_supported_fields(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root, _turn = _execution_ready_turn(tmp_path)
+    root, turn = _execution_ready_turn(tmp_path)
     monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
-
-    def snapshot(trunk: Path, review: tracking.MergeRequest) -> dict[str, object]:
-        def runner(
-            args: list[str], command_root: Path
-        ) -> subprocess.CompletedProcess[str]:
-            assert command_root == trunk
-            if args[:3] == ["gh", "pr", "view"]:
-                assert "headRefOid" not in args[-1].split(",")
-                assert "commits" in args[-1].split(",")
-                return subprocess.CompletedProcess(
-                    args,
-                    0,
-                    '{"state":"OPEN","isDraft":false,'
-                    '"url":"https://github.com/example/project/pull/1",'
-                    '"headRefName":"feat/feat_035_001",'
-                    '"baseRefName":"epic/epic_035",'
-                    '"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN",'
-                    '"body":"Reviewed repair","mergeCommit":null,'
-                    '"comments":[],"reviews":[],\n'
-                    '"commits":[{"authoredDate":"2026-11-24T10:00:00Z",'
-                    '"authors":[],"committedDate":"2026-11-24T10:00:00Z",'
-                    '"messageBody":"","messageHeadline":"Reviewed repair",'
-                    '"oid":"abc123"}]}',
-                    "",
-                )
-            return subprocess.CompletedProcess(args, 0, "[]", "")
-
-        return tracking.merge_request_snapshot(trunk, review, runner=runner)
-
-    monkeypatch.setattr(review_health, "merge_request_snapshot", snapshot)
+    monkeypatch.setattr(
+        review_health,
+        "merge_request_snapshot",
+        lambda *_args: {
+            "state": "open",
+            "mergeability": "mergeable",
+            "source_revision": turn.observed_source_sha,
+            "target_revision": turn.observed_target_sha,
+            "review_health": {"state": "green", "checks": []},
+        },
+    )
 
     assert reconcile_open_review_health(root) == [
         {"owner_id": "feat_035_001", "outcome": "healthy"}
@@ -165,7 +145,7 @@ def test_health_inquiry_is_executable_and_recurring_incidents_get_new_generation
     assert len([e for e in events if e.type == "BranchActionRecoveryRequested"]) == 2
 
 
-@pytest.mark.parametrize("failure", ["fetch", "snapshot", "worktree", "admission"])
+@pytest.mark.parametrize("failure", ["fetch", "worktree", "admission"])
 def test_health_failure_rechecks_and_admits_actual_review_publication(
     tmp_path, monkeypatch, failure
 ):
@@ -190,12 +170,6 @@ def test_health_failure_rechecks_and_admits_actual_review_publication(
             _git(root, "push", "origin", "epic/epic_035")
             _git(root, "checkout", "feat/feat_035_001")
             (root / "unfinished.txt").write_text("Preserve this owned work\n")
-        else:
-
-            def unavailable(*a):
-                raise OSError("forge unavailable")
-
-            broken.setattr(review_health, "merge_request_snapshot", unavailable)
         incident = reconcile_open_review_health(root)[0]["action_id"]
         assert (
             publish_review_resolution(incident, feature_id="feat_035_001", root=root)[
@@ -267,3 +241,174 @@ def test_validation_and_publication_failures_remain_owned_and_retryable(
         ]
         == 2
     )
+
+
+@pytest.mark.parametrize(
+    ("health", "wait_type"),
+    [
+        ({"state": "pending", "checks": ["build"]}, "pending"),
+        ({"state": "missing", "checks": ["build"]}, "missing"),
+        (
+            {"state": "conflict_or_moving_target", "reason": "stale_check_generation"},
+            "conflict_or_moving_target",
+        ),
+        (
+            {"state": "approval_only_wait", "reason": "approval_pending"},
+            "approval_only_wait",
+        ),
+        (
+            {
+                "state": "transient_outage",
+                "reason": "required_check_policy_unavailable",
+            },
+            "transient_outage",
+        ),
+    ],
+)
+def test_normalized_non_actionable_health_is_a_typed_wait_without_recovery_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    health: dict[str, object],
+    wait_type: str,
+) -> None:
+    root, turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+    monkeypatch.setattr(
+        review_health,
+        "merge_request_snapshot",
+        lambda *_args: {
+            "state": "open",
+            "mergeability": "mergeable",
+            "source_revision": turn.observed_source_sha,
+            "target_revision": turn.observed_target_sha,
+            "review_health": health,
+        },
+    )
+    before, _ = read_events("feat_035_001", 0, root=root)
+
+    result = reconcile_open_review_health(root)
+
+    assert result[0]["outcome"] == "waiting"
+    assert result[0]["wait_type"] == wait_type
+    after, _ = read_events("feat_035_001", 0, root=root)
+    assert after == before
+
+
+def test_snapshot_outage_is_a_transient_wait_without_an_action(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+
+    def unavailable(*_args: object) -> dict[str, object]:
+        raise OSError("forge unavailable")
+
+    monkeypatch.setattr(review_health, "merge_request_snapshot", unavailable)
+
+    assert reconcile_open_review_health(root) == [
+        {
+            "owner_id": "feat_035_001",
+            "outcome": "waiting",
+            "wait_type": "transient_outage",
+            "reason": "review_snapshot_failed",
+        }
+    ]
+
+
+def test_failed_check_reuses_material_repair_identity_and_changed_run_reevaluates_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import cascade.feature.repair as feature_repair
+    import cascade.team_supervision as team_supervision
+
+    root, turn = _execution_ready_turn(tmp_path)
+    monkeypatch.setattr(review_health, "detect_forge", lambda _root: "github")
+    run = {"id": 41}
+
+    def snapshot(*_args: object) -> dict[str, object]:
+        check = {
+            "status": "failure",
+            "generation": run["id"],
+            "source_head": turn.observed_source_sha,
+        }
+        return {
+            "state": "open",
+            "mergeability": "mergeable",
+            "source_revision": turn.observed_source_sha,
+            "target_revision": turn.observed_target_sha,
+            "required_check_results": {
+                "available": True,
+                "source_head": turn.observed_source_sha,
+                "statuses": {"build": "failure"},
+                "checks": {"build": check},
+            },
+            "review_health": {"state": "failed", "checks": ["build"]},
+        }
+
+    admitted: list[dict[str, object]] = []
+    durable_actions: list[dict[str, object]] = []
+
+    def request(
+        _feature_id: str, request_id: str, **kwargs: object
+    ) -> dict[str, object]:
+        admitted.append({"request_id": request_id, **kwargs})
+        existing = next(
+            (row for row in durable_actions if row["request_id"] == request_id), None
+        )
+        if existing is not None:
+            return {
+                "action_id": f"feature-repair-{existing['generation']}",
+                "generation": existing["generation"],
+                "admitted": True,
+                "replayed": True,
+            }
+        if durable_actions:
+            writer = durable_actions[-1]
+            return {
+                "action_id": f"feature-repair-{writer['generation']}",
+                "generation": writer["generation"],
+                "admitted": False,
+                "replayed": True,
+                "blocker": "repair_writer_active",
+            }
+        generation = len(durable_actions) + 1
+        durable_actions.append(
+            {
+                "action_id": f"feature-repair-{generation}",
+                "request_id": request_id,
+                "generation": generation,
+                "request_evidence": kwargs["evidence"],
+            }
+        )
+        return {
+            "action_id": f"feature-repair-{generation}",
+            "generation": generation,
+            "admitted": True,
+            "replayed": False,
+        }
+
+    monkeypatch.setattr(review_health, "merge_request_snapshot", snapshot)
+    monkeypatch.setattr(team_supervision, "request_feature_review_repair", request)
+    monkeypatch.setattr(
+        feature_repair,
+        "feature_repair_actions",
+        lambda *_args, **_kwargs: list(durable_actions),
+    )
+
+    first = reconcile_open_review_health(root)[0]
+    replay = reconcile_open_review_health(root)[0]
+    run["id"] = 42
+    changed = reconcile_open_review_health(root)[0]
+
+    assert first["outcome"] == "routed"
+    assert replay["outcome"] == "waiting"
+    assert replay["wait_type"] == "repair_generation_reused"
+    assert changed["outcome"] == "waiting"
+    assert changed["wait_type"] == "repair_writer_active"
+    assert len(admitted) == 2
+    assert admitted[1]["request_id"] != admitted[0]["request_id"]
+    assert replay["repair_generation"] == 1
+    assert changed["repair_generation"] == 1
+    assert len(durable_actions) == 1
+    assert first["material_identity"] == replay["material_identity"]
+    assert changed["material_identity"] != replay["material_identity"]
