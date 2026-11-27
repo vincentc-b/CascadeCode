@@ -331,8 +331,15 @@ subject to the single-writer and ordinary repair gates.
 [reconcile_open_review_health](../review_health.py) reads registered reviews and
 uses [merge_request_snapshot](../tracking.py) for the normalized original-review
 identity, exact heads, mergeability, policy, current check generations and human
-feedback. [_route_actionable_review_health](../review_health.py) constructs the
-material identity and calls
+feedback. Before classification can route work,
+[record_feature_review_evidence](../review.py) bounds check names, generations,
+heads, feedback counts and diagnostic text and stores the current observation in
+the canonical review registry. The registry write is serialized and atomically
+replaced. If the review record is missing or persistence fails, reconciliation
+returns the typed `review_evidence_persistence_failed` prerequisite and does not
+route repair from evidence that read-only consumers cannot later inspect.
+[_route_actionable_review_health](../review_health.py) constructs the material
+identity and calls
 [request_feature_review_repair](../team_supervision.py), whose existing action
 ledger and single-writer gate retain repair ownership across restart. The Feature
 owner creates any repair Task and uses the guarded resolution publication path;
@@ -353,7 +360,9 @@ ownership.
 ```mermaid
 flowchart TD
     Review[Tracked review] --> Snapshot[Fresh forge snapshot]
-    Snapshot --> Classify[Normalized evidence classification]
+    Snapshot --> Persist[Bound and persist current observation]
+    Persist -->|write succeeds| Classify[Normalized evidence classification]
+    Persist -->|missing record or write fails| Unavailable[Typed evidence-unavailable wait; no provider]
     Classify -->|red check, feedback or conflict| Identity[Material review and repair identity]
     Identity --> Fence[Record evidence on owned queued Task actions]
     Fence --> Task[Task-owned generation comparison and verified release]

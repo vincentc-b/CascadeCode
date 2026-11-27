@@ -497,6 +497,43 @@ def current_feature_repair_record(
     return _copy(max(candidates, key=lambda row: int(row.get("generation") or 0)))
 
 
+def latest_feature_repair_records(
+    feature_ids: list[str] | tuple[str, ...] | set[str], *, root: Path
+) -> dict[str, dict[str, Any]]:
+    """Project the latest durable repair for each Feature with one ledger read.
+
+    Unlike ``current_feature_repair_record``, this read model retains waiting,
+    refused, and verified generations.  Those phases are no longer execution
+    authority, but they remain the canonical explanation shown to operators.
+    """
+
+    wanted = set(feature_ids)
+    if not wanted:
+        return {}
+    try:
+        actions = _actions(_read_payload(lifecycle_root(root)))
+    except ActionRecoveryUnavailable:
+        return {}
+
+    def generation(action: Mapping[str, Any]) -> int:
+        value = action.get("generation")
+        return value if type(value) is int and value >= 0 else 0
+
+    latest: dict[str, dict[str, Any]] = {}
+    for action in actions.values():
+        feature_id = action.get("feature_id")
+        if (
+            action.get("kind") != "feature_repair"
+            or action.get("repair_route") != "open_review"
+            or feature_id not in wanted
+        ):
+            continue
+        previous = latest.get(str(feature_id))
+        if previous is None or generation(action) > generation(previous):
+            latest[str(feature_id)] = _copy(action)
+    return latest
+
+
 def feature_repair_actions(feature_id: str, *, root: Path) -> list[dict[str, Any]]:
     """Project all generations for closeout while the lifecycle fence is held."""
 

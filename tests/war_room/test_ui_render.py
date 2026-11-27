@@ -124,12 +124,16 @@ def test_completed_feature_awaiting_review_remains_in_active_lane(ui_server):
 
     active = {item["id"]: item for item in board["features"]["2_active"]}
     completed = {item["id"] for item in board["features"]["3_completed"]}
-    assert active["feat_001"]["review"] == {
+    review = active["feat_001"]["review"]
+    assert {key: review[key] for key in ("state", "url", "number", "draft")} == {
         "state": "awaiting_review",
         "url": "https://github.example/pull/4",
         "number": "4",
         "draft": False,
     }
+    assert review["implementation_complete"] is True
+    assert review["delivery_status"] == "review_pending"
+    assert review["repair"]["generation"] == 0
     assert "feat_001" not in completed
 
 
@@ -591,6 +595,124 @@ def test_open_reviews_js_queries_authoritative_api_only():
     assert "localStorage" not in pane_source
     assert "OpenReviewsPane" in war_room_source
     assert "createOpenReviewsPane" in war_room_source
+
+
+def test_open_review_repair_journey_in_real_browser(ui_server):
+    """The explicit action preserves typed stages while every refresh stays GET-only."""
+    playwright = pytest.importorskip("playwright.sync_api")
+    base, _root = ui_server
+    identity = {
+        "review_url": "https://github.example/pull/4",
+        "review_forge": "github",
+        "source_ref": "feat/feat_001",
+        "target_ref": "epic/epic_002",
+        "observed_source_head": "a" * 40,
+        "observed_target_head": "b" * 40,
+        "observed_review_generation": 4,
+    }
+
+    def review(health, delivery, prerequisite, repair=None):
+        return {
+            "id": "feat_001",
+            "url": identity["review_url"],
+            "state": "awaiting_review",
+            "context": {
+                "feature_id": "feat_001",
+                "epic_id": "epic_002",
+                "feature_title": "Feature one",
+                "epic_title": "Epic two",
+            },
+            "accountable_feature_id": "feat_001",
+            "implementation_complete": True,
+            "implementation_status": "completed",
+            "delivery_status": delivery,
+            "evidence": {
+                "health_state": health,
+                "freshness": "current",
+                "ci": {"policy_status": "available"},
+                "feedback": {"approval_state": "waiting"},
+            },
+            "repair": repair or {"generation": 0},
+            "repair_identity": identity,
+            "next_prerequisite": prerequisite,
+        }
+
+    reads = [
+        review("pending", "review_pending", "await_current_review_acceptance"),
+        review("failed", "review_pending", "request_review_repair"),
+    ]
+    held_execution = []
+    posts = []
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch(headless=True)
+        except playwright.Error as exc:
+            pytest.skip(f"Chromium unavailable: {exc}")
+        try:
+            page = browser.new_page()
+
+            def next_held_review():
+                # The action result renders before its follow-up GET is dispatched.
+                # Let Playwright service the route callback before inspecting it.
+                for _ in range(200):
+                    if held_execution:
+                        assert len(held_execution) == 1
+                        return held_execution.pop()
+                    page.wait_for_timeout(25)
+                pytest.fail("Expected the next open-review refresh")
+
+            def read_reviews(route):
+                if reads:
+                    route.fulfill(json={"reviews": [reads.pop(0)]})
+                else:
+                    held_execution.append(route)
+
+            def post_repair(route):
+                posts.append(route)
+
+            page.route("**/api/open-reviews", read_reviews)
+            page.route("**/api/open-reviews/repair", post_repair)
+            page.goto(base)
+            card = page.locator('.open-review-card[data-review-id="feat_001"]')
+            playwright.expect(card).to_contain_text("CI: pending", timeout=15000)
+
+            page.get_by_role("button", name="Refresh", exact=True).click()
+            playwright.expect(card).to_contain_text("CI: failed")
+            card.get_by_label("Stable repair request ID for feat_001").fill("review-fix:comment-7")
+            card.get_by_label("Repair reason for feat_001").fill("Fix the failing check")
+            card.get_by_role("button", name="Request repair").click()
+            playwright.expect(card).to_contain_text("Submitting authenticated repair request")
+            assert len(posts) == 1
+            assert posts[0].request.method == "POST"
+            posts[0].fulfill(json={
+                "ok": True,
+                "admitted": True,
+                "acknowledged": True,
+                "executing": False,
+                "verified": False,
+                "next_prerequisite": "feature_queue_checkpoint",
+            })
+            playwright.expect(card).to_contain_text("Admitted · Next: feature_queue_checkpoint")
+            next_held_review().fulfill(json={"reviews": [review(
+                "failed", "repair_in_progress", "await_repair_execution",
+                {"generation": 1, "admitted": True, "executing": True},
+            )]})
+            playwright.expect(card).to_contain_text("Delivery: repair_in_progress")
+            page.get_by_role("button", name="Refresh", exact=True).click()
+            next_held_review().fulfill(json={"reviews": [review(
+                "green", "review_pending", "await_human_approval",
+                {"generation": 1, "admitted": True, "waiting": True},
+            )]})
+            playwright.expect(card).to_contain_text("Next: await_human_approval")
+            page.get_by_role("button", name="Refresh", exact=True).click()
+            next_held_review().fulfill(json={"reviews": [review(
+                "green", "verified_integrated", "retirement_eligible",
+                {"generation": 1, "verified": True},
+            )]})
+            playwright.expect(card).to_contain_text("verified_integrated")
+            assert all(request.request.method == "POST" for request in posts)
+        finally:
+            browser.close()
 
 
 def test_epic_lifecycle_buttons_reconcile_in_real_browser(ui_server):
