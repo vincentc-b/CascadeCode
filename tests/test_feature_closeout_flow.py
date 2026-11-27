@@ -385,7 +385,7 @@ def test_merged_review_closes_active_feature_copy_on_target(
     assert feature.meta.path.parent.name == "3_completed"
     assert json.loads(state_path.read_text(encoding="utf-8"))["feat_001"]["closed"] is True
     events, _ = read_events("epic_001", 0, root=root)
-    assert len([event for event in events if event.type == "FeatureCompleted"]) == 1
+    assert not any(event.type == "FeatureCompleted" for event in events)
     assert pushes == ["epic/epic_001", "epic/epic_001"]
 
 

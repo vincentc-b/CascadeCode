@@ -46,6 +46,36 @@ def _isolate_graphs() -> None:
     clear_watchdog_memory()
 
 
+def test_locked_stale_completed_feature_job_rechecks_retained_eligibility(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.workspace.kickoff import _run_queue_delivery_locked
+
+    root = make_repo(tmp_path, git=False)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    resumed: list[str] = []
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._retained_feature_delivery",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.workspace.kickoff._resume_inflight_turn_if_needed",
+        lambda work_id, *_args, **_kwargs: resumed.append(work_id),
+    )
+
+    _run_queue_delivery_locked("feat_001", "feature", root, None)
+
+    assert resumed == []
+
+
 def _git(root: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True)
 

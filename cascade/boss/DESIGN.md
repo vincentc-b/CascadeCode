@@ -11,9 +11,20 @@ comments and review gates under the canonical lifecycle lock. A completed-path
 Feature can still have an open review; document position alone is not forge
 acceptance. [current_feature_obligation](rollup.py) also requires the current
 repair generation's reserved or original child to be terminal without a live lease, the
-current approval and dependencies, and either exact accepted review evidence or
-explicit local integration evidence. This predicate runs before the completed
-fast path and its result gates checkout retirement.
+current approval and dependencies. For review-enabled delivery it consumes the
+shared [Feature delivery projection](../review.py) and requires exact acceptance
+of the current generation plus independent ancestry of that merge on the
+intended Epic branch. A merge callback, green checks, a closed forge row, stale
+heads, or an accepted merge that is absent from the target cannot authorize the
+completion event. Review-disabled delivery retains its supervised local merge
+proof. This predicate runs before the completed fast path and its result gates
+both `FeatureCompleted` and checkout retirement. The active delivery generation
+may exist before its review is published. Once the exact repair child is delivered
+and all current gates pass, a missing or older published generation is
+`review_not_published`, selecting idempotent review publication/recovery even
+for a completed-path Feature (including split tracking/product roots). An open
+current review or newer mismatched publication cannot authorize completion or
+trigger a replacement review.
 Epic closeout accepts a Feature in `3_completed` with status `cancelled` only
 when cleanup completed without error and the canonical Epic contains the matching
 resolved `continue_reduced_scope` feedback (same child, parent, reason and
@@ -28,7 +39,10 @@ Under `REQ-BOSS-001`, Boss invokes Workspace's descendant-aware retirement proof
 the existing lifecycle authority after accepted Feature/Epic closeout. Boss logs
 the proof's missing evidence and owner action and leaves the branch, checkout and
 registry intact on refusal; it does not rank board copies or maintain a second
-retirement ledger.
+retirement ledger. Workspace independently rereads the same shared Feature
+delivery projection before it persists descendants, so a stale callback or an
+unsynchronized intended Epic target cannot exploit time between Boss closeout
+and checkout retirement.
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
@@ -45,12 +59,13 @@ own forge state. These functions collaborate within the local supervisor.
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [current_feature_obligation](rollup.py) | Fence completed closeout and retirement to the current repair and review generation. |
+| [feature_delivery_view](../review.py) | Derive retained Feature ownership and delivery phase from current local review, repair, completion, and target evidence without polling the forge. |
 | [feature_review_generation](../review.py) | Read immutable per-generation review facts; top-level fields remain the current compatibility projection. |
 | [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
-| [prove_terminal_retirement](../workspace/integration_worktree.py) | Verify and, when needed, canonically persist every terminal descendant before best-effort checkout retirement. |
+| [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
 
 ```mermaid
 flowchart TD
@@ -60,7 +75,10 @@ flowchart TD
     Merge --> Rollup[Current repair, child, comment and approval gates]
     Rollup --> Review[Publish Feature review; stage completed document]
     Review --> Accept[Observe forge acceptance]
-    Accept --> Proof[Workspace descendant persistence + canonical readback]
+    Accept --> Target{Accepted merge on intended Epic target?}
+    Target -->|no| Preserve
+    Target -->|yes| Event[Emit FeatureCompleted once]
+    Event --> Proof[Workspace delivery recheck + descendant persistence + canonical readback]
     Proof -->|complete| Close[Attempt retirement]
     Proof -->|refused| Preserve
 ```
