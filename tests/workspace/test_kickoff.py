@@ -10,6 +10,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from cascade.agent import run_role
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from cascade.agent.types import RoleResult
 from cascade.comments.store import comment
 from cascade.epic.graph import clear_epic_graph_sessions, ensure_epic_graph, ingest_queue
@@ -30,11 +36,46 @@ from cascade.watchdog.types import Event
 from cascade.workspace.kickoff import kickoff_turn, resume_inflight_graphs
 from cascade.workspace.types import KickoffReason
 from cascade.workspace.up import resume_legally_active_graphs
-from tests.support import TEST_MODEL_ID, add_doc, make_repo, approve_board_feature
+from tests.support import (
+    TEST_MODEL_ID,
+    add_doc,
+    approve_board_feature,
+    declare_no_dependencies,
+    make_repo,
+)
 
 
 @pytest.fixture(autouse=True)
-def _isolate_graphs() -> None:
+def _isolate_graphs(monkeypatch: pytest.MonkeyPatch) -> None:
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="cursor",
+                display_name="Cursor",
+                models=tuple(
+                    DiscoveredModel(id=model_id, display_name=model_id)
+                    for model_id in (
+                        "proj-epic",
+                        "proj-feature",
+                        "proj-task",
+                        TEST_MODEL_ID,
+                    )
+                ),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, 1.0, 301.0, 300.0),
+    )
+    # Scripted seam: provider discovery. Dispatch and approval still exercise
+    # their normal configured-selection preflight.
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr(
+        "cascade.agent.execution_preflight.refresh_provider_inventory",
+        lambda: inventory,
+    )
     clear_epic_graph_sessions()
     clear_feature_graph_sessions()
     clear_hooks()
@@ -110,6 +151,29 @@ def _seed_epic_chain(root: Path) -> None:
     _commit_all(root)
 
 
+def _activate_epic_chain(root: Path) -> Path:
+    """Activate normally, then mint the planned child in the Epic checkout."""
+
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="ready_to_plan")
+    _commit_all(root)
+    assert activate_epic("epic_001", "human", root=root).ok
+    epic_wt = get_integration_worktree(root, "epic", "epic_001")
+    assert epic_wt is not None
+    add_doc(
+        epic_wt.path,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="ready_to_plan",
+        parent="epic_001",
+    )
+    _commit_all(epic_wt.path)
+    declare_no_dependencies("epic_001", root=epic_wt.path)
+    return epic_wt.path
+
+
 def _patch_run_role(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     mock = AsyncMock(
         return_value=RoleResult(text="model-output", status="finished"),
@@ -122,6 +186,16 @@ def _patch_run_role(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     monkeypatch.setattr("cascade.agent.planning_turn.run_role", _wrapped)
     monkeypatch.setattr("cascade.task.swe_turn.run_role", _wrapped)
     return mock
+
+
+def _clear_epic_model_checkpoint(root: Path) -> None:
+    from cascade.epic.checkpoint import thread_config
+
+    graph = ensure_epic_graph("epic_001", root=root)
+    graph.update_state(
+        thread_config("epic_001"),
+        {"model_ids": {}, "model_sources": {}, "provider_ids": {}, "provider_sources": {}},
+    )
 
 
 def test_active_task_queue_recovers_missing_model_checkpoint(
@@ -196,17 +270,16 @@ def test_forbidden_paths_do_not_call_model(
     install_task_wiring(root)
     install_kickoff(root)
 
-    _seed_epic_chain(root)
+    epic_root = _activate_epic_chain(root)
     add_doc(
-        root,
+        epic_root,
         id="feat_002",
         title="Backlog ready",
         tier="feature",
         status="ready_to_plan",
         parent="epic_001",
     )
-    _commit_all(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    _commit_all(epic_root)
     run_role_mock.reset_mock()
 
     if action == "mint_feature":
@@ -255,9 +328,7 @@ def test_activate_epic_kickoff_one_planning_path(
 
     install_epic_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
 
     assert run_role_mock.await_count >= 2
 
@@ -275,8 +346,7 @@ def test_dispatch_feature_kickoff_one_planning_path(
     install_epic_boot_hook(root)
     install_feature_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
     run_role_mock.reset_mock()
 
     approve_board_feature(root, "feat_001")
@@ -297,8 +367,7 @@ def test_dispatch_feature_turn_is_told_to_mint_tasks(
     install_epic_boot_hook(root)
     install_feature_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
     run_role_mock.reset_mock()
 
     approve_board_feature(root, "feat_001")
@@ -372,20 +441,24 @@ def test_dispatch_task_kickoff_swe_turn(
     install_task_boot_hook(root)
     install_task_wiring(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
+    _activate_epic_chain(root)
+    approve_board_feature(root, "feat_001")
+    assert dispatch_feature("feat_001", "human", root=root).ok
+    run_role_mock.reset_mock()
+
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    feature_wt = get_integration_worktree(root, "feature", "feat_001")
+    assert feature_wt is not None
     add_doc(
-        root,
+        feature_wt.path,
         id="task_001",
         title="Task",
         tier="task",
         status="ready_to_plan",
         parent="feat_001",
     )
-    _commit_all(root)
-    assert activate_epic("epic_001", "human", root=root).ok
-    approve_board_feature(root, "feat_001")
-    assert dispatch_feature("feat_001", "human", root=root).ok
-    run_role_mock.reset_mock()
+    _commit_all(feature_wt.path)
 
     assert dispatch_task("task_001", "human", root=root).ok
     assert run_role_mock.await_count >= 1
@@ -403,15 +476,13 @@ def test_human_chat_on_epic_kickoff(
 
     install_epic_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
     run_role_mock.reset_mock()
 
     accept_human_chat(
         "epic_001",
         {"body": "hello", "id": "m1"},
         root=root,
-        model_id=TEST_MODEL_ID,
     )
     assert run_role_mock.await_count >= 1
 
@@ -458,8 +529,7 @@ def test_resume_idle_epic_does_not_kickoff(
 
     install_epic_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
     run_role_mock.reset_mock()
 
     resume_legally_active_graphs(root)
@@ -516,16 +586,20 @@ def test_model_resolution_failure_does_not_call_adapter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    root = make_repo(tmp_path, models=False, role_skills=True)
+    root = make_repo(tmp_path, models=True, role_skills=True)
     run_role_mock = _patch_run_role(monkeypatch)
     from cascade.epic.boot import install_epic_boot_hook
     from cascade.workspace.kickoff import install_kickoff
 
     install_epic_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
+    _activate_epic_chain(root)
+    run_role_mock.reset_mock()
+    (root / "cascade.toml").unlink()
+    _clear_epic_model_checkpoint(root)
+    from cascade.epic.boot import boot_epic
 
-    assert activate_epic("epic_001", "human", root=root).ok
+    boot_epic("epic_001")
     assert run_role_mock.await_count == 0
     war_events, _ = read_events("war_room", 0, root=root)
     assert any(e.type == "Toast" and e.payload.get("id") == "epic_001" for e in war_events)
@@ -535,17 +609,17 @@ def test_human_message_model_resolution_failure_does_not_call_adapter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    root = make_repo(tmp_path, models=False, role_skills=True)
+    root = make_repo(tmp_path, models=True, role_skills=True)
     run_role_mock = _patch_run_role(monkeypatch)
     from cascade.epic.boot import install_epic_boot_hook
     from cascade.workspace.kickoff import install_kickoff
 
     install_epic_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
     run_role_mock.reset_mock()
+    (root / "cascade.toml").unlink()
+    _clear_epic_model_checkpoint(root)
     war_events_before, _ = read_events("war_room", 0, root=root)
     toast_count_before = sum(
         1 for e in war_events_before if e.type == "Toast" and e.payload.get("id") == "epic_001"
@@ -580,8 +654,7 @@ def test_queue_event_kickoff_via_watchdog(
 
     install_epic_boot_hook(root)
     install_kickoff(root)
-    _seed_epic_chain(root)
-    assert activate_epic("epic_001", "human", root=root).ok
+    _activate_epic_chain(root)
     run_role_mock.reset_mock()
 
     append_event(

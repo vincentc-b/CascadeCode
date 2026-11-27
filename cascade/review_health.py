@@ -449,6 +449,8 @@ def _record_downstream_review_fence(
     root: Path,
     feature_id: str,
     *,
+    source_ref: str,
+    target_ref: str,
     evidence: Mapping[str, object],
     evidence_generation: str,
     repair_action_id: object,
@@ -460,6 +462,8 @@ def _record_downstream_review_fence(
 
     record_upstream_review_observation(
         feature_id,
+        source_ref=source_ref,
+        target_ref=target_ref,
         blocker_identity=_blocker_identity(evidence),
         evidence_generation=evidence_generation,
         repair_action_id=(repair_action_id if isinstance(repair_action_id, str) else None),
@@ -523,6 +527,8 @@ def _route_actionable_review_health(
         _record_downstream_review_fence(
             root,
             owner.id,
+            source_ref=str(record.get("source_branch") or ""),
+            target_ref=str(record.get("target_branch") or ""),
             evidence=evidence,
             evidence_generation=core_identity,
             repair_action_id=action_id,
@@ -608,6 +614,8 @@ def _route_actionable_review_health(
         _record_downstream_review_fence(
             root,
             owner.id,
+            source_ref=str(record.get("source_branch") or ""),
+            target_ref=str(record.get("target_branch") or ""),
             evidence=evidence,
             evidence_generation=core_identity,
             repair_action_id=None,
@@ -619,6 +627,8 @@ def _route_actionable_review_health(
     _record_downstream_review_fence(
         root,
         owner.id,
+        source_ref=str(record.get("source_branch") or ""),
+        target_ref=str(record.get("target_branch") or ""),
         evidence=evidence,
         evidence_generation=core_identity,
         repair_action_id=routed.get("action_id"),

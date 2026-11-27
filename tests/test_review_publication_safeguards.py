@@ -149,7 +149,9 @@ def test_timeout_stops_validation_descendants(tmp_path):
     while True:
         try:
             state = stat.read_text().split(") ")[1].split()[0]
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # Linux procfs can return ESRCH if the descendant exits between
+            # opening stat and reading it. Both errors prove it is gone.
             break
         if state == "Z":
             break

@@ -1,0 +1,76 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "04edd7165032c8e52d8451b0e88e5fa4cfdc6aea",
+  "proposal": {
+    "owner_work_id": "feat_051_005",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade",
+    "design_owner_directory": "cascade",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_051",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/2_active/feat_051_005_close_delivery_consumer_and_cross_feature_recovery_acceptance_gaps.md",
+      "revision": "04edd7165032c8e52d8451b0e88e5fa4cfdc6aea",
+      "content_digest": "6edf427b6b997dda88938e2f8959aa9a7fc8e468f48b80a3f457029314dfc31f"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "owning_work": "feat_051_005",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "0d73b4fc8a7e78966f1ac37103cb478f92dff2fd"
+      },
+      "content_digest": "fe13105345f25c398a5b042ee77672aa13082f8b4a27e4465ac0895fb0f70bf1"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-ROOT-010",
+      "REQ-REVIEW-DELIVERY-001",
+      "REQ-TASK-DELIVERY-003",
+      "REQ-WATCHDOG-REVIEW-001",
+      "REQ-BOSS-CLOSEOUT-001"
+    ],
+    "decision_citations": [
+      "DEC-TASK-DELIVERY-003",
+      "DEC-WATCHDOG-REVIEW-001",
+      "DEC-BOSS-CLOSEOUT-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-watchdog-code",
+      "cascade-task-code",
+      "cascade-boss-code",
+      "cascade-feature-code",
+      "cascade-workspace-code",
+      "cascade-epic-code"
+    ],
+    "affected_work_ids": [
+      "feat_051_005"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "The committed planning branch changes work records only; no product source, DESIGN.md, model, views or source contract changes at this revision. Existing source-linked context, container, component and native Code views describe current behavior, including Watchdog feature_review_pending gating and same-Feature-only Task observation routing. Tasks 1 and 2 own these corrections; Tasks 3 and 4 own integrated acceptance and final-diff design, model, render and browser reconciliation. The reviewed design paths, 14 passing current source-contract tests, diagram inventory and open gates are recorded in docs/feature_artifacts/feat_051_005_architecture_planning_review.md. This planning review does not assert delivery behavior is verified."
+  }
+}

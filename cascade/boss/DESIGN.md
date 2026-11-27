@@ -158,7 +158,11 @@ architecture tuple, affected-work, comment, provider and dependency gates
 remain authoritative.
 
 [BossView](view.py) identifies candidates without requiring a Git ancestry
-proof on a read. [Canonical dispatch](../watchdog/dispatch.py) rechecks all
+probe or forge poll on a read. Its Task dependency filter consumes the same
+persisted [Feature delivery projection](../review.py) as canonical dispatch, so
+a closed row, missing or stale generation, or accepted commit absent from the
+intended target is not advertised as dispatchable. The projection's local Git
+ancestry check is bounded and read-only. [Canonical dispatch](../watchdog/dispatch.py) rechecks all
 gates and [plans the base](../stacked_dispatch.py), including multiple
 predecessors; it never starts a branch lacking required ancestry. A previously
 selected base can be replanned only before an integration checkout exists.

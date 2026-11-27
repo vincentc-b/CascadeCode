@@ -192,12 +192,12 @@ exports = supervisor -> structurizr_cli "Requests an isolated export from" {
         "cascade.semanticId" "relationship.supervisor-exports-with-cli"
     }
 }
-watchdog_reads_board = watchdog_component -> board_component "Observes lifecycle state" {
+watchdog_reads_board = watchdog_component -> board_component "Observes lifecycle state and current Feature delivery evidence" {
     properties {
         "cascade.semanticId" "relationship.watchdog-reads-board"
     }
 }
-watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches eligible work" {
+watchdog_dispatches_teams = watchdog_component -> team_component "Dispatches work after lifecycle and integration-required delivery gates" {
     properties {
         "cascade.semanticId" "relationship.watchdog-dispatches-teams"
     }
@@ -209,7 +209,7 @@ watchdog_uses_task_budget = watchdog_component -> task_team "Consumes the Task-o
     }
 }
 
-watchdog_records_task_review_evidence = watchdog_component -> task_team "Records upstream review blocker and evidence generation on owned queued Task actions; Task owns retry and verified release" {
+watchdog_records_task_review_evidence = watchdog_component -> task_team "Records exact-route upstream review evidence on queued Tasks owned by declared same-Epic dependent Features; Task owns retry and verified release" {
     properties {
         "cascade.semanticId" "relationship.watchdog-records-task-review-evidence"
     }
@@ -230,7 +230,7 @@ teams_use_collaboration = team_component -> collaboration_component "Route comme
         "cascade.semanticId" "relationship.teams-use-collaboration"
     }
 }
-boss_reads_board = boss_component -> board_component "Computes gates and rollups from" {
+boss_reads_board = boss_component -> board_component "Computes candidate gates, current Feature delivery and rollups from" {
     properties {
         "cascade.semanticId" "relationship.boss-reads-board"
     }
@@ -307,7 +307,7 @@ epic_coordinates_feature = epic_team -> feature_team "Plans and coordinates" {
     }
 }
 
-feature_coordinates_task = feature_team -> task_team "Creates and coordinates" {
+feature_coordinates_task = feature_team -> task_team "Creates, coordinates and retries through canonical dispatch" {
     properties {
         "cascade.semanticId" "relationship.feature-coordinates-task"
     }
@@ -1253,6 +1253,24 @@ code_watchdog_dispatch = element "dispatch_task" "Function" "Checks Task admissi
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/watchdog/dispatch.py"
         "cascade.sourceSymbol" "dispatch_task"
+    }
+}
+
+code_watchdog_dependency_delivery_gate = element "_dependency_review_pending" "Function" "Requires every Feature dependency to have current verified intended-target delivery before Task execution." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.dependency-delivery-gate"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/watchdog/dispatch.py"
+        "cascade.sourceSymbol" "_dependency_review_pending"
+    }
+}
+
+code_watchdog_feature_dispatch_gate = element "feature_dispatch_blockers" "Function" "Applies current delivery evidence to serial Feature admission while preserving explicitly enabled stacked execution." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.feature-dispatch-gate"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/stacked_dispatch.py"
+        "cascade.sourceSymbol" "feature_dispatch_blockers"
     }
 }
 
@@ -2258,6 +2276,24 @@ code_boss_delivery_view = element "feature_delivery_view" "Function" "Derive rea
     }
 }
 
+code_boss_delivery_execution_predicate = element "feature_delivery_satisfies_integration" "Function" "Accept only verified intended-target delivery or an explicit supported terminal disposition for integration-required execution." {
+    properties {
+        "cascade.semanticId" "element.code.boss.feature-delivery-execution-predicate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "feature_delivery_satisfies_integration"
+    }
+}
+
+code_boss_dependency_delivery_gate = element "_deps_met" "Function" "Keeps Task candidates hidden until lifecycle dependencies and current Feature delivery evidence both pass." {
+    properties {
+        "cascade.semanticId" "element.code.boss.dependency-delivery-gate"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/view.py"
+        "cascade.sourceSymbol" "_deps_met"
+    }
+}
+
 code_watchdog_authority = element "_authorized" "Function" "Bind dispatch event to active path introduction." {
     properties {
         "cascade.semanticId" "element.code.watchdog.authority"
@@ -2456,6 +2492,15 @@ code_feature_recover = element "recover_task" "Function" "Recover the existing d
     }
 }
 
+code_feature_retry = element "retry_task" "Function" "Claims one eligible Task retry and re-enters canonical dispatch so current dependency delivery evidence is rechecked." {
+    properties {
+        "cascade.semanticId" "element.code.feature.retry"
+        "cascade.parent" "element.component.feature-team"
+        "cascade.sourcePath" "cascade/feature/recovery.py"
+        "cascade.sourceSymbol" "retry_task"
+    }
+}
+
 code_feature_mismatch_result = element "ParentLifecycleMismatchRecovery" "TypedDict" "Separates selected owner and operation, request, acknowledgement, execution, refusal, and verified postcheck evidence." {
     properties {
         "cascade.semanticId" "element.code.feature.parent-lifecycle-mismatch-recovery"
@@ -2624,12 +2669,21 @@ code_task_mismatch = element "ParentLifecycleMismatch" "TypedDict" "Binds one co
     }
 }
 
-code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker and evidence generation separately from downstream Task failure and evaluated generation." {
+code_task_upstream_review_fence = element "record_upstream_review_observation" "Function" "Persist normalized upstream blocker, exact review route and evidence generation on affected dependent Feature Tasks separately from Task failure and evaluated generation." {
     properties {
         "cascade.semanticId" "element.code.task.upstream-review-fence"
         "cascade.parent" "element.component.task-team"
         "cascade.sourcePath" "cascade/task_rollup.py"
         "cascade.sourceSymbol" "record_upstream_review_observation"
+    }
+}
+
+code_task_upstream_dependency = element "_dependent_feature_for_task" "Function" "Prove the queued Task's direct Feature owner declares the observed upstream Feature as a dependency under the same Epic." {
+    properties {
+        "cascade.semanticId" "element.code.task.upstream-review-dependency"
+        "cascade.parent" "element.component.task-team"
+        "cascade.sourcePath" "cascade/task_rollup.py"
+        "cascade.sourceSymbol" "_dependent_feature_for_task"
     }
 }
 
@@ -2780,6 +2834,36 @@ code_boss_obligation_to_delivery_view = code_boss_obligation -> code_boss_delive
     }
 }
 
+code_boss_dependency_gate_to_delivery_predicate = code_boss_dependency_delivery_gate -> code_boss_delivery_execution_predicate "Uses current delivery eligibility for Task visibility" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-dependency-gate-to-delivery-predicate"
+    }
+}
+
+code_boss_delivery_predicate_to_view = code_boss_delivery_execution_predicate -> code_boss_delivery_view "Classifies the current delivery projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-delivery-predicate-to-view"
+    }
+}
+
+code_watchdog_dispatch_to_dependency_delivery_gate = code_watchdog_dispatch -> code_watchdog_dependency_delivery_gate "Rechecks integration-required Feature dependencies" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-dispatch-to-dependency-delivery-gate"
+    }
+}
+
+code_watchdog_dependency_gate_to_delivery_predicate = code_watchdog_dependency_delivery_gate -> code_boss_delivery_execution_predicate "Uses the shared current delivery predicate" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-dependency-gate-to-delivery-predicate"
+    }
+}
+
+code_watchdog_feature_gate_to_delivery_predicate = code_watchdog_feature_dispatch_gate -> code_boss_delivery_execution_predicate "Uses the shared predicate outside the explicit stacked exception" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-feature-gate-to-delivery-predicate"
+    }
+}
+
 code_boss_reconcile_to_rollup = code_boss_reconcile -> code_boss_feature "Uses" {
     properties {
         "cascade.semanticId" "relationship.code-boss-reconcile-to-rollup"
@@ -2876,6 +2960,18 @@ code_feature_registry_to_recover = code_feature_registry -> code_feature_recover
     }
 }
 
+code_feature_registry_to_retry = code_feature_registry -> code_feature_retry "Offers the bounded retry operation" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-registry-to-retry"
+    }
+}
+
+code_feature_retry_to_watchdog_dispatch = code_feature_retry -> code_watchdog_dispatch "Re-enters canonical Task admission" {
+    properties {
+        "cascade.semanticId" "relationship.code-feature-retry-to-watchdog-dispatch"
+    }
+}
+
 code_feature_recover_to_repair = code_feature_recover -> code_feature_repair "Routes completed-parent mismatch through exact repair generation" {
     properties {
         "cascade.semanticId" "relationship.code-feature-recover-to-repair"
@@ -2957,6 +3053,12 @@ code_task_mismatch_to_actions = code_task_mismatch -> code_task_actions "Suppres
 code_task_upstream_review_fence_to_actions = code_task_upstream_review_fence -> code_task_actions "Stores observed and evaluated generations on the existing queued action" {
     properties {
         "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-actions"
+    }
+}
+
+code_task_upstream_review_fence_to_dependency = code_task_upstream_review_fence -> code_task_upstream_dependency "Requires exact source/target route and current same-Epic dependency ownership" {
+    properties {
+        "cascade.semanticId" "relationship.code-task-upstream-review-fence-to-dependency"
     }
 }
 
@@ -4399,7 +4501,7 @@ code_watchdog_actionable_review_to_feature_request = code_watchdog_actionable_re
     }
 }
 
-code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized upstream blocker evidence without claiming downstream delivery" {
+code_watchdog_actionable_review_to_task_fence = code_watchdog_actionable_review -> code_task_upstream_review_fence "Publishes normalized blocker generation and exact review route without claiming downstream delivery" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-actionable-review-to-task-fence"
     }
