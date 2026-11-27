@@ -2,7 +2,7 @@
 id: feat_056_002
 title: Show Feature approval outcomes and verify deferred dispatch end to end
 tier: feature
-status: active
+status: completed
 parent: epic_056
 children:
 - task_056_002_001
