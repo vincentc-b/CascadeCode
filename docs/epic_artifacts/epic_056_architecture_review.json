@@ -1,0 +1,139 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "4a1feb1e4e9b54d4bf545fa3687a216db2180de1",
+  "proposal": {
+    "owner_work_id": "epic_056",
+    "authorized_owner": "epic_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": ".",
+    "design_owner_directory": ".",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_056",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/epics/2_active/epic_056_separate_feature_approval_from_dispatch_readiness_and_expose.md",
+      "revision": "4a1feb1e4e9b54d4bf545fa3687a216db2180de1",
+      "content_digest": "232ae97e74ce04b1c9ee1588c058afd70df4e916a63702c6d5659b037b72a461"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": ".",
+        "design_owner_directory": ".",
+        "owning_work": "epic_056",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "DESIGN.md",
+        "revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028"
+      },
+      "content_digest": "71dfc7280bab9ec0ba52b54f79b8a858f8ef041edfc11210ac19340684964641"
+    },
+    "proposed_model": {
+      "contract": {
+        "reference": {
+          "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "code_directory": ".",
+          "design_owner_directory": ".",
+          "owning_work": "epic_056",
+          "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+          "destination_repository_role": "target",
+          "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.contract.json",
+          "revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028"
+        },
+        "content_digest": "9f213b0d5e67e962d852d425912e0ab4f0f0c5e9c9112a2fbddc438bb6fe7839"
+      },
+      "sources": [
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_056",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl",
+            "revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028"
+          },
+          "content_digest": "3ad49cf3065cf6682bfb9e6a93195379fdfd428b36faafb5a6970d703298962d"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_056",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl",
+            "revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028"
+          },
+          "content_digest": "4e52314e65f05817fd861a0faee59626f088f0f5893c1d11ec20768e704c3b1f"
+        },
+        {
+          "reference": {
+            "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "code_directory": ".",
+            "design_owner_directory": ".",
+            "owning_work": "epic_056",
+            "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+            "destination_repository_role": "target",
+            "repository_path": "architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/workspace.dsl",
+            "revision": "9d0ba60ae79d1c3319aa6fa277202846fa225028"
+          },
+          "content_digest": "5cdaa7d2e5447b2977cdba5bf754df3c9a5ac17a0831fa5d83eb2c26c5e10d5a"
+        }
+      ],
+      "source_closure_digest": "d823d507909f161d8e5e2bed23f84dbfee9eb9f820498b68d86c25773f13efef",
+      "renderer_image_digest": "sha256:c89b54231c42da90484e6bf4e398f36a40123cb4b12c9d5f09c27eef3dc9644c",
+      "renderer_settings": {
+        "cpus": "2",
+        "memory": "1536m",
+        "pids_limit": 256,
+        "timeout_seconds": 180.0,
+        "tmpfs_size": "512m"
+      },
+      "semantic_artifact_digest": "43684307e287bd22d0cfcc91eae2539ba5a3c6d1e1b06a0ef87d4050a5924f88",
+      "render_identity": "f6c53ae67ce4ae5817bf31cc6f23a1b04139fffc9355efd107deefb4f5301228"
+    },
+    "requirement_citations": [
+      "REQ-CASCADE-APPROVAL-001",
+      "REQ-FEATURE-APPROVAL-001",
+      "REQ-WARROOM-READINESS-001"
+    ],
+    "decision_citations": [
+      "DEC-CASCADE-APPROVAL-001",
+      "DEC-FEATURE-APPROVAL-001",
+      "DEC-WARROOM-READINESS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-approval-code",
+      "cascade-feature-code",
+      "cascade-war-room-components",
+      "cascade-war-room-http-code",
+      "cascade-dashboard-code"
+    ],
+    "affected_work_ids": [
+      "epic_056"
+    ],
+    "architecture_impact": "diagram_change",
+    "impact_reason": "Expose existing in-process approval orchestration as a Service component with source-linked native Code coverage; add receipt/readiness and HTTP/dashboard entry points. Correct approval storage and document current execution and interrupted receipt recovery. Context/container topology and Watchdog/Boss admission remain unchanged. Proposed permissive dependency approval and declaration fences stay in the plan and two child implementation scopes. All 25 views rendered within unchanged bounds; six actual UI navigation, deep-link, pinned-source and Level-up paths passed, reusing one render operation. Exact evidence is committed in docs/epic_artifacts/epic_056_architecture_evidence.json."
+  }
+}
