@@ -5,12 +5,19 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
+import time
 from http import HTTPStatus
 from pathlib import Path
 
 import pytest
 
 from cascade.approvals import feature_approved
+from cascade.agent.discovery.inventory import (
+    InventoryFreshness,
+    ProviderInventoryItem,
+    ProviderInventoryResult,
+)
+from cascade.agent.discovery.types import DiscoveredModel
 from tests.support import approve_epic_plan_when_ready
 from cascade.automation import reset_automation_memory
 from cascade.board.store import move_doc, read_doc
@@ -22,6 +29,45 @@ from tests.support import add_doc, commit_board, make_repo
 from tests.war_room.test_board_feature_readiness import _feature_row, _has_blocker
 from tests.war_room.test_dispatch_routes import _get, _post
 from tests.war_room.test_http_read import _free_port
+
+
+@pytest.fixture(autouse=True)
+def supported_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    now = time.time()
+    inventory = ProviderInventoryResult(
+        providers=(
+            ProviderInventoryItem(
+                provider_id="codex",
+                display_name="Codex",
+                models=(DiscoveredModel(id="offered", display_name="Offered"),),
+            ),
+        ),
+        failures=(),
+        freshness=InventoryFreshness(False, now, now + 300, 300),
+    )
+    monkeypatch.setattr("cascade.approvals.get_provider_inventory", lambda: inventory)
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch.get_provider_inventory", lambda: inventory
+    )
+
+
+def _select_supported(root: Path, work_id: str) -> None:
+    doc = read_doc(work_id, root=root)
+    roles = {
+        "epic": (
+            "epic_manager",
+            "epic_architect",
+            "feature_lead",
+            "feature_architect",
+            "swe",
+        ),
+        "feature": ("feature_lead", "feature_architect", "swe"),
+    }[doc.meta.tier]
+    doc.meta.provider = "codex"
+    doc.meta.models = {role: "offered" for role in roles}
+    from cascade.board.store import write_doc
+
+    write_doc(doc, root=root)
 
 
 def _initial_commit(root: Path) -> None:
@@ -61,6 +107,8 @@ def _assert_war_room_feature_approve_action() -> None:
 def _approve_initial_epic_plan(root: Path) -> None:
     add_doc(root, id="epic_001", title="Active epic", tier="epic", status="ready_to_plan")
     add_doc(root, id="feat_001", title="Initial child", tier="feature", parent="epic_001")
+    _select_supported(root, "epic_001")
+    _select_supported(root, "feat_001")
     commit_board(root)
     assert activate_epic("epic_001", "human", root=root).ok
     approve_epic_plan_when_ready("epic_001", root=root)
@@ -113,6 +161,7 @@ def test_late_minted_feature_approval_and_single_dispatch_e2e(
     move_doc("feat_001", "completed", root=root)
     commit_board(root)
     add_doc(root, id="feat_002", title="Late mint", tier="feature", parent="epic_001")
+    _select_supported(root, "feat_002")
     commit_board(root)
     assert not feature_approved("feat_002", root=root)
 
@@ -189,6 +238,7 @@ def test_late_mint_approval_blocked_by_unmerged_dependency_sibling(
         parent="epic_001",
         depends_on=["feat_003"],
     )
+    _select_supported(root, "feat_002")
     commit_board(root)
 
     base, server, thread = _start_war_room(root)
@@ -196,10 +246,21 @@ def test_late_mint_approval_blocked_by_unmerged_dependency_sibling(
         _status, board = _get(f"{base}/api/board")
         late_row = _feature_row(board, "feat_002")
         assert late_row["readiness"]["approved"] is False
+        assert late_row["readiness"]["approval"]["state"] == "unapproved"
+        assert late_row["readiness"]["approval"]["result"] == "approval_required"
+        assert late_row["readiness"]["approval"]["eligibility"] == "eligible_waiting"
+        assert late_row["readiness"]["approval"]["eligible"] is True
+        assert late_row["readiness"]["approval"]["affected_work_ids"] == ["feat_003"]
 
         status, body = _post(f"{base}/api/approve_feature", {"id": "feat_002"})
         assert status == HTTPStatus.OK
         assert body["newly_approved"] is True
+        assert body["approval_result"] == "approved"
+        assert body["approval_state"] == "approved"
+        assert body["execution_state"] == "waiting"
+        assert body["dispatch_pending"] is True
+        assert body["approval_explanation"]["code"] == "approval_saved_waiting"
+        assert set(body["affected_work_ids"]) == {"feat_001", "feat_002", "feat_003"}
         assert feature_approved("feat_002", root=root)
         assert read_doc("feat_002", root=root).meta.path.parent.name == "1_backlog"
         assert len(_ready_to_plan_events("feat_002", root=root)) == 0
@@ -207,6 +268,9 @@ def test_late_mint_approval_blocked_by_unmerged_dependency_sibling(
         _status, board = _get(f"{base}/api/board")
         late_row = _feature_row(board, "feat_002")
         blockers = late_row["readiness"]["blockers"]
+        assert late_row["readiness"]["approval"]["state"] == "approved"
+        assert late_row["readiness"]["approval"]["result"] == "approved"
+        assert late_row["readiness"]["approval"]["eligibility"] == "eligible_waiting"
         assert _has_blocker(blockers, "unmet_deps")
         assert any(item.startswith("unmet_deps:feat_003") for item in blockers)
     finally:
@@ -253,6 +317,7 @@ def test_late_mint_approval_blocked_when_dependency_sibling_in_review(
         parent="epic_001",
         depends_on=["feat_003"],
     )
+    _select_supported(root, "feat_002")
     commit_board(root)
 
     base, server, thread = _start_war_room(root)

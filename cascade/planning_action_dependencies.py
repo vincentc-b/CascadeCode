@@ -133,14 +133,7 @@ def require_feature_approval_dependencies(
             reasons=(reason,),
             affected_work_ids=tuple(sorted({work_id, *old_ids, *new_ids})),
         )
-    if evidence.outcome == "satisfied" or (
-        evidence.evaluation.dependencies
-        and all(
-            row.outcome in {"satisfied", "dependency_unmet"}
-            and (row.complete or row.reason == "dependency_incomplete")
-            for row in evidence.evaluation.dependencies
-        )
-    ):
+    if feature_approval_dependencies_permitted(evidence.evaluation):
         return evidence
     reasons = tuple(
         dict.fromkeys(
@@ -159,6 +152,25 @@ def require_feature_approval_dependencies(
         evidence.outcome,
         reasons=reasons,
         affected_work_ids=_affected_work_ids(evidence, work_id),
+    )
+
+
+def feature_approval_dependencies_permitted(
+    evaluation: DependencyEvaluation,
+) -> bool:
+    """Apply the individual-approval predecessor policy to supplied evidence.
+
+    This pure form lets read-only projections use exactly the mutation boundary's
+    allowlist without refreshing the board or writing approval state.
+    """
+
+    return evaluation.outcome == "satisfied" or (
+        bool(evaluation.dependencies)
+        and all(
+            row.outcome in {"satisfied", "dependency_unmet"}
+            and (row.complete or row.reason == "dependency_incomplete")
+            for row in evaluation.dependencies
+        )
     )
 
 

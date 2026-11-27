@@ -81,6 +81,27 @@ def feature_approved(feature_id: str, *, root: Path) -> bool:
     return meta is not None and meta.tier == "feature" and meta.approved_at is not None
 
 
+def canonical_feature_approval_state(feature_id: str, *, root: Path) -> str:
+    """Return receipt-backed approval state for operator-facing contracts."""
+
+    try:
+        repo = resolve_root(root)
+        meta = merged_board(repo).by_id.get(feature_id)
+    except Exception:
+        return "unknown"
+    if meta is None or meta.tier != "feature" or meta.approved_at is None:
+        return "unapproved"
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    try:
+        evidence_state, _revision = approval_evidence(meta, root=repo)
+    except Exception:
+        return "unknown"
+    if evidence_state == "current":
+        return "approved"
+    return evidence_state
+
+
 def epic_plan_approved(epic_id: str, *, root: Path) -> bool:
     repo = resolve_root(root)
     meta = merged_board(repo).by_id.get(epic_id)
@@ -135,6 +156,23 @@ def approve_feature(
         "ok": True, "feature_id": feature_id, "newly_approved": newly
     }
     _add_dispatch_warning(result, _maybe_advance_after_approval(repo))
+    try:
+        _add_feature_approval_contract(result, feature_id=feature_id, root=repo)
+    except Exception:
+        # Approval is already durable. Projection failure must not turn the
+        # successful mutation into an HTTP refusal or infer execution.
+        result.update(
+            {
+                "approval_result": "unknown",
+                "approval_state": "unknown",
+                "execution_state": "unknown",
+                "approval_explanation": {
+                    "code": "approval_readback_unavailable",
+                    "message": "Approval was saved but canonical readback is unavailable.",
+                },
+                "affected_work_ids": [feature_id],
+            }
+        )
     return result
 
 
@@ -438,6 +476,94 @@ def _add_dispatch_warning(
         first = warning.refusals[0][1]
         if first.selections is not None:
             result["selections"] = first.selections.to_dict()
+
+
+def _add_feature_approval_contract(
+    result: dict[str, object], *, feature_id: str, root: Path
+) -> None:
+    """Add receipt-backed approval and separately observed execution evidence."""
+
+    from cascade.feature.readiness import compute_feature_readiness
+    from cascade.feature.readiness_evidence import approval_evidence
+
+    board = merged_board(root)
+    meta = board.by_id.get(feature_id)
+    if meta is None or meta.tier != "feature":
+        # The write succeeded but its canonical readback is unavailable. Never
+        # infer approval from the timestamp that was held before dispatch.
+        result.update(
+            {
+                "approval_result": "unknown",
+                "approval_state": "unknown",
+                "execution_state": "unknown",
+                "approval_explanation": {
+                    "code": "approval_readback_unavailable",
+                    "message": "Approval was written but canonical readback is unavailable.",
+                },
+                "affected_work_ids": [feature_id],
+            }
+        )
+        return
+    evidence_state, _revision = approval_evidence(meta, root=root)
+    readiness = compute_feature_readiness(
+        feature_id,
+        root=root,
+        board=board,
+        approval_state=evidence_state,
+    )
+    approval_state = "approved" if readiness and readiness.approved else (
+        evidence_state if meta.approved_at is not None else "unapproved"
+    )
+    folder = meta.path.parent.name
+    execution_state = (
+        "admitted"
+        if folder == "2_active"
+        else "completed"
+        if folder == "3_completed"
+        else "waiting"
+        if folder == "1_backlog"
+        else "unknown"
+    )
+    affected: list[str] = [feature_id]
+    if readiness is not None and readiness.explanation is not None:
+        for reason in readiness.explanation.reasons:
+            affected.extend(reason.affected_work_ids)
+    result.update(
+        {
+            "approval_result": "approved" if approval_state == "approved" else "unknown",
+            "approval_state": approval_state,
+            "execution_state": execution_state,
+            "approval_explanation": {
+                "code": (
+                    "approval_saved_waiting"
+                    if approval_state == "approved" and execution_state == "waiting"
+                    else "approval_current"
+                    if approval_state == "approved"
+                    else "approval_evidence_unavailable"
+                ),
+                "message": (
+                    "Approval is current; execution is waiting on independent dispatch gates."
+                    if approval_state == "approved" and execution_state == "waiting"
+                    else "Approval is current."
+                    if approval_state == "approved"
+                    else "Canonical approval evidence is unavailable."
+                ),
+            },
+            "affected_work_ids": list(dict.fromkeys(affected)),
+        }
+    )
+    if execution_state == "waiting":
+        result["dispatch_pending"] = True
+        result.setdefault(
+            "dispatch_outcome",
+            {
+                "launched": [],
+                "not_launched": [feature_id],
+                "pending": True,
+                "message": "Approval is current; execution gates remain blocked.",
+                "blockers": list(readiness.blockers) if readiness is not None else [],
+            },
+        )
 
 
 def _set_epic_plan_approved(epic_id: str, *, root: Path) -> bool:

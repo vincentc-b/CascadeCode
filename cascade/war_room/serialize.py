@@ -713,6 +713,16 @@ def feature_readiness_to_dict(
     result: dict[str, Any] = {
         "approved": readiness.approved,
         "blockers": list(readiness.blockers),
+        "approval": {
+            "result": readiness.approval_eligibility.result,
+            "eligibility": readiness.approval_eligibility.eligibility,
+            "state": readiness.approval_state,
+            "eligible": readiness.approval_eligibility.eligible,
+            "explanation": readiness.approval_eligibility.explanation,
+            "affected_work_ids": list(
+                readiness.approval_eligibility.affected_work_ids
+            ),
+        },
     }
     if readiness.explanation is None or meta is None or board is None or root is None:
         return result

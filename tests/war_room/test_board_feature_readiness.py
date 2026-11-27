@@ -124,10 +124,21 @@ def test_board_serializes_backlog_feature_readiness(war_room_server) -> None:
 
     unapproved = _feature_row(payload, "feat_001")
     assert unapproved["readiness"]["approved"] is False
+    assert unapproved["readiness"]["approval"] == {
+        "result": "approval_required",
+        "eligibility": "eligible",
+        "state": "unapproved",
+        "eligible": True,
+        "explanation": "Current predecessor evidence permits approval.",
+        "affected_work_ids": ["feat_001"],
+    }
     assert _has_blocker(unapproved["readiness"]["blockers"], "not_approved")
 
     waiting = _feature_row(payload, "feat_003")
     assert waiting["readiness"]["approved"] is True
+    assert waiting["readiness"]["approval"]["state"] == "approved"
+    assert waiting["readiness"]["approval"]["result"] == "approved"
+    assert waiting["readiness"]["approval"]["eligibility"] == "eligible_waiting"
     assert _has_blocker(waiting["readiness"]["blockers"], "unmet_deps")
     assert any("feat_002" in item for item in waiting["readiness"]["blockers"])
 
@@ -152,10 +163,11 @@ def test_board_endpoint_reuses_one_board_scan(
     scans = 0
     original = integration_worktree._merged_board_uncached
 
-    def counting_scan(trunk):
+    def counting_scan(trunk, *, readonly=False):
         nonlocal scans
-        scans += 1
-        return original(trunk)
+        if not readonly:
+            scans += 1
+        return original(trunk, readonly=readonly)
 
     monkeypatch.setattr(integration_worktree, "_merged_board_uncached", counting_scan)
     status, _payload, _headers = _get(f"{base}/api/board")

@@ -4562,6 +4562,15 @@ code_approval_eligibility = element "require_feature_approval_dependencies" "Fun
     }
 }
 
+code_approval_policy = element "feature_approval_dependencies_permitted" "Function" "Pure approval-only allowlist shared by the mutation boundary and read-only eligibility projection." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-dependency-policy"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/planning_action_dependencies.py"
+        "cascade.sourceSymbol" "feature_approval_dependencies_permitted"
+    }
+}
+
 code_approval_strict = element "require_action_dependencies" "Function" "Refuses every unsatisfied or unknown dependency at strict planning boundaries." {
     properties {
         "cascade.semanticId" "element.code.approval.strict-dependencies"
@@ -4598,6 +4607,15 @@ code_approval_reconcile = element "reconcile_approval_dispatch" "Function" "Uses
     }
 }
 
+code_approval_result = element "_add_feature_approval_contract" "Function" "Reads matching receipt and current board lane after persistence, separating typed approval outcome from waiting or lifecycle admission without claiming provider execution." {
+    properties {
+        "cascade.semanticId" "element.code.approval.feature-result"
+        "cascade.parent" "element.component.approval"
+        "cascade.sourcePath" "cascade/approvals.py"
+        "cascade.sourceSymbol" "_add_feature_approval_contract"
+    }
+}
+
 code_feature_receipt_write = element "write_approval_evidence" "Function" "Atomically persists scope or exact receipt in tracking-root feature_approvals.json under a file lock." {
     properties {
         "cascade.semanticId" "element.code.feature.receipt-write"
@@ -4625,7 +4643,7 @@ code_feature_revision = element "_revision" "Function" "Hashes exact or delegate
     }
 }
 
-code_feature_readiness = element "compute_feature_readiness" "Function" "Projects approval and typed dispatch blockers from canonical facts without dispatching." {
+code_feature_readiness = element "compute_feature_readiness" "Function" "Projects receipt-backed approval state, approval-only predecessor eligibility and typed execution blockers without dispatching." {
     properties {
         "cascade.semanticId" "element.code.feature.readiness"
         "cascade.parent" "element.component.feature-team"
@@ -4634,7 +4652,7 @@ code_feature_readiness = element "compute_feature_readiness" "Function" "Project
     }
 }
 
-code_http_approve_feature = element "WarRoomRequestHandler._handle_approve_feature" "Method" "Decodes the displayed review context and serializes individual approval or refusal." {
+code_http_approve_feature = element "WarRoomRequestHandler._handle_approve_feature" "Method" "Preserves the operator route boundary while serializing typed approval success, refusal and independent execution evidence." {
     properties {
         "cascade.semanticId" "element.code.http.approve-feature"
         "cascade.parent" "element.component.war-room-http"
@@ -4649,6 +4667,15 @@ code_dashboard_feature_approve = element "featureApproveActionButton" "Function"
         "cascade.parent" "element.component.dashboard"
         "cascade.sourcePath" "cascade/war_room/static/war_room.js"
         "cascade.sourceSymbol" "featureApproveActionButton"
+    }
+}
+
+code_dashboard_feature_readiness = element "feature_readiness_to_dict" "Function" "Serializes compatible execution readiness plus canonical approval state and approval-only eligibility without mutation." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.feature-readiness"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/serialize.py"
+        "cascade.sourceSymbol" "feature_readiness_to_dict"
     }
 }
 
@@ -4700,6 +4727,12 @@ rel_approval_eligibility_evaluation = code_approval_eligibility -> code_approval
     }
 }
 
+rel_approval_eligibility_policy = code_approval_eligibility -> code_approval_policy "Applies the shared allowlist after refresh and fencing" {
+    properties {
+        "cascade.semanticId" "relationship.approval-eligibility-policy"
+    }
+}
+
 rel_approval_epic_dependencies = code_approval_epic -> code_approval_strict "Keeps Epic plan approval on the satisfied-only dependency policy" {
     properties {
         "cascade.semanticId" "relationship.approval-epic-dependencies"
@@ -4736,6 +4769,24 @@ rel_approval_feature_reconcile = code_approval_feature -> code_approval_reconcil
     }
 }
 
+rel_approval_feature_result = code_approval_feature -> code_approval_result "Returns receipt-backed approval separately from execution" {
+    properties {
+        "cascade.semanticId" "relationship.approval-feature-result"
+    }
+}
+
+rel_approval_result_readiness = code_approval_result -> code_feature_readiness "Reads independent execution blockers" {
+    properties {
+        "cascade.semanticId" "relationship.approval-result-readiness"
+    }
+}
+
+rel_feature_readiness_approval_policy = code_feature_readiness -> code_approval_policy "Uses the same approval-only predecessor allowlist for read projection" {
+    properties {
+        "cascade.semanticId" "relationship.feature-readiness-approval-policy"
+    }
+}
+
 rel_feature_write_revision = code_feature_receipt_write -> code_feature_revision "Binds approved document" {
     properties {
         "cascade.semanticId" "relationship.feature-write-revision"
@@ -4757,5 +4808,11 @@ rel_http_approve_handler = code_http_handler -> code_http_approve_feature "Route
 rel_dashboard_approve_lifecycle = code_dashboard_feature_approve -> code_dashboard_lifecycle_ui "Uses existing action presentation" {
     properties {
         "cascade.semanticId" "relationship.dashboard-approve-lifecycle"
+    }
+}
+
+rel_dashboard_feature_readiness = code_dashboard_feature_readiness -> code_feature_readiness "Serializes the server-owned projection" {
+    properties {
+        "cascade.semanticId" "relationship.dashboard-feature-readiness"
     }
 }

@@ -41,6 +41,18 @@ checks and writes; it is not a transaction across Git and JSON or an OS sandbox.
 | [`reconcile_approval_dispatch`](automation.py) | Use Boss ordering and canonical Watchdog dispatch after approval when automation is enabled; later reconciliation can retry a wait. |
 | [`WarRoomRequestHandler._handle_approve_feature`](war_room/server.py) | Decode the submitted review context and serialize approval/refusal. Provider and dependency failures have typed payloads; other exceptions use the generic conflict response. |
 
+The individual HTTP result preserves `ok`, `feature_id`, `newly_approved`,
+`dispatch_pending`, `dispatch_outcome`, and existing refusal fields. Additive
+fields separate the authorization result from execution: `approval_result` is
+`approved`, `refused`, or `unknown`; `approval_state` is the receipt-backed
+`approved`, `unapproved`, `stale`, or `unknown` state; `approval_explanation`
+contains a stable code and message; and `affected_work_ids` names the current
+scope or wait. `execution_state` reports `waiting`, `admitted`, `completed`, or
+`unknown`; `admitted` describes the canonical active board lane rather than a
+claim about provider execution. A current receipt can therefore return HTTP
+success with `execution_state: waiting` and `dispatch_pending: true` without
+claiming that Feature execution started.
+
 Epic plan approval additionally uses
 [`require_epic_plan_ready_for_approval`](epic/plan_readiness.py), including
 software prerequisite readiness and revision-bound role sign-offs. The individual
@@ -57,7 +69,7 @@ sequenceDiagram
     HTTP->>Approval: Feature ID and displayed review context
     Approval->>Board: Lock, refresh owner and dependency rows
     alt dependency or authorization refusal
-        Approval-->>HTTP: Refusal before approval writes
+        Approval-->>HTTP: Typed refusal before approval writes
     else satisfied or known legal predecessor wait and authorization checks pass
         Approval->>Board: Recheck unchanged owner and declaration
         Approval->>Board: Commit approved_at

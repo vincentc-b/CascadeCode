@@ -171,7 +171,7 @@ custom "cascade-dashboard-code" {
     properties {
         "cascade.codeComponent" "element.component.dashboard"
     }
-    include code_dashboard_feature_approve code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
+    include code_dashboard_feature_approve code_dashboard_feature_readiness code_dashboard_router code_dashboard_render code_dashboard_audit code_dashboard_reader code_dashboard_open_reviews code_dashboard_review_projection code_dashboard_review_ui code_dashboard_progress_ui code_dashboard_transcript_ui
     include code_dashboard_lifecycle_ui code_dashboard_board_refresh code_dashboard_plan_approval code_dashboard_post
     include code_dashboard_recovery code_dashboard_incidents code_dashboard_progress_contract code_dashboard_chat_get code_dashboard_transcript_get code_dashboard_chat_page code_dashboard_chat_read code_dashboard_chat_detail code_dashboard_chat_publish code_dashboard_chat_append code_dashboard_chat_fence code_dashboard_chat_source_fence code_dashboard_chat_index code_dashboard_chat_existing_index code_dashboard_chat_rewrite code_dashboard_chat_move code_dashboard_chat_resume_move code_dashboard_recovery_milestone code_dashboard_transcript code_dashboard_backfill
     autoLayout lr
@@ -214,6 +214,6 @@ custom "cascade-approval-code" {
     properties {
         "cascade.codeComponent" "element.component.approval"
     }
-    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_strict code_approval_review code_approval_save code_approval_reconcile
+    include code_approval_feature code_approval_epic code_approval_dependencies code_approval_eligibility code_approval_policy code_approval_strict code_approval_review code_approval_save code_approval_reconcile code_approval_result
     autoLayout lr
 }

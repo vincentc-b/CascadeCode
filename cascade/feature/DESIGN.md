@@ -255,9 +255,14 @@ bounded owning-path Git history; read-only projections cannot mint receipts.
 
 [`compute_feature_readiness`](readiness.py) combines supplied approval evidence
 with dependency, parent, sibling, integration-base and review facts. It returns
-`approved`, stable blocker codes and typed explanation reasons with affected
-work IDs. The Watchdog passes actual receipt state before admission; callers
-must not treat the timestamp-only `feature_approved` helper as that proof.
+the compatible `approved` and blocker fields plus a canonical approval state and
+an independent `ApprovalEligibility`. The eligibility projection applies the
+same pure approval-only predecessor allowlist as the mutation boundary: a known,
+legal incomplete predecessor yields `eligible_waiting`, while missing,
+cancelled, or illegal lifecycle evidence refuses or remains unavailable. Its
+explanation and affected IDs do not erase execution blockers. The Watchdog
+passes actual receipt state before admission; callers must not treat the
+timestamp-only `feature_approved` helper as that proof.
 The existing dispatch path rechecks provider and lifecycle review gates.
 
 ```mermaid
@@ -277,5 +282,6 @@ and `cascade-feature-code` include receipt write/read, revision calculation and
 readiness functions. The supervisor component view connects this owner to the
 approval service and Watchdog. Verification locations:
 [approval integration](../../tests/test_approval_dispatch_integration.py) and
-[Feature tests](../../tests/feature/). Dependency-declaration fencing is not
-established by the current revision digest.
+[Feature tests](../../tests/feature/). Both scope and exact approval revisions
+include the sorted dependency declaration, while mutable predecessor completion
+state remains outside the receipt.
