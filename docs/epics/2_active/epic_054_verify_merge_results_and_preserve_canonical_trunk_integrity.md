@@ -163,6 +163,11 @@ No DESIGN.md/model edits are included in this planning turn: existing documents 
   Chose Deliver feat_054_001 → feat_054_002 → feat_054_003: exact candidate/fresh-source validation, canonical physical board/history admission, then exact merged CI/trunk convergence and accountable recovery..
   Rationale: These slices cover all six success criteria while ordering shared receipt and gate changes. Tests/design updates belong to each feature; the last slice proves the integrated incidents. Reuse existing stores, scheduler, owner lifecycle and incident-wide budget.
   Honors: All original success criteria; human review/approval gates; no implementation before approval; frugal engineering..
+
+- `dec_002` · 2026-11-27 · Epic Architect · **Evidence and authority**
+  Chose Keep prospective validation, actual accepted merge, exact merged-revision required CI, fresh remote/local sync, board proof and independently verified closure separate. Validate existing local prerequisites only; declaration does not authorize installation or establish remote CI/deployment..
+  Rationale: Green source checks or a merged review cannot attest integrated target health. Unknown/stale evidence stays unavailable. Dirty/diverged work is preserved with supported owner prerequisites; no reset, force push, replacement ledger or implicit authority.
+  Honors: Success criteria 1–6; declared software prerequisites and target identity; current review/incident/owner contracts..
 ## Amendment log
 
 _(none)_
