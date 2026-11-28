@@ -218,6 +218,19 @@ def _observe_repair_review(
         return check_result
     if snapshot.get("state") != "merged":
         return _pending("review_acceptance_pending", "wait_for_review_acceptance")
+    from cascade.review import matching_exact_result_receipt
+
+    exact_proof = matching_exact_result_receipt(record, snapshot, root=repo)
+    if exact_proof is None:
+        return _pending(
+            "exact_candidate_proof_unavailable", "restore_exact_validation_receipt"
+        )
+    accepted_identity = snapshot.get("accepted_merge_identity")
+    if (
+        isinstance(accepted_identity, Mapping)
+        and accepted_identity.get("available") is not True
+    ):
+        return _pending("accepted_merge_identity_unavailable", "refresh_forge_observation")
 
     merge_sha = snapshot.get("merge_sha")
     if (

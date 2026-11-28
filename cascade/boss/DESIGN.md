@@ -83,6 +83,8 @@ own forge state. These functions collaborate within the local supervisor.
 | [feature_review_pending](../review.py) | Read an unclosed registry row or the completed-document preparation window; missing acceptance is not a completed delivery receipt. |
 | [_require_repair_review_route](../review.py) | Compare a repair review's URL and source/target route with fresh forge facts before reuse or acceptance. |
 | [_require_open_review_repair_identity](../review.py) | Join scoped repair publication to the admitted original review identity, observation or checkpointed action. |
+| [matching_exact_result_receipt](../review.py) | Re-read the Task-owned settled receipt and compare complete candidate, review, profile and runtime identity before acceptance and independent repair verification. |
+| [_actual_accepted_merge_identity](../review.py) | Require forge URL, route, source, actual merge SHA and observed target head for the current review generation without substituting ancestry or the prospective candidate. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -94,7 +96,9 @@ flowchart TD
     Pair -->|stale or refused| Preserve[Preserve work and recovery evidence]
     Merge --> Rollup[Current repair, child, comment and approval gates]
     Rollup --> Review[Publish Feature review; stage completed document]
-    Review --> Accept[Observe forge acceptance]
+    Review --> Receipt{Exact candidate receipt still matches?}
+    Receipt -->|no| Preserve
+    Receipt -->|yes| Accept[Observe actual forge merge identity]
     Accept --> Target{Accepted merge on intended Epic target?}
     Target -->|no| Preserve
     Target -->|yes| Source[Persist verified repair source as terminal]

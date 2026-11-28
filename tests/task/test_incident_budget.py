@@ -1,5 +1,7 @@
 import json
+import hashlib
 import multiprocessing
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -7,9 +9,17 @@ import pytest
 
 from cascade.epic.dependency_approvals import AuthenticatedHuman
 from cascade.task.action_recovery import (
+    admit_review_publication_generation,
     create_or_load_action,
     load_action,
     update_recovery_record,
+)
+from cascade.review_validation import (
+    ExactValidationMaterial,
+    approved_review_validation_profile,
+    exact_material_fingerprint,
+    match_review_validation_receipt,
+    reserve_review_validation,
 )
 from cascade.task.incident_budget import (
     IncidentBudgetAuthorityError,
@@ -732,6 +742,151 @@ def test_deterministic_failure_generation_and_policy_cycles_preserve_history(
     assert extended["charged"] == rebound["charged"]
     assert extended["operations"] == rebound["operations"]
     assert len(extended["extensions"]) == 1
+
+
+def test_exact_review_receipt_fences_a_b_a_material_across_restart(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    action = create_or_load_action(
+        "review:exact",
+        "review_rebase",
+        root=root,
+        attempt_bound=3,
+        owning_team={"kind": "feature_team", "work_id": "feat_001"},
+        evidence={"affected_work_id": "feat_001"},
+    )
+    identity = {
+        "candidate": {
+            "source_sha": "a" * 40,
+            "target_sha": "b" * 40,
+            "result_commit": "c" * 40,
+            "result_tree": "d" * 40,
+        },
+        "review": {
+            "review_id": "42",
+            "review_url": "https://forge.invalid/reviews/42",
+            "generation": "7",
+            "source_ref": "feature/source",
+            "target_ref": "main",
+        },
+        "profile": {
+            "id": "cascade.review-publication",
+            "argv": ["python", "-m", "pytest"],
+            "coverage_class": "review_publication",
+            "policy_owner": "repository_operator",
+            "approval_revision": "1",
+            "timeout_seconds": 30.0,
+            "attempt_budget": 1,
+        },
+        "incident_policy_version": 1,
+        "runtime": {
+            "implementation": "CPython",
+            "python": "3.12",
+            "executable": "/usr/bin/python",
+            "executable_sha256": "e" * 64,
+            "dependency_revision": "f" * 64,
+            "import_roots": ["."],
+            "source_tree": "d" * 40,
+        },
+    }
+    material = ExactValidationMaterial(identity, exact_material_fingerprint(identity))
+    generation = {"exact_validation_material": identity}
+    admitted, changed = admit_review_publication_generation(
+        "review:exact", generation, root=root
+    )
+    assert changed
+    incident_generation = admitted["incident"]["authoritative_generation"]
+    bind_incident_budget(
+        "review:exact", "review:exact", incident_generation, {}, root=root
+    )
+    generation_digest = hashlib.sha256(
+        json.dumps(generation, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    profile = approved_review_validation_profile(
+        root, command=("python", "-m", "pytest")
+    )
+    profile = replace(profile, timeout_seconds=30.0)
+    decision, operation = reserve_review_validation(
+        "review:exact",
+        "claim:exact",
+        f"review-validator:review:exact:{generation_digest}:1",
+        root=root,
+        timeout=30.0,
+        environment_revision=dict(identity["runtime"]),
+        profile=profile,
+        material=material,
+    )
+    assert decision.admitted and operation is not None
+    settle_incident_operation(
+        "review:exact",
+        operation.operation_id,
+        {
+            "outcome": "error",
+            "failure_class": "deterministic",
+            "quality": "known",
+            "usage": {"tool_attempts": 1, "process_seconds": 2},
+        },
+        root=root,
+    )
+
+    assert match_review_validation_receipt(
+        "review:exact", material, root=root
+    )[0] == "same_material_fenced"
+    changed_identity = json.loads(json.dumps(identity))
+    changed_identity["candidate"]["source_sha"] = "1" * 40
+    changed_material = ExactValidationMaterial(
+        changed_identity, exact_material_fingerprint(changed_identity)
+    )
+    assert match_review_validation_receipt(
+        "review:exact", changed_material, root=root
+    )[0] == "admission_required"
+
+    changed_generation = {"exact_validation_material": changed_identity}
+    changed_action, changed = admit_review_publication_generation(
+        "review:exact", changed_generation, root=root
+    )
+    assert changed
+    bind_incident_budget(
+        "review:exact",
+        "review:exact",
+        changed_action["incident"]["authoritative_generation"],
+        {},
+        root=root,
+    )
+    changed_digest = hashlib.sha256(
+        json.dumps(changed_generation, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    corrected, corrected_operation = reserve_review_validation(
+        "review:exact",
+        "claim:exact",
+        f"review-validator:review:exact:{changed_digest}:2",
+        root=root,
+        timeout=30.0,
+        environment_revision=dict(changed_identity["runtime"]),
+        profile=profile,
+        material=changed_material,
+    )
+    assert corrected.admitted and corrected_operation is not None
+    settle_incident_operation(
+        "review:exact",
+        corrected_operation.operation_id,
+        {
+            "outcome": "success",
+            "validation_status": "passed",
+            "quality": "known",
+            "usage": {"tool_attempts": 1, "process_seconds": 1},
+        },
+        root=root,
+    )
+    matching, receipt = match_review_validation_receipt(
+        "review:exact", changed_material, root=root
+    )
+    assert matching == "matching_green"
+    assert receipt["operation_id"] == corrected_operation.operation_id
+    assert match_review_validation_receipt(
+        "review:exact", material, root=root
+    )[0] == "same_material_fenced"
 
 
 def test_corrupt_policy_and_in_flight_overrun_fail_closed_without_minting(

@@ -764,7 +764,9 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
         assert dispatch_task(task_id, "human", root=root).ok
         run = get_task_run(task_id)
         assert run is not None and run.state != "booting"
-    assert wait_for_background_kickoffs(10)
+    # This journey performs two real pytest subprocesses in the background;
+    # allow scheduler contention without turning the wait into a latency SLA.
+    assert wait_for_background_kickoffs(30)
     assert physical_turns == [task_id]
     assert [result["exit_code"] for result in task_validations] == [1, 0]
     red_target = task_validations[0]["final_validation"]

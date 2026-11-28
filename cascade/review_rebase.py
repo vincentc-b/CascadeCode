@@ -15,11 +15,14 @@ from typing import Mapping
 
 from cascade.review_validation import review_validation_command as validation_command
 from cascade.review_validation import (
+    ExactValidationMaterial,
     ReviewValidationAdmissionError,
     ReviewValidationOperation,
+    approved_review_validation_profile,
+    exact_review_identity,
+    inspect_exact_validation_material,
     review_validation_timeout,
-    run_review_validation,
-    validate_publication_board,
+    validate_exact_merge_candidate,
 )
 from cascade.resolution_actions import resolution_action
 from cascade.task.action_recovery import (
@@ -212,6 +215,8 @@ def check_and_publish_review_rebase(
     execution: ReviewRebaseExecution,
     *,
     validation_operation: ReviewValidationOperation | None = None,
+    validation_material: ExactValidationMaterial | None = None,
+    reusable_receipt: Mapping[str, object] | None = None,
 ) -> ReviewRebasePublication:
     """Run the bounded regression check and lease-protect source publication.
 
@@ -236,16 +241,6 @@ def check_and_publish_review_rebase(
     if _dirty_paths(worktree):
         return _publication_blocked("worktree_clean", "dirty_unrelated_paths", "The authorized worktree has uncommitted paths; they were left untouched.", worktree)
 
-    # A conflict-free Git tree can still contain duplicate lifecycle documents.
-    # Reject it before spawning checks or publishing any remote mutation.
-    from cascade.board.errors import SchemaError
-    try:
-        validate_publication_board(worktree)
-    except (SchemaError, OSError, ValueError) as exc:
-        return _publication_blocked(
-            "board", "board_validation_failed",
-            f"Resolved checkout has invalid lifecycle documents ({type(exc).__name__}); repair the board before publication.", worktree,
-        )
     try:
         trunk = locate_trunk(worktree)
         command = review_validation_command(
@@ -255,31 +250,89 @@ def check_and_publish_review_rebase(
             configured_command=validation_command(trunk),
         )
         timeout = review_validation_timeout(trunk)
-        check_result = run_review_validation(
-            command,
-            cwd=worktree,
-            timeout=timeout,
-            operation=validation_operation,
-        )
-    except subprocess.TimeoutExpired as exc:
-        return _publication_blocked(
-            "checks", "repository_checks_timed_out",
-            f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
-            checks=(ReviewRebaseCheck(command, 124, str(exc.output or ""), str(exc.stderr or "")),),
-        )
+        profile = approved_review_validation_profile(trunk, command=command)
+        if reusable_receipt is None:
+            validation = validate_exact_merge_candidate(
+                worktree,
+                execution.source_head,
+                turn.observed_target_sha,
+                command=command,
+                timeout=timeout,
+                operation=validation_operation,
+            )
+        else:
+            observation = reusable_receipt.get("observation")
+            if (
+                validation_material is None
+                or reusable_receipt.get("state") != "settled"
+                or not isinstance(observation, Mapping)
+                or observation.get("outcome") != "success"
+                or observation.get("validation_status") != "passed"
+                or reusable_receipt.get("material_fingerprint")
+                != validation_material.fingerprint
+                or reusable_receipt.get("exact_validation_material")
+                != validation_material.identity
+            ):
+                return _publication_blocked(
+                    "checks", "validation_receipt_unavailable",
+                    "The reusable exact-candidate receipt is incomplete or mismatched.",
+                    worktree,
+                )
+            validation = None
     except (OSError, ValueError, ReviewValidationAdmissionError) as exc:
         return _publication_blocked(
             "checks", "repository_checks_unavailable",
-            f"Repository checks could not run ({type(exc).__name__}); no publication attempted.", worktree,
+            f"Exact-candidate repository checks could not run ({type(exc).__name__}); no publication attempted.",
+            worktree,
+        )
+    if validation is not None and validation.stage == "board":
+        return _publication_blocked(
+            "board", "board_validation_failed",
+            "The exact candidate has invalid lifecycle documents; repair the board before publication.",
+            worktree,
+        )
+    if validation is not None and validation.reason in {
+        "source_head_changed", "validation_policy_changed", "validation_material_changed"
+    }:
+        message = {
+            "source_head_changed": (
+                "The validation candidate head changed during checks; the exact pair must be rerun."
+            ),
+            "validation_policy_changed": (
+                "The validation policy changed during checks; the approved profile must be rerun."
+            ),
+            "validation_material_changed": (
+                "Candidate, runtime or dependency identity changed; refresh material and seek bounded admission."
+            ),
+        }[validation.reason]
+        return _publication_blocked(
+            "checks", validation.reason, message, worktree,
+            checks=(ReviewRebaseCheck(
+                command, validation.returncode or 0,
+                validation.stdout, validation.stderr,
+            ),),
+        )
+    if validation is not None and validation.outcome == "timeout":
+        return _publication_blocked(
+            "checks", "repository_checks_timed_out",
+            f"Repository checks exceeded {timeout:g} seconds; validation processes were stopped and the checkout preserved.", worktree,
+            checks=(ReviewRebaseCheck(command, 124, validation.stdout, validation.stderr),),
+        )
+    if validation is not None and validation.outcome == "unavailable":
+        return _publication_blocked(
+            "checks", "repository_checks_unavailable",
+            f"Exact-candidate repository checks could not run; {validation.owner_action}", worktree,
         )
     check = ReviewRebaseCheck(
-        command, check_result.returncode,
-        check_result.stdout, check_result.stderr,
+        command,
+        (validation.returncode or 0) if validation is not None else 0,
+        validation.stdout if validation is not None else "",
+        validation.stderr if validation is not None else "",
     )
-    if check.returncode:
+    if validation is not None and validation.outcome != "passed":
         return _publication_blocked(
             "checks", "repository_checks_failed",
-            "The repository-defined review-rebase checks failed; publication was not attempted.",
+            f"The exact candidate failed repository checks ({validation.outcome}); publication was not attempted.",
             worktree, checks=(check,),
         )
     if _dirty_paths(worktree):
@@ -305,6 +358,52 @@ def check_and_publish_review_rebase(
             "The source head changed during checks; the new head must be validated before publication.",
             worktree, checks=(check,),
         )
+
+    if validation_material is not None:
+        review_identity = validation_material.identity.get("review")
+        if not isinstance(review_identity, Mapping):
+            return _publication_blocked(
+                "checks", "validation_receipt_unavailable",
+                "The admitted review identity is unavailable.", worktree, checks=(check,),
+            )
+        current_resolution = resolution_action(turn.action_id, root=trunk)
+        current_request = (
+            current_resolution.get("request")
+            if isinstance(current_resolution, Mapping)
+            else None
+        )
+        current_review_identity = (
+            exact_review_identity(
+                turn.action_id,
+                turn.review_id,
+                turn.source_ref,
+                turn.target_ref,
+                turn.observed_source_sha,
+                turn.observed_target_sha,
+                current_request,
+            )
+            if isinstance(current_request, Mapping)
+            else None
+        )
+        if current_review_identity != review_identity:
+            return _publication_blocked(
+                "authorization", "review_identity_changed",
+                "The durable review URL, route or generation changed after checks.",
+                worktree, checks=(check,),
+            )
+        refreshed = inspect_exact_validation_material(
+            worktree,
+            execution.source_head,
+            turn.observed_target_sha,
+            profile=profile,
+            review_identity=review_identity,
+        )
+        if refreshed.material is None or refreshed.material != validation_material:
+            return _publication_blocked(
+                "checks", "validation_material_changed",
+                "Candidate, profile, review, runtime or dependency identity drifted after checks.",
+                worktree, checks=(check,),
+            )
 
     # A network read after checks is required: the remote-tracking ref from
     # preflight may be stale, and the lease needs the exact remote source SHA.

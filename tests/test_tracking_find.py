@@ -196,6 +196,15 @@ def test_github_snapshot_uses_supported_query_and_last_commit_as_source_revision
     assert snapshot["source_revision"] == source_sha
     assert snapshot["source_branch"] == "epic/epic_001"
     assert snapshot["target_revision"] == "d" * 40
+    assert snapshot["accepted_merge_identity"] == {
+        "available": True,
+        "review_url": mr.url,
+        "source_branch": mr.source_branch,
+        "target_branch": mr.target_branch,
+        "source_revision": source_sha,
+        "merge_sha": sha,
+        "observed_target_head": "d" * 40,
+    }
     assert snapshot["required_check_policy"]["confirmed_empty"] is True
     assert snapshot["review_identity"]["url"] == mr.url
     assert [row["id"] for row in snapshot["comments"]] == ["comment-1", "review-1"]
@@ -282,6 +291,54 @@ def test_review_snapshot_exposes_conflicting_mergeability(tmp_path: Path) -> Non
     snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
     assert snapshot["state"] == "open"
     assert snapshot["mergeability"] == "conflicting"
+
+
+def test_merged_snapshot_marks_missing_actual_merge_sha_unavailable(
+    tmp_path: Path,
+) -> None:
+    mr = tracking.MergeRequest(
+        url="https://github.com/example/project/pull/18",
+        number="18",
+        forge="github",
+        source_branch="feat/feat_001",
+        target_branch="epic/epic_001",
+        draft=False,
+    )
+
+    def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+        if args[:3] == ["gh", "pr", "view"]:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                json.dumps(
+                    {
+                        "state": "MERGED",
+                        "url": mr.url,
+                        "headRefName": mr.source_branch,
+                        "baseRefName": mr.target_branch,
+                        "mergeCommit": None,
+                        "commits": [{"oid": "a" * 40}],
+                        "mergeable": "UNKNOWN",
+                        "mergeStateStatus": "UNKNOWN",
+                        "comments": [],
+                        "reviews": [],
+                    }
+                ),
+                "",
+            )
+        endpoint = args[-1]
+        if endpoint.endswith(f"/branches/{mr.target_branch}"):
+            return subprocess.CompletedProcess(
+                args, 0, json.dumps({"commit": {"sha": "b" * 40}}), ""
+            )
+        return subprocess.CompletedProcess(args, 1, "", "unavailable")
+
+    snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
+
+    assert snapshot["accepted_merge_identity"] == {
+        "available": False,
+        "reason": "accepted_merge_sha_unavailable",
+    }
 
 
 def test_review_snapshot_distinguishes_missing_review(tmp_path: Path) -> None:
