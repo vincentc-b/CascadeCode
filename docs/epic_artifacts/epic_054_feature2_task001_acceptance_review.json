@@ -1,0 +1,59 @@
+{
+  "work_id": "epic_054",
+  "role": "epic_manager",
+  "trigger": "feat_054_002:feat_054_002:task_001_merge_acceptance_gap",
+  "reviewed_plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+  "reviewed_feature_revision": "c651365be00dc1a0e695a3cd7b212b789e125671",
+  "reviewed_integration_revision": "b5cc51b1",
+  "outcome": "Retain the completed-Task correction prerequisite and approved implementation sequence. No Epic contract change, replacement sign-off or lifecycle recovery is performed.",
+  "verified": [
+    "Canonical Epic read retains the approved plan; both existing role sign-offs name bb26a5c8.",
+    "Canonical child listing shows Feature 1 completed, Feature 2 active with five Tasks and Feature 3 in dependent backlog. No architecture amendments are pending.",
+    "Canonical Feature 2 read contains the detailed Task 001 contract, the primary acceptance=TBD limitation and required supported reconciliation before Feature completion. Its Task breakdown still describes Task 001 as active.",
+    "Feature 2 defines exact candidate identities, distinct product/tracking roots, pinned accepted terminal history, exact cancellation/parent feedback retention, target rechecks and refusal without mutation. The reported single-checkout scan does not establish these remaining requirements.",
+    "cascade/feature/recovery.py:revise_task permits only backlog, ready_to_plan and blocked, with an execution lease check. Completed Tasks are excluded.",
+    "git diff --exit-code 5abe8b2d HEAD -- cascade DESIGN.md architecture passed. Child implementation is not present in this Epic integration diff."
+  ],
+  "reported_not_independently_verified": [
+    "Feature 2 reports Task 001 merged and canonically completed, with primary Acceptance criteria=TBD at Task read revision 199b094a and a prior revision refusal after activation.",
+    "Feature 2 reports 41 focused board/publication tests and 14 C4 source-contract tests passing. These were not rerun or treated as Epic implementation acceptance.",
+    "Feature 2 reports the physical scan covers only the supplied checkout and Task 002 has received the split-root/accepted-history requirements. No direct Task-body review or child implementation review was performed here."
+  ],
+  "owner_prerequisites": [
+    "The Task lifecycle runtime owner must provide a supported completed-Task documentation correction preserving terminal state, accepted implementation and history. A detailed Feature contract or passing tests cannot correct the canonical primary Task field. Do not reopen the Task or bypass guards through filesystem or ledger edits.",
+    "Feature 2 owns updating its work record through Cascade to reflect Task 001 completion, observed Task revision, merged implementation identity, evidence and remaining correction prerequisite. Final Feature Architect review must bind the final exact Feature revision and implemented diff.",
+    "The failed Epic architecture publication requires supported publication-runtime recovery of the exact saved request, followed by Epic Architect verification. The last failure receipt remains docs/epic_artifacts/epic_054_architecture_publication_failure.json; no recovery or success is inferred.",
+    "Feature 1's earlier completion-evidence request remains outstanding in the prior handoff. Canonical completed state alone does not establish correction of its Task acceptance gap or final architecture verification."
+  ],
+  "handoff": {
+    "recipient": "feat_054_002",
+    "request_id": "epic_054:epic_054:feature2-task001-completed-acceptance-handoff",
+    "status": "enqueued",
+    "instructions": "Update the stale Feature work-record status; preserve the completed Task and correction prerequisite; continue sequenced children with exact split-root/history proof and final architecture evidence. No unchanged refused revision retries or guard bypasses.",
+    "routing_limit": "Available Epic tools expose no completed-Task correction or failed architecture-publication recovery. Direct-family messaging cannot dispatch an unrelated runtime owner; these prerequisites remain explicit in the artifact and turn handoff."
+  },
+  "design_closeout": {
+    "reviewed_paths": [
+      "cascade/DESIGN.md",
+      "cascade/board/DESIGN.md",
+      "cascade/workspace/DESIGN.md",
+      "cascade/boss/DESIGN.md"
+    ],
+    "basis": "Read publication, physical-board, canonical ownership/retirement and closeout interfaces against the approved Epic and current Feature contract. This is an evidence-only manager handoff; child code is not available in the owned integration diff.",
+    "diagram_impact": {
+      "context": "No actor, external dependency or authority boundary changes in this handoff; existing landscape/context inventory remains Feature-owned for final implementation reconciliation.",
+      "containers": "No runtime, communication channel or persistence boundary changes; existing stores remain authoritative.",
+      "components": "No relationship change in this diff. Feature 2 retains Board/Workspace proof and provisioning ownership, Teams publication ownership and Boss consumer review.",
+      "code": "No source symbol, declaration kind, ownership or model change. Feature 2 must reconcile cascade-board-code, cascade-teams-code, cascade-workspace-code and cascade-boss-code against its final source and contract.",
+      "behavior": "No execution or recovery flow change. Feature 2 retains candidate scan, accepted-history proof, target recheck, admission/refusal and restart verification."
+    },
+    "required_child_verification": "Validate source contracts and pinned renders; exercise context/container/component/Code navigation, Level up, deep-link restoration and pinned-source opening; check stale symbols/ownership and measured warm artifact reuse within render bounds. Trace normal and failure/resume behavior and record unresolved gaps against the final revision.",
+    "updates": "No design/model edit is warranted by the evidence-only diff. No delivery history was added to designs.",
+    "verification": [
+      "Canonical Epic/Feature reads, child listing and amendment inspection completed.",
+      "Existing sign-offs and Task revision guard inspected; unchanged source/design/model diff verified.",
+      "Evidence JSON parsing and git diff --check passed before commit."
+    ],
+    "limitations": "No new runtime tests, renders, browser journeys, Feature sign-off, implementation acceptance or publication success is claimed."
+  }
+}
