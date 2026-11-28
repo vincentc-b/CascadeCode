@@ -1,0 +1,49 @@
+{
+  "revision": "514c54477b00f42a28a914a4d2ea2bd112faca1e",
+  "source_sha256": {
+    "cascade/review.py": "72915e636710c756b5940764026b3c9349c3cb57b8c33193e1bec81cb080f8e2",
+    "cascade/boss/epic_complete.py": "1bc835745d56aa2e20a360218ae13c944eb2ae8254db5b98be1048b816ee0115"
+  },
+  "result": "stale proof adopts newer generation and sets verified_closure",
+  "writes": [
+    {
+      "record": {
+        "kind": "epic_close",
+        "stage": "implementation_review_pending",
+        "review_url": "https://example.test/pulls/2",
+        "url": "https://example.test/pulls/2",
+        "source_branch": "epic/new",
+        "target_branch": "main",
+        "forge_state": "merged",
+        "current_generation": 2,
+        "observation_identity": "new-observation",
+        "accepted_merge_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observed_target_sha": "cccccccccccccccccccccccccccccccccccccccc",
+        "post_merge_ci": {
+          "state": "green",
+          "merge_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observed_target_sha": "cccccccccccccccccccccccccccccccccccccccc"
+        },
+        "board_fingerprint": "old-board-proof",
+        "sync_receipt": {
+          "ok": true,
+          "target": "main",
+          "local_sha": "cccccccccccccccccccccccccccccccccccccccc",
+          "remote_sha": "cccccccccccccccccccccccccccccccccccccccc",
+          "sync_result": "current",
+          "board_fingerprint": "old-board-proof",
+          "reason": null,
+          "owner": null,
+          "prerequisite": null
+        },
+        "verified_closure": true,
+        "closed": false,
+        "blocker": null
+      },
+      "write_options": {
+        "create": true
+      }
+    }
+  ],
+  "limitation": "Extracted production functions/classes with in-memory reader/writer; no registry write, full caller scheduling or lifecycle-lock exclusion tested."
+}
