@@ -464,7 +464,7 @@ without reopening unchanged work or enqueueing an unprocessable action.
 
 The independent `reconcile_open_review_repair` postcheck also requires green
 post-merge CI bound to the accepted merge and observed target. A source-head
-green result can no longer mark the repair verified after the merged object is
+green result does not mark the repair verified when the merged object is
 red, pending or unavailable. Polling and GET projections remain read-only; only
 the existing producer lane persists observations or changes an exact repair
 generation.

@@ -724,12 +724,32 @@ def test_board_projects_exact_post_merge_delivery_and_verified_epic_closure(
         "target_branch": "main",
         "forge_state": "merged",
         "current_generation": 9,
+        "observation_identity": "epic-observation-9",
         "accepted_merge_sha": "a" * 40,
         "observed_target_sha": "b" * 40,
         "post_merge_ci": {
             "state": "green",
             "merge_sha": "a" * 40,
             "observed_target_sha": "b" * 40,
+            "required_check_policy": {
+                "available": True,
+                "source_head": "a" * 40,
+                "target_head": "b" * 40,
+                "required": ["tests"],
+            },
+            "required_check_results": {
+                "available": True,
+                "source_head": "a" * 40,
+                "target_head": "b" * 40,
+                "statuses": {"tests": "success"},
+                "checks": {
+                    "tests": {
+                        "status": "success",
+                        "source_head": "a" * 40,
+                        "generation": 1,
+                    }
+                },
+            },
         },
         "board_fingerprint": "board-proof",
         "sync_receipt": {
@@ -737,6 +757,7 @@ def test_board_projects_exact_post_merge_delivery_and_verified_epic_closure(
             "local_sha": "b" * 40,
             "remote_sha": "b" * 40,
             "sync_result": "fast_forwarded",
+            "board_fingerprint": "sync-board-proof",
         },
         "verified_closure": True,
     }

@@ -11,7 +11,7 @@ import re
 import subprocess
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Mapping
@@ -163,17 +163,91 @@ class EpicReviewSnapshot:
             raise ValueError("epic close blocker is only valid for the blocked stage")
         if isinstance(self.generation, bool) or self.generation < 0:
             raise ValueError("epic review generation must be nonnegative")
-        if self.verified_closure and (
-            self.forge_state != "merged"
-            or not self.accepted_merge_sha
-            or self.post_merge_ci.get("state") != "green"
-            or not self.board_fingerprint
-            or self.sync_receipt.get("ok") is not True
-            or self.sync_receipt.get("remote_sha") != self.observed_target_sha
+        if (
+            self.verified_closure
+            and not epic_verified_closure_evidence_complete(self)
         ):
             raise ValueError(
                 "verified epic closure requires matching independent evidence"
             )
+
+
+def epic_post_merge_ci_evidence_complete(snapshot: EpicReviewSnapshot) -> bool:
+    """Return whether green CI is complete and bound to the accepted merge."""
+
+    merge_sha = snapshot.accepted_merge_sha
+    target_sha = snapshot.observed_target_sha
+    post_merge = snapshot.post_merge_ci
+    policy = post_merge.get("required_check_policy")
+    results = post_merge.get("required_check_results")
+    if (
+        not isinstance(merge_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}", merge_sha) is None
+        or not isinstance(target_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}", target_sha) is None
+        or post_merge.get("state") != "green"
+        or post_merge.get("merge_sha") != merge_sha
+        or post_merge.get("observed_target_sha") != target_sha
+        or not isinstance(policy, Mapping)
+        or policy.get("available") is not True
+        or policy.get("source_head") != merge_sha
+        or policy.get("target_head") != target_sha
+        or not isinstance(results, Mapping)
+        or results.get("available") is not True
+        or results.get("source_head") != merge_sha
+        or results.get("target_head") != target_sha
+    ):
+        return False
+    required = policy.get("required")
+    statuses = results.get("statuses")
+    checks = results.get("checks")
+    if (
+        not isinstance(required, list)
+        or not all(isinstance(name, str) and name for name in required)
+        or not isinstance(statuses, Mapping)
+        or not isinstance(checks, Mapping)
+    ):
+        return False
+    return all(
+        statuses.get(name) == "success"
+        and isinstance(checks.get(name), Mapping)
+        and checks[name].get("status") == "success"
+        and checks[name].get("source_head") == merge_sha
+        and checks[name].get("generation") not in (None, "")
+        and not isinstance(checks[name].get("generation"), bool)
+        for name in required
+    )
+
+
+def epic_sync_evidence_complete(snapshot: EpicReviewSnapshot) -> bool:
+    """Return whether sync proves equal local, remote, and observed target heads."""
+
+    target_sha = snapshot.observed_target_sha
+    sync = snapshot.sync_receipt
+    return bool(
+        isinstance(target_sha, str)
+        and re.fullmatch(r"[0-9a-f]{40}", target_sha) is not None
+        and snapshot.board_fingerprint
+        and sync.get("ok") is True
+        and sync.get("local_sha") == target_sha
+        and sync.get("remote_sha") == target_sha
+        and sync.get("board_fingerprint")
+    )
+
+
+def epic_verified_closure_evidence_complete(snapshot: EpicReviewSnapshot) -> bool:
+    """Return whether every exact Epic closure dimension is present and matching."""
+
+    return bool(
+        snapshot.forge_state == "merged"
+        and snapshot.generation > 0
+        and snapshot.observation_identity
+        and snapshot.review_url
+        and snapshot.source_branch
+        and snapshot.target_branch
+        and epic_post_merge_ci_evidence_complete(snapshot)
+        and epic_sync_evidence_complete(snapshot)
+    )
 
 
 def validate_review_url(url: str) -> None:
@@ -216,7 +290,7 @@ def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | No
             owner=str(blocker_raw.get("owner") or "") or None,
             prerequisite=str(blocker_raw.get("prerequisite") or "") or None,
         )
-    return EpicReviewSnapshot(
+    snapshot = EpicReviewSnapshot(
         stage=stage,  # type: ignore[arg-type]
         review_url=str(record.get("review_url") or record.get("url") or "") or None,
         source_branch=str(record.get("source_branch") or "") or None,
@@ -258,8 +332,14 @@ def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | No
             if isinstance(record.get("sync_receipt"), Mapping)
             else {}
         ),
-        verified_closure=record.get("verified_closure") is True,
+        verified_closure=False,
     )
+    if (
+        record.get("verified_closure") is True
+        and epic_verified_closure_evidence_complete(snapshot)
+    ):
+        return replace(snapshot, verified_closure=True)
+    return snapshot
 
 
 def epic_close_document_staged(meta: WorkMeta, *, root: Path) -> bool:
@@ -304,9 +384,19 @@ def epic_close_documents_staged(
 
 
 def persist_epic_review_snapshot(
-    epic_id: str, snapshot: EpicReviewSnapshot, *, root: Path
-) -> None:
-    """Atomically persist the validated epic close snapshot in the review registry."""
+    epic_id: str,
+    snapshot: EpicReviewSnapshot,
+    *,
+    root: Path,
+    expected: EpicReviewSnapshot | None = None,
+) -> bool:
+    """Atomically persist an epic snapshot, optionally fencing a stale writer.
+
+    Long-running closeout checks pass the snapshot they observed before doing
+    forge, Git, board, and synchronization work.  The registry update then
+    succeeds only while that exact review generation, route, and observation
+    remain current.
+    """
 
     blocker = snapshot.blocker
     record: dict[str, object] = {
@@ -338,7 +428,30 @@ def persist_epic_review_snapshot(
             "owner": blocker.owner,
             "prerequisite": blocker.prerequisite,
         }
-    _update_record(locate_trunk(root), epic_id, record, create=True)
+    expected_identity = None
+    expected_generation = None
+    expected_url = None
+    if expected is not None:
+        expected_generation = expected.generation
+        expected_url = expected.review_url
+        expected_identity = {
+            "kind": "epic_close",
+            "source_branch": expected.source_branch,
+            "target_branch": expected.target_branch,
+            "observation_identity": expected.observation_identity,
+        }
+    return (
+        _update_record(
+            locate_trunk(root),
+            epic_id,
+            record,
+            create=expected is None,
+            expected_generation=expected_generation,
+            expected_url=expected_url,
+            expected_identity=expected_identity,
+        )
+        is not None
+    )
 
 
 def refresh_epic_review_snapshot(

@@ -229,6 +229,28 @@ class DeterministicForge:
             snapshot["required_check_policy"] = self.required_check_policy
         if current and self.required_check_results is not None:
             snapshot["required_check_results"] = self.required_check_results
+        if (
+            current
+            and self.current_state == "merged"
+            and self.current_merge_sha is not None
+            and self.current_target_head is not None
+        ):
+            snapshot["accepted_merge_identity"] = {
+                "available": True,
+                "review_url": mr.url,
+                "source_branch": mr.source_branch,
+                "target_branch": mr.target_branch,
+                "source_revision": snapshot["source_revision"],
+                "merge_sha": self.current_merge_sha,
+                "observed_target_head": self.current_target_head,
+            }
+            snapshot["post_merge_ci"] = {
+                "state": "green",
+                "merge_sha": self.current_merge_sha,
+                "observed_target_sha": self.current_target_head,
+                "policy": self.required_check_policy,
+                "results": self.required_check_results,
+            }
         return snapshot
 
     def find(self, *_args, **_kwargs) -> MergeRequest | None:
@@ -1221,7 +1243,7 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
     assert physical_turns == [task_id]
     refs = [line.split()[2] for line in push_log.read_text(encoding="utf-8").splitlines()]
     assert refs.count("refs/heads/feat/feat_001") == 1
-    assert refs.count("refs/heads/epic/epic_001") == (1 if split_roots else 3)
+    assert refs.count("refs/heads/epic/epic_001") == (2 if split_roots else 3)
     review_messages = [
         event
         for event in read_events("war_room", 0, root=root)[0]

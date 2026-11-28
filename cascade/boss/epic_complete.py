@@ -284,9 +284,15 @@ def _finish_epic_completion_result(
                 review_state = epic_review_snapshot(epic_id, root=repo)
                 if review_state is None or not review_state.verified_closure:
                     return EpicCompleteResult(ok=False, reason="verification_pending")
-                persist_epic_review_snapshot(
-                    epic_id, _completed_epic_snapshot(review_state), root=repo
-                )
+                if not persist_epic_review_snapshot(
+                    epic_id,
+                    _completed_epic_snapshot(review_state),
+                    root=repo,
+                    expected=review_state,
+                ):
+                    return EpicCompleteResult(
+                        ok=False, reason="verification_pending"
+                    )
             _emit_epic_completed(epic_id, repo)
             _retire_epic_worktree(epic_id, repo)
             return EpicCompleteResult(ok=True, close_stage="completed")
@@ -456,6 +462,14 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
     target = resolve_product_trunk(trunk)
     if review.source_branch != f"epic/{epic_id}" or review.target_branch != target:
         return None
+    observed_review = epic_review_snapshot(epic_id, root=repo)
+    if (
+        observed_review is None
+        or observed_review.review_url != review.url
+        or observed_review.source_branch != review.source_branch
+        or observed_review.target_branch != review.target_branch
+    ):
+        return None
     try:
         workspace = create_verified_trunk_workspace(trunk, target=target)
     except GitError:
@@ -472,6 +486,7 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
                 repo,
                 "forge_evidence_unavailable",
                 "Retry the exact forge observation.",
+                expected=observed_review,
             )
             return None
         merge_sha = snapshot.get("merge_sha")
@@ -488,6 +503,13 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
             or post_merge.get("merge_sha") != merge_sha
             or post_merge.get("observed_target_sha") != workspace.revision
             or accepted.get("observed_target_head") != workspace.revision
+            or observed_review.observation_identity is None
+            or observed_review.accepted_merge_sha != merge_sha
+            or observed_review.observed_target_sha != workspace.revision
+            or observed_review.post_merge_ci != post_merge
+            or snapshot.get("url") != observed_review.review_url
+            or snapshot.get("source_branch") != observed_review.source_branch
+            or snapshot.get("target_branch") != observed_review.target_branch
         ):
             post_state = (
                 str(post_merge.get("state") or "unknown")
@@ -517,6 +539,7 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
                     if post_state == "red"
                     else "retry_exact_merge_ci_observation"
                 ),
+                expected=observed_review,
             )
             return None
         landed = subprocess.run(
@@ -552,6 +575,7 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
                 snapshot=snapshot,
                 owner="operator",
                 prerequisite="repair_and_reprove_current_physical_board",
+                expected=observed_review,
             )
             return None
         sync = synchronize_operator_trunk(root=trunk, target=target)
@@ -570,6 +594,7 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
                 sync=sync,
                 owner=sync.owner,
                 prerequisite=sync.prerequisite,
+                expected=observed_review,
             )
             return None
         try:
@@ -583,6 +608,7 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
                 snapshot=snapshot,
                 owner="operator",
                 prerequisite="observe_and_verify_new_target_generation",
+                expected=observed_review,
             )
             return None
         entry = get_integration_worktree(trunk, "epic", epic_id)
@@ -603,9 +629,15 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
             )
             if not accepted:
                 return None
-            _persist_verified_epic_closure(
-                epic_id, repo, snapshot, board_fingerprint, sync
-            )
+            if not _persist_verified_epic_closure(
+                epic_id,
+                repo,
+                snapshot,
+                board_fingerprint,
+                sync,
+                expected=observed_review,
+            ):
+                return None
             return remote_doc
         if (
             remote_doc.meta.status != "active"
@@ -633,7 +665,15 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
         )
         if not accepted:
             return None
-        _persist_verified_epic_closure(epic_id, repo, snapshot, board_fingerprint, sync)
+        if not _persist_verified_epic_closure(
+            epic_id,
+            repo,
+            snapshot,
+            board_fingerprint,
+            sync,
+            expected=observed_review,
+        ):
+            return None
         return remote_doc
 
 
@@ -662,12 +702,13 @@ def _persist_epic_verification_blocker(
     sync=None,
     owner: str | None = None,
     prerequisite: str | None = None,
-) -> None:
+    expected: EpicReviewSnapshot | None = None,
+) -> bool:
     """Persist independent failed dimensions without inventing closure."""
 
     current = epic_review_snapshot(epic_id, root=repo)
     if current is None:
-        return
+        return False
     accepted = snapshot.get("accepted_merge_identity") if snapshot else None
     accepted = accepted if isinstance(accepted, dict) else {}
     post_merge = snapshot.get("post_merge_ci") if snapshot else None
@@ -676,7 +717,7 @@ def _persist_epic_verification_blocker(
         if isinstance(post_merge, dict)
         else dict(current.post_merge_ci)
     )
-    persist_epic_review_snapshot(
+    return persist_epic_review_snapshot(
         epic_id,
         EpicReviewSnapshot(
             stage="blocked",
@@ -712,6 +753,7 @@ def _persist_epic_verification_blocker(
             else dict(current.sync_receipt),
         ),
         root=repo,
+        expected=expected,
     )
 
 
@@ -721,7 +763,9 @@ def _persist_verified_epic_closure(
     snapshot: dict[str, object],
     board_fingerprint: str,
     sync,
-) -> None:
+    *,
+    expected: EpicReviewSnapshot,
+) -> bool:
     current = epic_review_snapshot(epic_id, root=repo)
     accepted = snapshot.get("accepted_merge_identity")
     post_merge = snapshot.get("post_merge_ci")
@@ -730,8 +774,8 @@ def _persist_verified_epic_closure(
         or not isinstance(accepted, dict)
         or not isinstance(post_merge, dict)
     ):
-        return
-    persist_epic_review_snapshot(
+        return False
+    return persist_epic_review_snapshot(
         epic_id,
         EpicReviewSnapshot(
             stage="implementation_review_pending",
@@ -749,6 +793,7 @@ def _persist_verified_epic_closure(
             verified_closure=True,
         ),
         root=repo,
+        expected=expected,
     )
 
 

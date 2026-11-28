@@ -43,7 +43,12 @@ validation, accepted merge identity, exact merge-SHA CI, product-trunk sync,
 physical-board proof, accountable repair owner/prerequisite and independently
 verified closure as separate persisted dimensions. Exact revisions remain
 visible. Pending, unavailable, stale and failed evidence are distinct, and only
-the complete matching generation can display verified closure. Feature rows
+the complete matching generation can display verified closure. A persisted
+verified flag fails closed unless its CI policy and newest result generations
+name the accepted merge and observed target, its local and remote trunk heads
+both equal that target, and both physical-board receipts are present. Legacy
+rows missing any identity remain readable but display unavailable evidence and
+a refresh prerequisite. Feature rows
 name product-trunk and physical-board evidence unavailable because those facts
 belong to Epic closeout; Epic rows expose the bounded persisted sync and board
 receipts. The original review URL and accountable Feature remain unchanged.
@@ -67,8 +72,11 @@ generation and its bounded prospective, acceptance and merge-CI payload without
 Git or forge observation. [`epic_review_snapshot_to_dict`](serialize.py) applies
 the same fail-closed presentation rule to the Epic close receipt, including
 local/remote heads, sync result, physical-board fingerprint and closure flag.
-Malformed or oversized evidence becomes unavailable with a refresh prerequisite;
-a mismatched generation or revision becomes stale. GET and dashboard polling do
+Malformed, incomplete or oversized evidence becomes unavailable with a refresh
+prerequisite; a mismatched generation or revision becomes stale. The typed
+[`EpicReviewSnapshot`](../review.py) refuses new incomplete verified receipts,
+while its persisted loader downgrades incomplete legacy flags before projection.
+GET and dashboard polling do
 not fetch Git, query a forge, validate CI, start a provider, scan an unbounded
 ledger or mutate lifecycle state.
 

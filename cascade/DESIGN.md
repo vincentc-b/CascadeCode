@@ -606,7 +606,15 @@ historical row.
 accepted identity, exact merge-SHA CI, physical-board proof and operator-trunk
 sync receipt. Boss persists their matching observation generation and grants
 verified Epic closure only when the merge and observed target agree across all
-four dimensions. Watchdog keeps accepted red, pending and unavailable work in
+four dimensions. A typed verified snapshot additionally requires the complete
+required-check policy and newest generation-bearing results, equal local and
+remote trunk heads, both physical-board proofs, and the exact review observation
+identity. Persisted incomplete legacy flags are downgraded rather than promoted
+after restart. Its verified, blocker and terminal snapshot writes compare the
+generation, URL, source/target route and observation identity again under the
+registry lock; a rejected write leaves the intervening observation unverified
+and makes the caller retry from fresh evidence. Watchdog keeps accepted red,
+pending and unavailable work in
 its bounded producer lane. Open work uses its current Feature repair owner;
 closed work retains its accepted lineage and reports the human-approved
 corrective-scope capability gate instead of reopening or enqueueing an action

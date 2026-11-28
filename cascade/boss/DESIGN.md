@@ -180,10 +180,19 @@ name the same merge SHA and freshly fetched target, then consumes Workspace's
 physical-board fingerprint and `OperatorTrunkSyncResult` independently. The
 registry retains the observation generation, accepted SHA, observed target,
 post-merge result, board proof, local/remote heads and sync result. Only matching
-green CI, a valid board and a current or successful fast-forward set
+green CI with complete policy and newest generation-bearing result evidence, a
+valid board, and equal observed, remote and local trunk heads set
 `verified_closure`; only that receipt permits completion notification and
-worktree retirement. A dirty, diverged, wrong-branch or moved checkout is
+worktree retirement. Verified, blocker and terminal writes use
+[`persist_epic_review_snapshot`](../review.py) to compare the exact generation,
+URL, route and observation identity under the registry lock. An intervening
+observation therefore remains current and unverified instead of inheriting stale
+proof. A dirty, diverged, wrong-branch or moved checkout is
 preserved and records its operator prerequisite.
+The shared typed snapshot rejects a newly produced verified receipt when any of
+those exact identities or either board proof is absent. Incomplete persisted
+legacy flags are downgraded on load, so Boss and passive readers cannot treat a
+partial receipt as closure after restart.
 
 `DEC-BOSS-CLOSEOUT-002`: Keep these receipts in the existing review registry and
 reuse Workspace's safe synchronization boundary. Restart repeats remote
@@ -211,7 +220,8 @@ flowchart TD
 
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
-connect `cascade-boss-code` → `element.code.boss.merged-epic` → Workspace's
+connect `cascade-boss-code` → `element.code.boss.merged-epic` →
+`element.code.boss.epic-snapshot-write` and Workspace's
 `element.code.workspace.verified-trunk`. These are collaborators in one local
 runtime, not isolated services. The shared
 [review evidence contract](../DESIGN.md#delivery-and-review-boundaries) owns

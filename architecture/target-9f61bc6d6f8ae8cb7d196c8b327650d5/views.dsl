@@ -134,7 +134,7 @@ custom "cascade-boss-code" {
     properties {
         "cascade.codeComponent" "element.component.boss"
     }
-    include code_boss_merged_epic code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_epic_promote code_boss_feature code_boss_epic
+    include code_boss_merged_epic code_boss_epic_snapshot_write code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_epic_promote code_boss_feature code_boss_epic
     include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_exact_result code_boss_accepted_identity code_boss_open_review_identity code_boss_reconcile code_boss_lock code_boss_obligation code_boss_repair_postcheck_gate code_boss_delivery_view code_boss_delivery_execution_predicate code_boss_dependency_delivery_gate
     include code_boss_review_generation code_boss_review_pending code_boss_accept_generation
     autoLayout lr

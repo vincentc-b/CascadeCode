@@ -1793,7 +1793,7 @@ code_dashboard_delivery_projection = element "_post_merge_delivery_projection" "
     }
 }
 
-code_dashboard_epic_delivery_projection = element "epic_review_snapshot_to_dict" "Function" "Projects persisted Epic merge CI, local and remote trunk heads, sync result, physical-board proof, repair prerequisite and verified closure within a finite payload bound." {
+code_dashboard_epic_delivery_projection = element "epic_review_snapshot_to_dict" "Function" "Projects persisted Epic delivery evidence within a finite payload bound and fails closed unless exact merge CI, local and remote trunk heads, board proofs and observation identity are complete." {
     properties {
         "cascade.semanticId" "element.code.dashboard.epic-delivery-projection"
         "cascade.parent" "element.component.dashboard"
@@ -5360,12 +5360,21 @@ code_teams_history_refusal = element "TerminalHistoryRefusal" "Dataclass" "Carry
     }
 }
 
-code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Join fresh accepted identity, exact merge-SHA green CI, first-parent board proof, safe operator sync and matching Epic document before persisting verified closure." {
+code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Joins fresh accepted identity, complete exact merge-SHA green CI, first-parent board proof, equal local and remote trunk heads and matching Epic document before conditionally persisting verified closure." {
     properties {
         "cascade.semanticId" "element.code.boss.merged-epic"
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/boss/epic_complete.py"
         "cascade.sourceSymbol" "_merged_epic_review_landed"
+    }
+}
+
+code_boss_epic_snapshot_write = element "persist_epic_review_snapshot" "Function" "Atomically writes verified, blocker or terminal Epic close state only while the observed generation, review URL, route and observation identity remain current; typed verified receipts require complete exact CI, sync and board evidence." {
+    properties {
+        "cascade.semanticId" "element.code.boss.epic-snapshot-write"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "persist_epic_review_snapshot"
     }
 }
 
@@ -5549,5 +5558,17 @@ code_boss_landed_to_history = code_boss_merged_epic -> code_workspace_closeout_h
 code_boss_landed_to_operator_sync = code_boss_merged_epic -> code_workspace_operator_sync "Consumes independent board and local/remote synchronization receipts before verified closure" {
     properties {
         "cascade.semanticId" "relationship.code.boss.landed-operator-sync"
+    }
+}
+
+code_boss_landed_to_epic_snapshot_write = code_boss_merged_epic -> code_boss_epic_snapshot_write "Commits proof only under the exact observed review fence" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.landed-epic-snapshot-write"
+    }
+}
+
+code_boss_epic_to_epic_snapshot_write = code_boss_epic -> code_boss_epic_snapshot_write "Advances only an already verified current generation to terminal closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.epic-epic-snapshot-write"
     }
 }

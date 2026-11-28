@@ -39,7 +39,14 @@ from cascade.agent.discovery.types import (
     ReasoningCapability,
 )
 from cascade.agent.providers import ProviderId, ProviderStatus
-from cascade.review import EpicReviewSnapshot, OpenReview, epic_close_documents_staged
+from cascade.review import (
+    EpicReviewSnapshot,
+    OpenReview,
+    epic_close_documents_staged,
+    epic_post_merge_ci_evidence_complete,
+    epic_sync_evidence_complete,
+    epic_verified_closure_evidence_complete,
+)
 from cascade.war_room.room_settings import RoomSettings
 from cascade.workspace.types import FlightOverlap, FlightReport
 
@@ -907,6 +914,9 @@ def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]
     blocker = snapshot.blocker
     post_merge = snapshot.post_merge_ci
     sync = snapshot.sync_receipt
+    ci_evidence_complete = epic_post_merge_ci_evidence_complete(snapshot)
+    sync_evidence_complete = epic_sync_evidence_complete(snapshot)
+    verified_evidence = epic_verified_closure_evidence_complete(snapshot)
     identity_values = (
         snapshot.accepted_merge_sha,
         snapshot.observed_target_sha,
@@ -957,25 +967,34 @@ def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]
             or (observed_target and remote_sha and observed_target != remote_sha)
         )
     )
-    delivery_unavailable = malformed or _delivery_payload_too_large(
-        {
-            "post_merge_ci": post_merge,
-            "sync_receipt": sync,
-            "board_fingerprint": snapshot.board_fingerprint,
-            "review_url": snapshot.review_url,
-            "source_branch": snapshot.source_branch,
-            "target_branch": snapshot.target_branch,
-            "blocker": (
-                {
-                    "code": blocker.code,
-                    "message": blocker.message,
-                    "owner": blocker.owner,
-                    "prerequisite": blocker.prerequisite,
-                }
-                if blocker is not None
-                else None
-            ),
-        }
+    incomplete_ci = post_merge.get("state") == "green" and not ci_evidence_complete
+    incomplete_sync = sync.get("ok") is True and not sync_evidence_complete
+    incomplete_claim = snapshot.verified_closure and not verified_evidence
+    delivery_unavailable = (
+        malformed
+        or incomplete_ci
+        or incomplete_sync
+        or incomplete_claim
+        or _delivery_payload_too_large(
+            {
+                "post_merge_ci": post_merge,
+                "sync_receipt": sync,
+                "board_fingerprint": snapshot.board_fingerprint,
+                "review_url": snapshot.review_url,
+                "source_branch": snapshot.source_branch,
+                "target_branch": snapshot.target_branch,
+                "blocker": (
+                    {
+                        "code": blocker.code,
+                        "message": blocker.message,
+                        "owner": blocker.owner,
+                        "prerequisite": blocker.prerequisite,
+                    }
+                    if blocker is not None
+                    else None
+                ),
+            }
+        )
     )
     if delivery_unavailable:
         stale = False
@@ -997,7 +1016,7 @@ def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]
         else "authorize_supported_corrective_scope_on_current_target"
         if ci_state == "red"
         else None
-        if snapshot.verified_closure
+        if snapshot.verified_closure and verified_evidence
         else "finish_independent_delivery_verification"
     )
     owner = (
@@ -1011,7 +1030,7 @@ def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]
         else "stale"
         if stale
         else "verified"
-        if snapshot.verified_closure
+        if snapshot.verified_closure and verified_evidence
         else "pending"
     )
     delivery = {

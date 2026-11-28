@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+import cascade.boss.epic_complete as epic_complete_module
 
 from cascade.board.errors import GitError, NotFound
 from cascade.board.store import list_board, read_doc
@@ -18,8 +22,56 @@ from cascade.review import (
     refresh_epic_review_snapshot,
 )
 from cascade.tracking import ReviewNotFound
-from cascade.war_room.serialize import board_view_from_index, work_doc_to_dict
+from cascade.war_room.serialize import (
+    board_view_from_index,
+    epic_review_snapshot_to_dict,
+    work_doc_to_dict,
+)
 from tests.support import add_doc, make_repo
+
+
+def _green_post_merge_ci(merge_sha: str, target_sha: str) -> dict[str, object]:
+    return {
+        "state": "green",
+        "merge_sha": merge_sha,
+        "observed_target_sha": target_sha,
+        "required_check_policy": {
+            "available": True,
+            "source_head": merge_sha,
+            "target_head": target_sha,
+            "required": ["tests"],
+        },
+        "required_check_results": {
+            "available": True,
+            "source_head": merge_sha,
+            "target_head": target_sha,
+            "statuses": {"tests": "success"},
+            "checks": {
+                "tests": {
+                    "status": "success",
+                    "source_head": merge_sha,
+                    "generation": 1,
+                }
+            },
+        },
+    }
+
+
+def _observed_epic_snapshot(generation: int) -> EpicReviewSnapshot:
+    merge_sha = str(generation) * 40
+    target_sha = chr(ord("a") + generation) * 40
+    return EpicReviewSnapshot(
+        stage="implementation_review_pending",
+        review_url="https://github.example/acme/project/pull/17",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        forge_state="merged",
+        generation=generation,
+        observation_identity=f"observation-{generation}",
+        accepted_merge_sha=merge_sha,
+        observed_target_sha=target_sha,
+        post_merge_ci=_green_post_merge_ci(merge_sha, target_sha),
+    )
 
 
 def test_epic_review_snapshot_round_trips_all_close_fields(tmp_path: Path) -> None:
@@ -54,15 +106,157 @@ def test_verified_epic_snapshot_keeps_independent_closure_receipts(
         observation_identity="observation-3",
         accepted_merge_sha="a" * 40,
         observed_target_sha="b" * 40,
-        post_merge_ci={"state": "green", "merge_sha": "a" * 40},
+        post_merge_ci=_green_post_merge_ci("a" * 40, "b" * 40),
         board_fingerprint="board-proof",
-        sync_receipt={"ok": True, "remote_sha": "b" * 40, "sync_result": "current"},
+        sync_receipt={
+            "ok": True,
+            "local_sha": "b" * 40,
+            "remote_sha": "b" * 40,
+            "sync_result": "current",
+            "board_fingerprint": "sync-board-proof",
+        },
         verified_closure=True,
     )
 
     persist_epic_review_snapshot("epic_001", snapshot, root=root)
 
     assert epic_review_snapshot("epic_001", root=root) == snapshot
+    assert epic_review_snapshot_to_dict(snapshot)["delivery"]["verified_closure"] == {
+        "state": "verified",
+        "verified": True,
+    }
+
+
+def test_incomplete_persisted_verified_epic_snapshot_fails_closed(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    path = root / ".cascade" / "reviews.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "epic_001": {
+                    "kind": "epic_close",
+                    "stage": "completed",
+                    "review_url": "https://github.example/acme/project/pull/17",
+                    "source_branch": "epic/epic_001",
+                    "target_branch": "main",
+                    "forge_state": "merged",
+                    "current_generation": 3,
+                    "observation_identity": "observation-3",
+                    "accepted_merge_sha": "a" * 40,
+                    "observed_target_sha": "b" * 40,
+                    "post_merge_ci": {"state": "green"},
+                    "board_fingerprint": "board-proof",
+                    "sync_receipt": {"ok": True, "remote_sha": "b" * 40},
+                    "verified_closure": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = epic_review_snapshot("epic_001", root=root)
+
+    assert loaded is not None
+    assert loaded.verified_closure is False
+    delivery = epic_review_snapshot_to_dict(loaded)["delivery"]
+    assert delivery["merge_ci"]["state"] == "unavailable"
+    assert delivery["trunk_sync"]["state"] == "unavailable"
+    assert delivery["verified_closure"] == {
+        "state": "unavailable",
+        "verified": False,
+    }
+    assert delivery["next_prerequisite"] == "refresh_persisted_delivery_observation"
+
+
+def test_verified_epic_snapshot_rejects_incomplete_exact_evidence() -> None:
+    with pytest.raises(ValueError, match="matching independent evidence"):
+        EpicReviewSnapshot(
+            stage="completed",
+            review_url="https://github.example/acme/project/pull/17",
+            source_branch="epic/epic_001",
+            target_branch="main",
+            forge_state="merged",
+            generation=3,
+            observation_identity="observation-3",
+            accepted_merge_sha="a" * 40,
+            observed_target_sha="b" * 40,
+            post_merge_ci={"state": "green"},
+            board_fingerprint="board-proof",
+            sync_receipt={"ok": True, "remote_sha": "b" * 40},
+            verified_closure=True,
+        )
+
+
+def test_epic_close_writers_reject_intervening_observation_generation(
+    tmp_path: Path,
+) -> None:
+    """Old proof, blocker, and terminal writers cannot replace a newer observation."""
+
+    root = make_repo(tmp_path)
+    observed = _observed_epic_snapshot(3)
+    advanced = _observed_epic_snapshot(4)
+    persist_epic_review_snapshot("epic_001", observed, root=root)
+    persist_epic_review_snapshot("epic_001", advanced, root=root)
+
+    sync = SimpleNamespace(
+        ok=True,
+        target="main",
+        local_sha=observed.observed_target_sha,
+        remote_sha=observed.observed_target_sha,
+        sync_result="current",
+        board_fingerprint="board-3",
+        reason=None,
+        owner=None,
+        prerequisite=None,
+    )
+    forge_snapshot = {
+        "state": "merged",
+        "accepted_merge_identity": {
+            "merge_sha": observed.accepted_merge_sha,
+            "observed_target_head": observed.observed_target_sha,
+        },
+        "post_merge_ci": dict(observed.post_merge_ci),
+    }
+
+    assert not epic_complete_module._persist_verified_epic_closure(
+        "epic_001",
+        root,
+        forge_snapshot,
+        "board-3",
+        sync,
+        expected=observed,
+    )
+    assert not epic_complete_module._persist_epic_verification_blocker(
+        "epic_001",
+        root,
+        "target_moved",
+        "Observe the new target generation.",
+        expected=observed,
+    )
+    assert not persist_epic_review_snapshot(
+        "epic_001",
+        replace(
+            advanced,
+            stage="completed",
+            board_fingerprint="board-3",
+            sync_receipt={
+                "ok": True,
+                "local_sha": advanced.observed_target_sha,
+                "remote_sha": advanced.observed_target_sha,
+                "board_fingerprint": "sync-board-3",
+            },
+            verified_closure=True,
+        ),
+        root=root,
+        expected=observed,
+    )
+
+    current = epic_review_snapshot("epic_001", root=root)
+    assert current == advanced
+    assert current.verified_closure is False
 
 
 def test_feature_review_poll_ignores_epic_close_record(tmp_path: Path) -> None:
