@@ -1,0 +1,74 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "f03894633e9caa39918b51988f06c682736afd0a",
+  "proposal": {
+    "owner_work_id": "feat_054_002",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade",
+    "design_owner_directory": "cascade",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_054",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/3_completed/feat_054_002_preserve_canonical_board_history_across_merge_and_checkout_boundaries.md",
+      "revision": "f03894633e9caa39918b51988f06c682736afd0a",
+      "content_digest": "d6d6e26c1c7e3c172540493c65a57347ec8a16e2b8dac6f7dba2966c60a28657"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "owning_work": "feat_054_002",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "f03894633e9caa39918b51988f06c682736afd0a"
+      },
+      "content_digest": "885e5cf1b2b9df604e81b9835a3f6fc8362f5848f3ba70c487a1b5a9552b82d9"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-BOARD-001",
+      "REQ-WORKSPACE-OWNER-001",
+      "REQ-WORKSPACE-MERGE-001",
+      "REQ-WORKSPACE-RETIRE-001",
+      "REQ-BOSS-MERGE-001"
+    ],
+    "decision_citations": [
+      "DEC-BOARD-001",
+      "DEC-WORKSPACE-OWNER-001",
+      "DEC-WORKSPACE-MERGE-001",
+      "DEC-BOSS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-board-code",
+      "cascade-teams-code",
+      "cascade-workspace-code",
+      "cascade-boss-code"
+    ],
+    "affected_work_ids": [
+      "feat_054_002"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "Reviewed completed Feature record f0389463 against the merged implementation e86ee238 and prior final architecture review 7ecda2c4. The intervening diff updates only the Feature work record and architecture receipt; no source, design, model, view, or contract file changed. Board scan, Teams accepted-history proof, Workspace guarded merge/checkout/retirement and Boss consumption remain source-linked in cascade/board/DESIGN.md, cascade/DESIGN.md, cascade/workspace/DESIGN.md and cascade/boss/DESIGN.md. Context actors and external systems, container runtime/data boundaries and component ownership are unchanged. The Board, Teams, Workspace and Boss native Code views retain real symbols, paths, parents and declaration kinds; the source contract passes 14/14 on f0389463. Existing designs trace candidate scan, pinned accepted history, normal admission, typed refusal and target/owner drift restart with Git, board and registry state. Prior final review records merged-tree Board/C4 26/26 and the complete browser journey; subsequent focused Board/publication/checkout/C4 checks passed 91/91 on the same implementation source. The completed record accurately distinguishes child render measurements from merged checks and retains the unclassified exploratory failures. Task 001 primary acceptance TBD remains a separate supported lifecycle-owner correction. No accepted snapshot was changed. This publication covers the architecture decision for the exact new record revision."
+  }
+}
