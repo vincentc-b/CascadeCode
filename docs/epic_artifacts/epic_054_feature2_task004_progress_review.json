@@ -1,0 +1,68 @@
+{
+  "work_id": "epic_054",
+  "role": "epic_manager",
+  "triggers": [
+    "feat_054_002:feat_054_002:task004-merge-handoff-ebca3ab0",
+    "feat_054_002:feat_054_002:verification-correction-f22ccb90"
+  ],
+  "reviewed_plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+  "reviewed_feature_revision": "f22ccb9042e0186f562262ada9619d35e6a5f700",
+  "reviewed_integration_revision": "d158f850",
+  "outcome": "Existing scope, sequencing and sign-offs remain unchanged. No Epic contract amendment is indicated. The model-key test failure predates the child delivery; evidence supports correcting a stale test while preserving invalid-key rejection coverage in existing Feature verification work.",
+  "canonical_observations": [
+    "Epic plan remains bb26a5c8; latest Manager and Architect sign-offs name that revision.",
+    "Feature 1 is completed, Feature 2 active and Feature 3 dependent backlog. No architecture amendments are pending.",
+    "Feature 2 records Task 004 completed, Task 003 not yet canonically integrated and Task 005 final verification outstanding. No child completion is inferred beyond this canonical Feature record.",
+    "Owned checkout is clean before this evidence change. git diff --stat 5abe8b2d HEAD -- cascade DESIGN.md architecture is empty: child implementation is not integrated into this Epic checkout."
+  ],
+  "independent_contract_evidence": {
+    "command": "/opt/conda/bin/python3.12 -m pytest -q tests/board/test_validate.py::test_models_wrong_tier_key_fails_validation --tb=short",
+    "result": "1 failed in 0.23s, exit 1: DID NOT RAISE SchemaError at tests/board/test_validate.py:78 on unchanged Epic HEAD d158f850.",
+    "source": "cascade/board/validate.py:_EPIC_STACK_MODEL_KEYS explicitly permits swe for Epic-wide role defaults; the failing test expects that same key to be rejected.",
+    "history": "git log -1 -S _EPIC_STACK_MODEL_KEYS -- cascade/board/validate.py identifies bad2ccc39034f4a4caaec6da454ebac7655feb41, predating this Epic.",
+    "supporting_tests_inspected_not_run": [
+      "tests/test_planning_manifest_and_team_controls.py:test_manifest_authoring_unblocks_signoffs_approval_and_feature_dispatch writes Epic swe model selection",
+      "tests/war_room/test_brief_full_stack_defaults_e2e.py validates full-stack model defaults, including swe, on created Epics"
+    ],
+    "classification": "Stale wrong-tier fixture is supported by current schema, historical introduction and existing integration expectations. Feature Task 005 must confirm on its final tree and preserve real wrong-tier/unknown-role rejection coverage; this review does not change schema policy or accept a red suite."
+  },
+  "reported_not_independently_verified": {
+    "task_004_merge": "51fae3af",
+    "focused_checks": "Feature reports 16/16 checkout refusal, closeout refusal and C4 source-contract checks on c1a1b4db, followed by 25/26 Board+C4 checks with the model-key assertion as the sole failure.",
+    "cache_regression": "Feature now reports an isolated pass in 24.85 seconds after earlier nested-validator timeouts. The combined suite has not been rerun; isolated green does not close combined final-validation obligations.",
+    "task_003": "Validated implementation handoff reported, but canonical merge remains outstanding in the reviewed Feature record."
+  },
+  "owner_prerequisites": [
+    "Feature 2 retains Task 003 canonical merge proof and Task 005 combined real-Git, target-change, split-root/history, refusal and restart evidence.",
+    "Feature Architect must review the final exact revision and implemented diff, including source contract, bounded pinned render, context-to-Code navigation, Level up, restored deep links, pinned source, stale-symbol checks and measured warm reuse.",
+    "Task 001 primary acceptance remains TBD; supported lifecycle-owner correction must preserve terminal state and accepted history. No reopening, repeated unchanged refused call or direct filesystem/ledger edit is authorized.",
+    "Feature 1 completion-evidence reconciliation remains unresolved by these Feature 2 messages; canonical completion alone does not prove its acceptance-field correction or final architecture review.",
+    "Failed Epic architecture publication still requires supported publication-runtime recovery of the exact saved request and Architect verification. Available Epic tools expose neither that recovery nor completed-Task acceptance correction."
+  ],
+  "design_closeout": {
+    "reviewed_paths": [
+      "cascade/DESIGN.md#review-publication-safeguards",
+      "cascade/board/DESIGN.md",
+      "cascade/workspace/DESIGN.md#remote-trunk-inspection-and-synchronization",
+      "cascade/workspace/DESIGN.md#work-ownership-and-retirement",
+      "cascade/boss/DESIGN.md#delivery-and-closeout"
+    ],
+    "basis": "Reviewed existing source-scan limits, schema ownership, mutation/retirement authority and closeout interface against the approved plan and canonical Feature work record. The local diff contains evidence only; it cannot attest unintegrated child implementation.",
+    "diagram_impact": {
+      "context": "cascade-landscape/cascade-context unchanged: no actor, external dependency or authority-boundary change.",
+      "containers": "cascade-containers unchanged: no runtime, communication or persistence change.",
+      "components": "cascade-supervisor-components/cascade-team-components unchanged: Board, Teams, Workspace and Boss responsibilities are not changed by this evidence review.",
+      "code": "cascade-board-code/cascade-teams-code/cascade-workspace-code/cascade-boss-code unchanged locally: no source symbol, declaration kind or component ownership change; final child reconciliation remains required.",
+      "behavior": "No normal, refusal or resume path changes in this diff. Existing design limits remain accurate for this checkout; combined accepting-boundary verification belongs to Feature 2."
+    },
+    "updates": "No design or model edits warranted. No delivery history added to designs, no accepted snapshot rewritten and no speculative child behavior promoted to current architecture.",
+    "verification": "Canonical reads, child listing, amendment inspection, existing sign-off inspection and unchanged source/design/model comparison completed. Evidence JSON parsing and git diff --check passed before commit.",
+    "limitations": "No child test rerun, full green suite, render/browser run, final Feature sign-off, publication success or completion recommendation is claimed."
+  },
+  "handoff": {
+    "recipient": "feat_054_002",
+    "request_id": "epic_054:epic_054:feature2-task004-contract-classification-f22ccb90",
+    "status": "enqueued",
+    "next": "Continue existing sequenced child work, record the source-supported test correction through the Feature work record, and preserve all outstanding completion prerequisites."
+  }
+}
