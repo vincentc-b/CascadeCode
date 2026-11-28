@@ -1,0 +1,74 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "7ecda2c457867d0da8c4251b0c27394e5b356c9a",
+  "proposal": {
+    "owner_work_id": "feat_054_002",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade",
+    "design_owner_directory": "cascade",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_054",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/3_completed/feat_054_002_preserve_canonical_board_history_across_merge_and_checkout_boundaries.md",
+      "revision": "7ecda2c457867d0da8c4251b0c27394e5b356c9a",
+      "content_digest": "6e20cf3da1d6c87a914fdfee349f14932b90d998102d675ca5458bcd9088918a"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "owning_work": "feat_054_002",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "7ecda2c457867d0da8c4251b0c27394e5b356c9a"
+      },
+      "content_digest": "885e5cf1b2b9df604e81b9835a3f6fc8362f5848f3ba70c487a1b5a9552b82d9"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-BOARD-001",
+      "REQ-WORKSPACE-OWNER-001",
+      "REQ-WORKSPACE-MERGE-001",
+      "REQ-WORKSPACE-RETIRE-001",
+      "REQ-BOSS-MERGE-001"
+    ],
+    "decision_citations": [
+      "DEC-BOARD-001",
+      "DEC-WORKSPACE-OWNER-001",
+      "DEC-WORKSPACE-MERGE-001",
+      "DEC-BOSS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-board-code",
+      "cascade-teams-code",
+      "cascade-workspace-code",
+      "cascade-boss-code"
+    ],
+    "affected_work_ids": [
+      "feat_054_002"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "Final review of completed Feature plan 7ecda2c4 and canonically merged Task 005 implementation e86ee238. Compared cascade/DESIGN.md, cascade/board/DESIGN.md, cascade/workspace/DESIGN.md, cascade/boss/DESIGN.md, source entry points for Board physical scan, Teams pinned terminal-history proof, Workspace guarded lifecycle merge/checkout/retirement and Boss acceptance with pinned model.dsl, views.dsl and workspace.contract.json. Since the prior 210d75a9 review the diff changes only the Feature work record; there is no further design or model change. Context keeps its actors and external dependencies; containers keep supervisor, Git and tracking boundaries; components retain distinct Board/Teams/Workspace/Boss ownership; native Board/Teams/Workspace/Boss Code views retain valid source paths, symbols, parents and declaration kinds. Owning designs describe exact candidate and accepted history inputs, Git/board/registry persistence, normal admission, typed refusal and target/owner drift restart. C4 source-contract tests pass 14/14 on 7ecda2c4. The final Feature record documents merged-tree Board/C4 26/26 and complete browser journey including refreshed documentation panel, and child pinned render/navigation and measured warm reuse. No accepted snapshot changed. Task 001 primary acceptance TBD remains a separate supported lifecycle-owner correction; broader exploratory failures remain recorded without a green claim. This publication covers architecture only."
+  }
+}
