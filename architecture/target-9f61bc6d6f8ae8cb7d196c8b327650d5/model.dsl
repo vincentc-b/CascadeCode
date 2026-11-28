@@ -1440,6 +1440,15 @@ code_boss_merge = element "merge_task_branch" "Function" "Integrates an approved
     }
 }
 
+code_boss_epic_promote = element "promote_epic_to_trunk" "Function" "Promotes an Epic only through the exact physical-board and accepted-history merge gate." {
+    properties {
+        "cascade.semanticId" "element.code.boss.epic-promote"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/merge.py"
+        "cascade.sourceSymbol" "promote_epic_to_trunk"
+    }
+}
+
 code_boss_feature = element "try_complete_feature" "Function" "Refreshes scoped-review verification, then evaluates child completion and Feature closeout gates." {
     properties {
         "cascade.semanticId" "element.code.boss.feature"
@@ -2265,6 +2274,15 @@ code_workspace_preflight = element "preflight_lifecycle_merge_target" "Function"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
         "cascade.sourceSymbol" "preflight_lifecycle_merge_target"
+    }
+}
+
+code_workspace_lifecycle_merge = element "merge_exact_lifecycle_candidate" "Function" "Materialize and prove the exact source/target board, fence both refs, and commit only the matching result tree." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.lifecycle-merge"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
+        "cascade.sourceSymbol" "merge_exact_lifecycle_candidate"
     }
 }
 
@@ -3471,7 +3489,7 @@ code_teams_validation_material = element "ExactValidationMaterial" "Dataclass" "
     }
 }
 
-code_teams_material_inspect = element "inspect_exact_validation_material" "Function" "Preflight the approved profile, materialize the exact result and scan its physical board before any validator reservation." {
+code_teams_material_inspect = element "inspect_exact_validation_material" "Function" "Preflight the approved profile, materialize the exact result, scan its physical board and prove pinned accepted history before any validator reservation." {
     properties {
         "cascade.semanticId" "element.code.teams.material-inspect"
         "cascade.parent" "element.component.teams"
@@ -5255,9 +5273,33 @@ code_teams_history_to_refusal = code_teams_history_proof -> code_teams_history_r
     }
 }
 
+code_teams_material_inspect_to_history = code_teams_material_inspect -> code_teams_history_proof "Binds fresh accepted-history proof into publication material" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-material-inspect-to-history"
+    }
+}
+
 code_workspace_history_to_owner = code_workspace_history_repair -> code_workspace_mutation_owner "Previews repairs only through the canonical lifecycle owner" {
     properties {
         "cascade.semanticId" "relationship.code.workspace.history-owner"
+    }
+}
+
+code_workspace_lifecycle_merge_to_history = code_workspace_lifecycle_merge -> code_teams_history_proof "Requires a fresh proof for the exact lifecycle result" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.lifecycle-merge-history"
+    }
+}
+
+code_boss_merge_to_lifecycle_merge = code_boss_merge -> code_workspace_lifecycle_merge "Delegates guarded Task integration" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.merge-lifecycle-merge"
+    }
+}
+
+code_boss_epic_promote_to_lifecycle_merge = code_boss_epic_promote -> code_workspace_lifecycle_merge "Delegates guarded Epic promotion" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.epic-promote-lifecycle-merge"
     }
 }
 

@@ -60,6 +60,14 @@ delivery projection before it persists descendants, so a stale callback or an
 unsynchronized intended Epic target cannot exploit time between Boss closeout
 and checkout retirement.
 
+`REQ-BOSS-MERGE-001`: Boss Task, Feature and Epic acceptance delegates to
+Workspace's exact lifecycle merge gate while retaining the lifecycle lock,
+comment and architecture gates, current delivery evidence, source cleanliness
+and target preflight. Refusals preserve exact kind, affected IDs, evidence paths,
+diagnostic and owner action for recovery. Boss does not repair, delete, rank or
+choose physical board copies. Epic promotion permits only the established
+activation-pointer resolution and still refuses every unrelated conflict.
+
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 connect `cascade-context` → `cascade-containers` →
@@ -72,6 +80,7 @@ own forge state. These functions collaborate within the local supervisor.
 | Entry point | Responsibility |
 |---|---|
 | [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
+| [promote_epic_to_trunk](merge.py) | Under product-trunk preflight, consume the same exact physical/history gate and preserve the managed activation-pointer exception. |
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [_complete_verified_repair_source](rollup.py) | After the fresh closeout gate, persist the retained active source document as completed before retirement; absent or already terminal source is an idempotent no-op. |

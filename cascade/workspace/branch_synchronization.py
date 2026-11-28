@@ -53,6 +53,11 @@ class BranchSyncUpdateResult:
     conflict_paths: tuple[str, ...] = ()
     merge_sha: str | None = None
     no_op: bool = False
+    refusal_kind: str | None = None
+    detail: str = ""
+    owner_action: str = ""
+    affected_ids: tuple[str, ...] = ()
+    evidence_paths: tuple[str, ...] = ()
 
 
 def inspect_branch_synchronization(
@@ -422,7 +427,10 @@ def preflight_lifecycle_merge_target(
     if not _branch_exists(trunk, work_branch):
         return BranchSyncUpdateResult(ok=False, reason="branch_missing")
 
-    blocked = _preflight_blocked(meta, kind, trunk)
+    # This gate is intentionally read-only. Missing checkout repair is a
+    # separate owner-authorized recovery action; recreating it here would
+    # mutate the registry/worktree before the exact candidate is proved.
+    blocked = _preflight_blocked(meta, kind, trunk, repair_missing=False)
     if blocked is not None:
         return BranchSyncUpdateResult(ok=False, reason=blocked)
     return BranchSyncUpdateResult(ok=True)
@@ -515,33 +523,263 @@ def merge_lifecycle_source(
         if kind is None:
             return BranchSyncUpdateResult(ok=False, reason="wrong_tier")
 
-        checkout = _resolve_integration_checkout(trunk, kind, checkout_work_id)
+        checkout = _existing_integration_checkout(trunk, kind, checkout_work_id)
         if checkout is None:
             return BranchSyncUpdateResult(ok=False, reason="checkout_missing")
 
         if not _branch_exists(trunk, source_branch):
             return BranchSyncUpdateResult(ok=False, reason="branch_missing")
 
-        pre_sha = head_sha(checkout)
-        if pre_sha is None:
-            return BranchSyncUpdateResult(ok=False, reason="invariant")
+        return merge_exact_lifecycle_candidate(
+            trunk,
+            checkout,
+            source_branch,
+            integration_branch(kind, checkout_work_id),
+            owner_work_id=checkout_work_id,
+            owner_tier=meta.tier,
+            owner_parent=meta.parent,
+        )
 
-        if _run(["merge", source_branch, "--no-edit"], checkout, check=False).returncode == 0:
-            return BranchSyncUpdateResult(ok=True, merge_sha=head_sha(checkout))
 
-        conflict_paths = _validated_unmerged_paths(checkout)
-        _run(["merge", "--abort"], checkout, check=False)
-        if not _merge_state_clean(checkout):
-            return BranchSyncUpdateResult(ok=False, reason="invariant")
-        if head_sha(checkout) != pre_sha:
-            _run(["reset", "--hard", pre_sha], checkout, check=False)
-        if head_sha(checkout) != pre_sha:
-            return BranchSyncUpdateResult(ok=False, reason="invariant")
+def merge_exact_lifecycle_candidate(
+    repository: Path,
+    checkout: Path,
+    source_ref: str,
+    target_ref: str,
+    *,
+    prefer_source_paths: tuple[str, ...] = (),
+    owner_work_id: str | None = None,
+    owner_tier: str | None = None,
+    owner_parent: str | None = None,
+    owner_must_match_checkout: bool = True,
+) -> BranchSyncUpdateResult:
+    """Prove and merge one exact lifecycle pair without mutating on refusal."""
+
+    from cascade.review_validation import (
+        ExactMergeCandidate,
+        MergeCandidateRefusal,
+        TerminalHistoryRefusal,
+        materialize_exact_merge_candidate,
+        prove_accepted_terminal_history,
+    )
+
+    source_sha = _ref_commit(repository, source_ref)
+    target_sha = head_sha(checkout)
+    if source_sha is None:
+        return BranchSyncUpdateResult(ok=False, reason="branch_missing")
+    if target_sha is None:
+        return BranchSyncUpdateResult(ok=False, reason="invariant")
+    if _ref_commit(repository, target_ref) != target_sha:
         return BranchSyncUpdateResult(
             ok=False,
-            reason="branch_conflict",
-            conflict_paths=conflict_paths,
+            reason="target_changed",
+            refusal_kind="target_changed",
+            detail=f"target {target_ref} does not name checkout head {target_sha}",
+            owner_action="refresh the target and prove a new exact candidate",
         )
+
+    history_repository = repository
+    history_revision = target_sha
+    history_candidate_root: Path | None = None
+    history_owner_root = repository
+    bound_owner: Path | None = None
+    if owner_work_id is not None:
+        owner_binding = _bind_lifecycle_mutation_owner(
+            repository,
+            checkout,
+            owner_work_id,
+            owner_tier,
+            owner_parent,
+            must_match_checkout=owner_must_match_checkout,
+        )
+        if isinstance(owner_binding, BranchSyncUpdateResult):
+            return owner_binding
+        bound_owner, split_owner = owner_binding
+        history_owner_root = bound_owner
+        if split_owner:
+            owner_revision = head_sha(bound_owner)
+            if owner_revision is None or _worktree_cleanliness(bound_owner) is not None:
+                return _owner_evidence_refusal(
+                    owner_work_id,
+                    "the canonical tracking owner is not a clean pinned checkout",
+                    "restore or commit the canonical tracking owner, then prove a new candidate",
+                )
+            history_repository = bound_owner
+            history_revision = owner_revision
+            history_candidate_root = bound_owner
+
+    with materialize_exact_merge_candidate(
+        repository,
+        source_sha,
+        target_sha,
+        prefer_source_paths=prefer_source_paths,
+    ) as materialized:
+        if isinstance(materialized, MergeCandidateRefusal):
+            return BranchSyncUpdateResult(
+                ok=False,
+                reason=(
+                    "branch_conflict"
+                    if materialized.kind == "conflict"
+                    else f"candidate_{materialized.kind}"
+                ),
+                conflict_paths=materialized.conflicted_paths,
+                refusal_kind=materialized.kind,
+                detail=materialized.message,
+                owner_action=materialized.owner_action,
+            )
+        assert isinstance(materialized, ExactMergeCandidate)
+        if history_candidate_root is not None:
+            product_history = prove_accepted_terminal_history(
+                repository,
+                materialized,
+                target_sha,
+                candidate_board_root=materialized.checkout,
+                owner_root=history_owner_root,
+                target_ref=target_ref,
+            )
+            if isinstance(product_history, TerminalHistoryRefusal):
+                return BranchSyncUpdateResult(
+                    ok=False,
+                    reason=f"board_history_{product_history.kind}",
+                    refusal_kind=product_history.kind,
+                    detail=product_history.reason,
+                    owner_action=product_history.owner_action,
+                    affected_ids=product_history.affected_ids,
+                    evidence_paths=product_history.paths,
+                )
+        history = prove_accepted_terminal_history(
+            history_repository,
+            materialized,
+            history_revision,
+            accepted_repository=history_repository,
+            candidate_board_root=history_candidate_root,
+            owner_root=history_owner_root,
+            target_ref=target_ref if history_repository == repository else None,
+        )
+        if isinstance(history, TerminalHistoryRefusal):
+            return BranchSyncUpdateResult(
+                ok=False,
+                reason=f"board_history_{history.kind}",
+                refusal_kind=history.kind,
+                detail=history.reason,
+                owner_action=history.owner_action,
+                affected_ids=history.affected_ids,
+                evidence_paths=history.paths,
+            )
+
+        if owner_work_id is not None:
+            refreshed = _bind_lifecycle_mutation_owner(
+                repository,
+                checkout,
+                owner_work_id,
+                owner_tier,
+                owner_parent,
+                must_match_checkout=owner_must_match_checkout,
+            )
+            if isinstance(refreshed, BranchSyncUpdateResult):
+                return refreshed
+            refreshed_owner, refreshed_split = refreshed
+            if refreshed_owner != bound_owner:
+                return _owner_evidence_refusal(
+                    owner_work_id,
+                    "the canonical mutation owner changed after candidate proof",
+                    "refresh the owner and prove a new exact candidate",
+                )
+            if refreshed_split and (
+                head_sha(refreshed_owner) != history_revision
+                or _worktree_cleanliness(refreshed_owner) is not None
+            ):
+                return _owner_evidence_refusal(
+                    owner_work_id,
+                    "the canonical tracking owner changed after candidate proof",
+                    "refresh the tracking owner and prove a new exact candidate",
+                )
+
+        # Fence both moving refs after the fresh scan/proof.  Merge the proven
+        # source object, not a ref that could move between this check and Git.
+        if _ref_commit(repository, source_ref) != materialized.source_sha:
+            return BranchSyncUpdateResult(
+                ok=False,
+                reason="source_changed",
+                refusal_kind="source_changed",
+                detail=f"source {source_ref} moved after candidate proof",
+                owner_action="refresh both heads and prove a new exact candidate",
+            )
+        if (
+            head_sha(checkout) != materialized.target_sha
+            or _ref_commit(repository, target_ref) != materialized.target_sha
+        ):
+            return BranchSyncUpdateResult(
+                ok=False,
+                reason="target_changed",
+                refusal_kind="target_changed",
+                detail=f"target {target_ref} moved after candidate proof",
+                owner_action="refresh the target and prove a new exact candidate",
+            )
+
+        merge = _run(
+            ["merge", "--no-commit", "--no-ff", materialized.source_sha],
+            checkout,
+            check=False,
+        )
+        if merge.returncode != 0:
+            conflict_paths = _validated_unmerged_paths(checkout)
+            safe_preference = bool(prefer_source_paths) and all(
+                path
+                and not Path(path).is_absolute()
+                and ".." not in Path(path).parts
+                for path in prefer_source_paths
+            )
+            if safe_preference and set(conflict_paths) == set(prefer_source_paths):
+                resolved = _run(
+                    ["checkout", materialized.source_sha, "--", *prefer_source_paths],
+                    checkout,
+                    check=False,
+                )
+                conflict_paths = _validated_unmerged_paths(checkout)
+                if resolved.returncode == 0 and not conflict_paths:
+                    merge = resolved
+            if merge.returncode != 0:
+                _run(["merge", "--abort"], checkout, check=False)
+                return BranchSyncUpdateResult(
+                    ok=False,
+                    reason="branch_conflict" if conflict_paths else "invariant",
+                    conflict_paths=conflict_paths,
+                )
+
+        merge_head = _run(["rev-parse", "-q", "MERGE_HEAD"], checkout, check=False)
+        if merge_head.returncode != 0:
+            return BranchSyncUpdateResult(
+                ok=True, merge_sha=head_sha(checkout), no_op=True
+            )
+        observed_tree = _run(["write-tree"], checkout, check=False)
+        if (
+            observed_tree.returncode != 0
+            or observed_tree.stdout.strip() != materialized.result_tree
+        ):
+            _run(["merge", "--abort"], checkout, check=False)
+            return BranchSyncUpdateResult(
+                ok=False,
+                reason="candidate_result_changed",
+                refusal_kind="target_changed",
+                detail="the real merge tree did not match the proven candidate tree",
+                owner_action="refresh both heads and prove a new exact candidate",
+            )
+        committed = _run(
+            ["-c", "commit.gpgsign=false", "commit", "--no-edit"],
+            checkout,
+            check=False,
+        )
+        if committed.returncode != 0:
+            _run(["merge", "--abort"], checkout, check=False)
+            return BranchSyncUpdateResult(ok=False, reason="invariant")
+        return BranchSyncUpdateResult(ok=True, merge_sha=head_sha(checkout))
+
+
+def _ref_commit(repo: Path, ref: str) -> str | None:
+    result = _run(["rev-parse", "--verify", f"{ref}^{{commit}}"], repo, check=False)
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and value else None
 
 
 def _integration_kind(tier: WorkTier) -> IntegrationKind | None:
@@ -582,8 +820,86 @@ def _resolve_integration_checkout(
     return entry.path
 
 
+def _existing_integration_checkout(
+    trunk: Path, kind: IntegrationKind, work_id: str
+) -> Path | None:
+    """Return the registered checkout without repairing or publishing state."""
+
+    from cascade.workspace.integration_worktree import get_integration_worktree
+
+    entry = get_integration_worktree(trunk, kind, work_id)
+    if entry is None or not entry.path.is_dir():
+        return None
+    return entry.path
+
+
+def _owner_evidence_refusal(
+    work_id: str, detail: str, owner_action: str
+) -> BranchSyncUpdateResult:
+    return BranchSyncUpdateResult(
+        ok=False,
+        reason="board_history_evidence_unavailable",
+        refusal_kind="evidence_unavailable",
+        detail=f"{work_id}: {detail}",
+        owner_action=owner_action,
+        affected_ids=(work_id,),
+    )
+
+
+def _bind_lifecycle_mutation_owner(
+    repository: Path,
+    checkout: Path,
+    work_id: str,
+    tier: str | None,
+    parent: str | None,
+    *,
+    must_match_checkout: bool,
+) -> tuple[Path, bool] | BranchSyncUpdateResult:
+    """Bind the exact registered product/tracking owner without repairing it."""
+
+    from cascade.board.context import get_project_context
+    from cascade.workspace.errors import MutationOwnerError
+    from cascade.workspace.integration_worktree import resolve_mutation_owner
+
+    try:
+        owner = resolve_mutation_owner(
+            work_id, trunk=repository, tier=tier, parent=parent
+        ).resolve()
+    except MutationOwnerError as exc:
+        return _owner_evidence_refusal(work_id, exc.reason, exc.action)
+
+    project = get_project_context()
+    split_owner = bool(
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+    )
+    if split_owner:
+        target = locate_trunk(project.target.root).resolve()
+        tracking = locate_trunk(project.tracking.root).resolve()
+        if repository.resolve() != target or not (
+            owner == tracking or owner.is_relative_to(tracking / ".cascade")
+        ):
+            return _owner_evidence_refusal(
+                work_id,
+                "the registered product/tracking roots do not match this merge boundary",
+                "retry from the registered product root after repairing tracking ownership",
+            )
+    elif must_match_checkout and owner != checkout.resolve():
+        return _owner_evidence_refusal(
+            work_id,
+            f"registered owner {owner} is not merge checkout {checkout.resolve()}",
+            "restore the exact registered checkout before proving a new candidate",
+        )
+    return owner, split_owner
+
+
 def _preflight_blocked(
-    meta: WorkMeta, kind: IntegrationKind, trunk: Path, *, ignore_inflight: bool = False
+    meta: WorkMeta,
+    kind: IntegrationKind,
+    trunk: Path,
+    *,
+    ignore_inflight: bool = False,
+    repair_missing: bool = True,
 ) -> SyncBlockReason | None:
     feature_id = meta.parent if meta.tier == "task" else None
     if not ignore_inflight and _graph_has_inflight_turn(
@@ -591,7 +907,11 @@ def _preflight_blocked(
     ):
         return "busy"
 
-    checkout = _resolve_integration_checkout(trunk, kind, meta.id)
+    checkout = (
+        _resolve_integration_checkout(trunk, kind, meta.id)
+        if repair_missing
+        else _existing_integration_checkout(trunk, kind, meta.id)
+    )
     if checkout is None:
         return "checkout_missing"
 

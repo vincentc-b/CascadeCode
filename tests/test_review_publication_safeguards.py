@@ -138,6 +138,39 @@ def test_exact_material_inspection_precedes_admission_and_binds_complete_identit
     assert identity["runtime"]["dependency_revision"]
     assert identity["runtime"]["executable_sha256"] != "unavailable"
     assert identity["runtime"]["import_roots"] == ["."]
+    assert identity["board_history"]["accepted_revision"] == target
+    assert identity["board_history"]["fingerprint"]
+
+
+def test_exact_material_inspection_refuses_missing_accepted_history(tmp_path: Path) -> None:
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "target")
+    retained = add_doc(
+        root, id="epic_001", title="Retained", tier="epic", status="completed"
+    )
+    accepted = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-B", "source-history-loss", accepted)
+    _git(root, "rm", retained.meta.path.relative_to(root).as_posix())
+    _git(root, "commit", "-m", "drop accepted lifecycle history")
+    source = _git(root, "rev-parse", "HEAD")
+    profile = approved_review_validation_profile(
+        root, command=(sys.executable, "-c", "")
+    )
+
+    inspected = inspect_exact_validation_material(
+        root,
+        source,
+        accepted,
+        profile=profile,
+        review_identity={"review_id": "history-loss"},
+    )
+
+    assert inspected.material is None
+    assert inspected.reason == "board_history_evidence_unavailable"
+    assert inspected.history_refusal is not None
+    assert inspected.history_refusal.affected_ids == ("epic_001",)
+    assert "retained specification is missing" in inspected.history_refusal.reason
+    assert "restore the work document" in inspected.owner_action
 
 
 def test_duplicate_lifecycle_document_blocks_before_checks_and_push(

@@ -100,6 +100,7 @@ class ExactMaterialInspection:
 
     material: ExactValidationMaterial | None = None
     refusal: MergeCandidateRefusal | None = None
+    history_refusal: TerminalHistoryRefusal | None = None
     reason: str | None = None
     owner_action: str = ""
 
@@ -621,6 +622,8 @@ def materialize_exact_merge_candidate(
     repository: Path,
     source_sha: str | None,
     target_sha: str | None,
+    *,
+    prefer_source_paths: tuple[str, ...] = (),
 ) -> Iterator[ExactMergeCandidate | MergeCandidateRefusal]:
     """Create an owned checkout and resolve an exact pair with Git's merge path.
 
@@ -693,20 +696,40 @@ def materialize_exact_merge_candidate(
                     checkout, "diff", "--name-only", "--diff-filter=U"
                 ).stdout.splitlines() if line
             )
-            yield MergeCandidateRefusal(
-                "conflict" if conflicts else "unknown", exact_source, exact_target,
-                (
-                    "The exact source/target pair has merge conflicts."
-                    if conflicts else "Git could not resolve the exact source/target pair."
-                ),
-                (
-                    "Resolve the listed product conflicts on the source branch and refresh both heads."
-                    if conflicts else "Inspect the bounded Git diagnostic and restore a mergeable exact pair."
-                ),
-                conflicts,
-                _sanitized_tail(f"{merge.stdout}\n{merge.stderr}", repository, checkout),
+            safe_preference = bool(prefer_source_paths) and all(
+                path
+                and not Path(path).is_absolute()
+                and ".." not in Path(path).parts
+                for path in prefer_source_paths
             )
-            return
+            if safe_preference and set(conflicts) == set(prefer_source_paths):
+                resolved_conflict = _candidate_git(
+                    checkout, "checkout", exact_source, "--", *prefer_source_paths
+                )
+                remaining = tuple(
+                    line for line in _candidate_git(
+                        checkout, "diff", "--name-only", "--diff-filter=U"
+                    ).stdout.splitlines() if line
+                )
+                if resolved_conflict.returncode == 0 and not remaining:
+                    merge = resolved_conflict
+            if merge.returncode == 0:
+                conflicts = ()
+            else:
+                yield MergeCandidateRefusal(
+                    "conflict" if conflicts else "unknown", exact_source, exact_target,
+                    (
+                        "The exact source/target pair has merge conflicts."
+                        if conflicts else "Git could not resolve the exact source/target pair."
+                    ),
+                    (
+                        "Resolve the listed product conflicts on the source branch and refresh both heads."
+                        if conflicts else "Inspect the bounded Git diagnostic and restore a mergeable exact pair."
+                    ),
+                    conflicts,
+                    _sanitized_tail(f"{merge.stdout}\n{merge.stderr}", repository, checkout),
+                )
+                return
 
         merge_head = checkout / ".git" / "MERGE_HEAD"
         if merge_head.is_file():
@@ -813,6 +836,15 @@ def inspect_exact_validation_material(
                     "before requesting admission."
                 ),
             )
+        history = prove_accepted_terminal_history(
+            repository, result, result.target_sha
+        )
+        if isinstance(history, TerminalHistoryRefusal):
+            return ExactMaterialInspection(
+                history_refusal=history,
+                reason=f"board_history_{history.kind}",
+                owner_action=history.owner_action,
+            )
         unconfined = _unconfined_candidate_source(result.checkout)
         if unconfined is not None:
             return ExactMaterialInspection(
@@ -840,6 +872,12 @@ def inspect_exact_validation_material(
                 "attempt_budget": profile.attempt_budget,
             },
             "incident_policy_version": policy_version,
+            "board_history": {
+                "accepted_revision": history.accepted_revision,
+                "retained_ids": list(history.retained_ids),
+                "terminal_ids": list(history.terminal_ids),
+                "fingerprint": history.fingerprint,
+            },
             "runtime": _candidate_runtime_identity(result),
         }
         try:
@@ -923,6 +961,16 @@ def validate_exact_merge_candidate(
                 "fixture_environment", "board", candidate, None, command, None, "", "",
                 dependency_revision, runtime,
                 f"Repair the candidate lifecycle documents ({type(exc).__name__}) before validation.",
+            )
+
+        history = prove_accepted_terminal_history(
+            repository, candidate, candidate.target_sha
+        )
+        if isinstance(history, TerminalHistoryRefusal):
+            return ExactCandidateValidation(
+                "fixture_environment", "board", candidate, None, command, None, "", "",
+                dependency_revision, runtime, history.owner_action,
+                f"board_history_{history.kind}: {history.reason}",
             )
 
         unconfined = _unconfined_candidate_source(candidate.checkout)
@@ -1167,7 +1215,7 @@ def _physical_refusal_details(error: Exception) -> tuple[str, tuple[str, ...]]:
     else:
         kind = "malformed"
     affected = tuple(
-        sorted(set(re.findall(r"\b(?:epic|feat|task)_[0-9][A-Za-z0-9_]*\b", message)))
+        sorted(set(re.findall(r"\b(?:epic|feat|task)(?:_[0-9]+)+\b", message)))
     )
     return kind, affected
 

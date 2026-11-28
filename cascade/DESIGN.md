@@ -147,6 +147,11 @@ from reopening, and preserves cancellation reason, timestamp, cleanup outcome,
 and exact parent feedback/disposition. Valid lifecycle path and frontmatter
 transitions, including managed Epic activation pointers, do not require byte
 equality. Unrelated accepted specifications remain retained.
+`inspect_exact_validation_material` binds the fresh history-proof fingerprint,
+accepted revision and retained/terminal IDs into the immutable publication
+material before budget reservation. Post-check refresh recomputes the proof; a
+changed target, repaired tree or unavailable split-root inventory requires new
+materialization and admission, so a prior green receipt cannot cross revisions.
 This check establishes document consistency, not full Epic acceptance. It
 runs against an owned exact-pair candidate; it is not a universal
 precondition on every forge merge of a changed target. Successful source

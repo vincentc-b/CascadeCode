@@ -57,6 +57,319 @@ def _commit_on_branch(repo: Path, branch: str, rel: str, content: str, message: 
     subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True)
 
 
+def test_exact_lifecycle_merge_refuses_history_loss_without_moving_target(
+    tmp_path: Path,
+) -> None:
+    from cascade.workspace.branch_synchronization import merge_exact_lifecycle_candidate
+
+    root = make_repo(tmp_path)
+    completed = add_doc(
+        root, id="epic_001", title="Retained", tier="epic", status="completed"
+    )
+    target = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "target", target], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-b", "source"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "rm", completed.meta.path.relative_to(root).as_posix()],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "commit", "-m", "drop retained history"], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "target"], cwd=root, check=True)
+
+    result = merge_exact_lifecycle_candidate(root, root, "source", "target")
+
+    assert not result.ok
+    assert result.reason == "board_history_history"
+    assert result.refusal_kind == "history"
+    assert result.affected_ids == ("epic_001",)
+    assert "retained specification is missing" in result.detail
+    assert "new exact candidate" in result.owner_action
+    assert subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip() == target
+
+
+def test_exact_lifecycle_merge_refuses_divergent_physical_duplicates(
+    tmp_path: Path,
+) -> None:
+    from cascade.workspace.branch_synchronization import merge_exact_lifecycle_candidate
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-b", "target"], cwd=root, check=True)
+    completed = add_doc(
+        root, id="feat_001", title="Feature", tier="feature", status="completed",
+        parent="epic_001",
+    )
+    target = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-b", "source", base], cwd=root, check=True)
+    backlog = add_doc(
+        root, id="feat_001", title="Feature", tier="feature", status="backlog",
+        parent="epic_001",
+    )
+    subprocess.run(["git", "checkout", "target"], cwd=root, check=True)
+
+    result = merge_exact_lifecycle_candidate(root, root, "source", "target")
+
+    assert not result.ok
+    assert result.reason == "board_history_duplicate"
+    assert result.refusal_kind == "duplicate"
+    assert result.affected_ids == ("feat_001",)
+    assert "duplicate id feat_001" in result.detail
+    assert completed.meta.path.relative_to(root).as_posix() in result.detail
+    assert backlog.meta.path.relative_to(root).as_posix() in result.detail
+    assert subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip() == target
+
+
+def test_exact_lifecycle_merge_commits_only_the_proven_tree(tmp_path: Path) -> None:
+    from cascade.workspace.branch_synchronization import merge_exact_lifecycle_candidate
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Retained", tier="epic", status="completed")
+    target = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "target", target], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-b", "source"], cwd=root, check=True)
+    (root / "delivered.txt").write_text("exact\n", encoding="utf-8")
+    subprocess.run(["git", "add", "delivered.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "deliver"], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "target"], cwd=root, check=True)
+
+    result = merge_exact_lifecycle_candidate(root, root, "source", "target")
+
+    assert result.ok
+    assert result.merge_sha
+    assert (root / "delivered.txt").read_text(encoding="utf-8") == "exact\n"
+    assert subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"], cwd=root, check=True,
+        capture_output=True, text=True,
+    ).stdout == ""
+    replay = merge_exact_lifecycle_candidate(root, root, "source", "target")
+    assert replay.ok and replay.no_op
+    assert replay.merge_sha == result.merge_sha
+
+
+def test_exact_lifecycle_merge_restarts_after_target_moves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade import review_validation
+    from cascade.workspace.branch_synchronization import merge_exact_lifecycle_candidate
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Retained", tier="epic", status="completed")
+    target = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "branch", "target", target], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-b", "source"], cwd=root, check=True)
+    (root / "delivered.txt").write_text("exact\n", encoding="utf-8")
+    subprocess.run(["git", "add", "delivered.txt"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "deliver"], cwd=root, check=True)
+    source = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "target"], cwd=root, check=True)
+    original = review_validation.prove_accepted_terminal_history
+
+    def move_after_proof(*args, **kwargs):
+        proof = original(*args, **kwargs)
+        subprocess.run(
+            ["git", "update-ref", "refs/heads/target", source], cwd=root, check=True
+        )
+        return proof
+
+    monkeypatch.setattr(
+        review_validation, "prove_accepted_terminal_history", move_after_proof
+    )
+
+    result = merge_exact_lifecycle_candidate(root, root, "source", "target")
+
+    assert not result.ok
+    assert result.reason == "target_changed"
+    assert result.refusal_kind == "target_changed"
+    assert "new exact candidate" in result.owner_action
+
+
+def test_lifecycle_preflight_does_not_repair_missing_checkout(
+    tmp_path: Path,
+) -> None:
+    from cascade.workspace.branch_synchronization import (
+        preflight_lifecycle_merge_target,
+    )
+    from cascade.workspace.integration_worktree import registry_path
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    feature = create_integration_worktree(
+        "feature",
+        "feat_001",
+        branch="feat/feat_001",
+        base_ref="HEAD",
+        trunk=root,
+    )
+    registry_before = registry_path(root).read_bytes()
+    subprocess.run(
+        ["git", "worktree", "remove", str(feature.path)],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+
+    result = preflight_lifecycle_merge_target("feat_001", root=root)
+
+    assert not result.ok
+    assert result.reason == "checkout_missing"
+    assert not feature.path.exists()
+    assert registry_path(root).read_bytes() == registry_before
+
+
+def test_exact_lifecycle_merge_rechecks_canonical_owner_after_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cascade.workspace.branch_synchronization import merge_exact_lifecycle_candidate
+
+    root = make_repo(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    feature = create_integration_worktree(
+        "feature",
+        "feat_001",
+        branch="feat/feat_001",
+        base_ref="HEAD",
+        trunk=root,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", "source"], cwd=root, check=True, capture_output=True
+    )
+    (root / "delivered.txt").write_text("exact\n", encoding="utf-8")
+    subprocess.run(["git", "add", "delivered.txt"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "deliver"], cwd=root, check=True, capture_output=True
+    )
+
+    calls = 0
+
+    def moving_owner(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return feature.path if calls == 1 else root
+
+    monkeypatch.setattr(
+        "cascade.workspace.integration_worktree.resolve_mutation_owner", moving_owner
+    )
+    before = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    result = merge_exact_lifecycle_candidate(
+        root,
+        feature.path,
+        "source",
+        "feat/feat_001",
+        owner_work_id="feat_001",
+        owner_tier="feature",
+        owner_parent="epic_001",
+    )
+
+    assert not result.ok
+    assert result.reason == "board_history_evidence_unavailable"
+    assert result.affected_ids == ("feat_001",)
+    assert "registered owner" in result.detail
+    assert subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=feature.path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip() == before
+
+
+def test_exact_lifecycle_merge_binds_split_tracking_owner(tmp_path: Path) -> None:
+    from cascade.board.context import set_project_context
+    from cascade.workspace.branch_synchronization import merge_exact_lifecycle_candidate
+    from cascade.workspace.types import ProjectContext
+
+    target = make_repo(tmp_path / "target")
+    tracking = make_repo(tmp_path / "tracking")
+    _initial_commit(target)
+    add_doc(tracking, id="epic_001", title="Epic", tier="epic", status="active")
+    add_doc(
+        tracking,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="active",
+        parent="epic_001",
+    )
+    set_project_context(ProjectContext.split(target, tracking))
+    feature = create_integration_worktree(
+        "feature",
+        "feat_001",
+        branch="feat/feat_001",
+        base_ref="HEAD",
+        trunk=target,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", "source"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+    )
+    (target / "delivered.txt").write_text("split\n", encoding="utf-8")
+    subprocess.run(["git", "add", "delivered.txt"], cwd=target, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "deliver"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+    )
+
+    result = merge_exact_lifecycle_candidate(
+        target,
+        feature.path,
+        "source",
+        "feat/feat_001",
+        owner_work_id="feat_001",
+        owner_tier="feature",
+        owner_parent="epic_001",
+    )
+
+    assert result.ok
+    assert (feature.path / "delivered.txt").read_text(encoding="utf-8") == "split\n"
+    assert not list((feature.path / "docs").rglob("*.md"))
+
+
 def test_feature_update_merges_epic_base(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     _initial_commit(root)

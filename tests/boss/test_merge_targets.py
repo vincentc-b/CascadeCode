@@ -737,7 +737,17 @@ def test_epic_promotion_does_not_resolve_unrelated_conflicts(tmp_path: Path) -> 
     assert "Live epic spec is on branch" in pointer.body
 
 
-def test_merge_repairs_checkout_when_branch_exists_without_registry(tmp_path: Path) -> None:
+def test_merge_requires_explicit_checkout_repair_before_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "cascade.watchdog.dispatch._provider_preflight_refusal",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "cascade.approvals._require_approval_selections",
+        lambda *_args, **_kwargs: (),
+    )
     root = make_repo(tmp_path)
     _initial_commit(root)
     _stacked_board(root)
@@ -756,8 +766,14 @@ def test_merge_repairs_checkout_when_branch_exists_without_registry(tmp_path: Pa
     assert not epic_wt.is_dir()
 
     feature_checkout = merge_module._feature_merge_checkout(root, "feat_001")
-    assert feature_checkout is not None
-    assert feature_checkout.is_dir()
+    assert feature_checkout is None
+    assert not feat_wt.is_dir()
+    assert not epic_wt.is_dir()
+
+    from cascade.workspace.integration_worktree import repair_missing_worktree
+
+    assert repair_missing_worktree("feature", "feat_001", trunk=root) is not None
+    assert repair_missing_worktree("epic", "epic_001", trunk=root) is not None
 
     feat_merge = merge_feature_branch("feat_001", root=root)
     assert feat_merge.ok is True

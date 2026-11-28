@@ -392,6 +392,28 @@ to materialize and validate a new exact candidate, and never deletes, moves, or
 selects a physical record. Missing split-root, registry, branch, or lineage
 evidence remains unavailable. A projection-ranked copy cannot supply authority.
 
+`REQ-WORKSPACE-MERGE-001`: Task, Feature and Epic lifecycle integration accepts
+only a freshly materialized exact source/target result whose physical board is
+valid and whose pinned target history is retained. The gate re-reads both refs,
+merges the proven source object, compares the real index tree with the proven
+tree before committing, and refuses target or source movement with a new-proof
+prerequisite. Duplicate copies, missing terminal descendants and changed
+cancellation feedback remain typed refusals with affected IDs, evidence paths
+and canonical-owner action. Refusal does not mutate the target checkout.
+The lifecycle preflight reads only the existing registration and checkout; a
+missing checkout requires the separate owner-authorized repair path rather than
+being recreated before proof. The accepting boundary binds the canonical
+product/tracking owner before proof and re-resolves it immediately before Git
+mutation, so owner or tracking-revision movement requires a fresh candidate.
+
+`DEC-WORKSPACE-MERGE-001`: Keep exact lifecycle admission in
+[`merge_exact_lifecycle_candidate`](branch_synchronization.py), after the
+existing activity, branch, inflight-turn, dirty-worktree and source-worktree
+preflight. Reuse the Teams-owned private candidate and history proof rather than
+persisting a merge receipt or selecting a board copy. A managed Epic activation
+pointer may prefer the verified live source document only for that single exact
+conflict; unrelated conflicts remain refused.
+
 `REQ-WORKSPACE-RETIRE-001`: Retirement preserves a branch and refuses a
 noncanonical, dirty, locked or currently occupied checkout. Merge ancestry or an
 explicit forge merge confirmation gates removal. Before removal, Workspace walks
@@ -427,7 +449,8 @@ their own design artifact and owner rather than inheriting the package document.
 | [create_integration_worktree / _prove_integration_checkout_history](integration_worktree.py) | Exact product base plus canonical physical board → a prepared registration, or refusal before preparation/registry publication with attempt-owned cleanup only. |
 | [VerifiedTrunkWorkspace.verify_history](closeout.py) | Fetched product revision plus canonical board and pinned accepted revision → a target-fenced proof fingerprint or disposable-workspace refusal. |
 | [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
-| [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
+| [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → read-only synchronization check or typed refusal, including `not_active` and `checkout_missing`; repair remains a separate authorized action. |
+| [merge_exact_lifecycle_candidate](branch_synchronization.py) | Exact source/target refs → private physical scan and accepted-history proof → fenced matching-tree commit or actionable refusal. |
 | [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, shared Feature delivery phase, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |
 | [terminal_doc_persisted_outside_worktree](integration_worktree.py) | Compatibility Boolean backed by the same descendant-aware proof. |
 | [retire_integration_worktree](integration_worktree.py) | Registered identity and merge evidence → removal Boolean; refusal preserves registry and checkout. |
@@ -478,6 +501,10 @@ sequenceDiagram
     end
     Note over Caller,History: Target movement or any repair requires a newly materialized candidate and a fresh proof
 ```
+
+Lifecycle integration follows the same restart rule: a refusal or changed ref
+returns to exact materialization. No green scan or proof is cached across target
+revisions, and no cleanup is inferred from lifecycle-column preference.
 
 Registry cleanup follows successful worktree removal; missing-path cleanup checks
 Git's worktree registration. This is repository ownership enforcement, not an OS
