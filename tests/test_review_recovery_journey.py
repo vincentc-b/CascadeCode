@@ -371,7 +371,7 @@ from pathlib import Path
 import subprocess
 Path('new-unvalidated.txt').write_text('arrived while checks were running')
 subprocess.run(['git', 'add', 'new-unvalidated.txt'], check=True)
-subprocess.run(['git', 'commit', '-m', 'concurrent source change'], check=True)
+subprocess.run(['git', '-c', 'user.name=Test User', '-c', 'user.email=test@example.com', 'commit', '-m', 'concurrent source change'], check=True)
 ''')
     else:
         validator.write_text("from pathlib import Path\np = Path('cascade.toml')\np.write_text(p.read_text().replace('review_timeout_seconds = 10', 'review_timeout_seconds = 20'))\n")
