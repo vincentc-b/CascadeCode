@@ -22,11 +22,26 @@ class VerifiedTrunkWorkspace:
 
     trunk: Path
     target: str
+    remote: str
     revision: str
     path: Path
     _temporary_root: Path
     _added: bool = True
     _cleaned: bool = False
+
+    @property
+    def remote_ref(self) -> str:
+        return f"refs/remotes/{self.remote}/{self.target}"
+
+    def refresh_target(self) -> None:
+        """Fetch and require the configured target to remain at ``revision``."""
+
+        fetched = _fetch_target(self.trunk, self.remote, self.target)
+        if fetched != self.revision:
+            raise GitError(
+                "closeout target changed during history admission; "
+                "fetch and prove it again"
+            )
 
     def cleanup(self) -> None:
         """Remove only this workspace and its private temporary directory."""
@@ -73,11 +88,19 @@ class VerifiedTrunkWorkspace:
             prove_accepted_terminal_history,
         )
 
+        # A remote-tracking ref is a cache, not evidence. Refresh before and
+        # after the physical scan so movement on either side of the proof is a
+        # refusal rather than authorization for a stale checkout.
+        self.refresh_target()
+
         board_root = self.path
-        accepted_repository = self.trunk
+        # The fetched commit may not be reachable from a local branch yet.
+        # The detached checkout pins it as HEAD and is therefore the exact
+        # accepted-history repository for colocated projects.
+        accepted_repository = self.path
         board_revision = accepted_revision or self.revision
         target_repository = self.trunk
-        target_ref = f"refs/remotes/origin/{self.target}"
+        target_ref = self.remote_ref
         target_sha = self.revision
         project = get_project_context()
         if (
@@ -112,15 +135,12 @@ class VerifiedTrunkWorkspace:
                 "closeout history admission refused: "
                 f"{proof.kind}: {proof.reason}; {proof.owner_action}"
             )
-        if _resolve_commit(self.trunk, f"refs/remotes/origin/{self.target}") != self.revision:
-            raise GitError(
-                "closeout target changed during history admission; fetch and prove it again"
-            )
+        self.refresh_target()
         return proof.fingerprint
 
 
 def create_verified_trunk_workspace(
-    trunk: Path, *, target: str | None = None
+    trunk: Path, *, target: str | None = None, remote: str = "origin"
 ) -> VerifiedTrunkWorkspace:
     """Fetch product trunk and create a detached checkout at its exact SHA.
 
@@ -135,26 +155,7 @@ def create_verified_trunk_workspace(
             f"closeout target {target!r} is not product trunk {expected_target!r}"
         )
     branch = target or expected_target
-    remote_ref = f"refs/remotes/origin/{branch}"
-    fetch = _git(
-        repo,
-        "fetch",
-        "--no-tags",
-        "origin",
-        f"refs/heads/{branch}:{remote_ref}",
-    )
-    if fetch.returncode != 0:
-        raise GitError(
-            (fetch.stderr or fetch.stdout).strip()
-            or f"could not fetch remote product trunk origin/{branch}"
-        )
-    resolved = _git(repo, "rev-parse", "--verify", f"{remote_ref}^{{commit}}")
-    if resolved.returncode != 0:
-        raise GitError(
-            (resolved.stderr or resolved.stdout).strip()
-            or f"remote product trunk origin/{branch} is unavailable"
-        )
-    revision = resolved.stdout.strip()
+    revision = _fetch_target(repo, remote, branch)
 
     temporary_root = Path(tempfile.mkdtemp(prefix="cascade-closeout-"))
     path = temporary_root / "checkout"
@@ -165,6 +166,7 @@ def create_verified_trunk_workspace(
     workspace = VerifiedTrunkWorkspace(
         trunk=repo,
         target=branch,
+        remote=remote,
         revision=revision,
         path=path,
         _temporary_root=temporary_root,
@@ -179,6 +181,23 @@ def create_verified_trunk_workspace(
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+
+
+def _fetch_target(repo: Path, remote: str, branch: str) -> str:
+    remote_ref = f"refs/remotes/{remote}/{branch}"
+    fetch = _git(
+        repo,
+        "fetch",
+        "--no-tags",
+        remote,
+        f"refs/heads/{branch}:{remote_ref}",
+    )
+    if fetch.returncode != 0:
+        raise GitError(
+            (fetch.stderr or fetch.stdout).strip()
+            or f"could not fetch remote product trunk {remote}/{branch}"
+        )
+    return _resolve_commit(repo, remote_ref)
 
 
 def _resolve_commit(repo: Path, ref: str) -> str:

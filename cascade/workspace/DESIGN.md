@@ -33,11 +33,20 @@ and [Watchdog provisioning](../watchdog/DESIGN.md#interrupted-epic-provisioning)
 
 ## Remote trunk inspection and synchronization
 
-Under `REQ-WORKSPACE-001`,
+`REQ-WORKSPACE-SYNC-001`: Remote-trunk inspection and operator synchronization
+use a freshly fetched configured target plus its exact physical terminal and
+cancellation history. A remote-tracking ref alone is never evidence. Split
+projects bind product history and canonical tracking-board ownership separately.
+Only a clean operator checkout already on the configured trunk may fast-forward;
+every refusal preserves its local branch, HEAD, index, files and worktree
+registrations and returns both heads, owner and a reconciliation prerequisite.
+
+Under `REQ-WORKSPACE-001` and `REQ-WORKSPACE-SYNC-001`,
 [`create_verified_trunk_workspace`](closeout.py) resolves the configured product
 trunk, fetches its remote ref and creates a private detached Git worktree at the
 resolved commit. Before returning it, `VerifiedTrunkWorkspace.verify_history`
-scans the applicable physical board and fences the fetched remote ref. Boss can
+refetches, scans the applicable physical board, and refetches again to fence the
+proof. Boss can
 then compare that same target with a pinned accepted first parent; any target
 movement requires a fresh checkout and proof. Split projects use canonical
 tracking evidence without treating a product checkout as the document owner.
@@ -47,13 +56,22 @@ checkout's branch, index or files. Fetch, target mismatch, board/history refusal
 and worktree creation failures raise `GitError` without admitting a workspace.
 This proof establishes board-history retention, not accepted-merge CI.
 
-[`fast_forward_trunk`](../tracking.py) is a separate mutation adapter: it requires
-the configured branch to be checked out, fetches, returns immediately for equal
-heads, and otherwise uses `git merge --ff-only`. Git rejects divergence and edits
-that the merge would overwrite. Non-overlapping local edits can remain; this
-adapter does not enforce a completely clean checkout, board integrity or exact
-merged-revision CI. It has no independent receipt store. Retrying observes Git
-again rather than treating an earlier fetch as completion.
+[`synchronize_operator_trunk`](branch_synchronization.py) returns a bounded
+`OperatorTrunkSyncResult` with local and fetched SHAs, proof fingerprint, sync
+result, owner and prerequisite. It refuses staged, unstaged or untracked changes,
+wrong branch, divergence, unavailable history and target/owner movement. After a
+second fetch and physical proof it merges the proven commit object with
+`--ff-only`; it never resets, force-pushes or resolves conflicts. Equal heads and
+a restart after an already-applied fast-forward are idempotent. The compatibility
+[`fast_forward_trunk`](../tracking.py) adapter returns the proven remote SHA or
+raises `GitError` with the reconciliation prerequisite. These interfaces do not
+establish exact merged-revision CI and do not own a second receipt store.
+
+Epic checkout creation and interrupted clean-checkout resume fetch a configured
+product remote when one exists and require the approved base to equal that fresh
+head before and after physical-history admission. Local-only repositories retain
+their existing pinned-base flow. Preparation, transcript handoff and registry
+publication occur only after these fences.
 
 ```mermaid
 flowchart TD
@@ -63,11 +81,13 @@ flowchart TD
     History -->|yes| Caller[Boss checks forge acceptance and document identity]
     History -->|no| Refuse
     Caller --> Cleanup[Remove only private worktree]
-    Target -->|separate sync request| Branch{Operator on requested branch?}
-    Branch -->|yes| SyncFetch[Fetch remote target]
-    SyncFetch --> FF[Equal head or Git fast-forward only]
-    Branch -->|no| Refuse[GitError; preserve operator work]
-    FF -->|divergence or overlapping edit| Refuse
+    Target -->|sync request| SyncProof[Fetch and prove physical board]
+    SyncProof --> Branch{Clean configured branch and ancestor head?}
+    Branch -->|yes| Fence[Refetch and re-prove]
+    Fence --> FF[Equal head or exact-SHA fast-forward only]
+    Branch -->|no| Refuse[Structured preview; preserve operator work]
+    Fence -->|moved or unavailable| Refuse
+    FF -->|Git refusal| Refuse
 ```
 
 These functions are source-linked in `cascade-workspace-code` in the

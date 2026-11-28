@@ -2166,7 +2166,7 @@ code_workspace_registry = element "get_integration_worktree" "Function" "Read re
     }
 }
 
-code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout, admits its exact physical history before preparation, then publishes registration and transcript ownership." {
+code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout, freshly fences a configured remote product base for Epics, admits exact physical history before preparation, then publishes registration and transcript ownership." {
     properties {
         "cascade.semanticId" "element.code.workspace.create"
         "cascade.parent" "element.component.workspace"
@@ -2181,6 +2181,15 @@ code_workspace_checkout_history = element "_prove_integration_checkout_history" 
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
         "cascade.sourceSymbol" "_prove_integration_checkout_history"
+    }
+}
+
+code_workspace_remote_base = element "_prove_remote_product_base" "Function" "Fetch a configured product remote and require the approved Epic base to equal its exact head; unavailable or moved targets refuse checkout admission." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.remote-base"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "_prove_remote_product_base"
     }
 }
 
@@ -5294,7 +5303,7 @@ code_workspace_verified_trunk = element "create_verified_trunk_workspace" "Funct
     }
 }
 
-code_workspace_closeout_history = element "VerifiedTrunkWorkspace.verify_history" "Method" "Bind the fetched product target and canonical board root to a fresh terminal-history proof; target movement or unavailable split-root evidence refuses use." {
+code_workspace_closeout_history = element "VerifiedTrunkWorkspace.verify_history" "Method" "Refetch around physical-history inspection and bind the exact product target and canonical board owner; movement or unavailable split-root evidence refuses use." {
     properties {
         "cascade.semanticId" "element.code.workspace.closeout-history"
         "cascade.parent" "element.component.workspace"
@@ -5303,7 +5312,25 @@ code_workspace_closeout_history = element "VerifiedTrunkWorkspace.verify_history
     }
 }
 
-code_workspace_fast_forward = element "fast_forward_trunk" "Function" "Fetch and fast-forward the checked-out trunk; Git refuses divergence and overlapping tracked edits. This does not establish board or CI health." {
+code_workspace_operator_sync = element "synchronize_operator_trunk" "Function" "Return exact local/remote heads and physical proof; fast-forward only a clean configured trunk after a second fetch/proof fence, otherwise preserve it with an owner prerequisite." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.operator-sync"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
+        "cascade.sourceSymbol" "synchronize_operator_trunk"
+    }
+}
+
+code_workspace_operator_sync_result = element "OperatorTrunkSyncResult" "Dataclass" "Carry independent local and remote SHAs, board fingerprint, sync result, refusal reason, owner and reconciliation prerequisite." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.operator-sync-result"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
+        "cascade.sourceSymbol" "OperatorTrunkSyncResult"
+    }
+}
+
+code_workspace_fast_forward = element "fast_forward_trunk" "Function" "Compatibility adapter returning the proven remote SHA or raising the structured synchronization refusal prerequisite." {
     properties {
         "cascade.semanticId" "element.code.workspace.fast-forward"
         "cascade.parent" "element.component.workspace"
@@ -5384,6 +5411,18 @@ code_workspace_create_to_history = code_workspace_create -> code_workspace_check
     }
 }
 
+code_workspace_create_to_remote_base = code_workspace_create -> code_workspace_remote_base "Freshly fences configured remote Epic bases before and after history admission" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.create-remote-base"
+    }
+}
+
+code_workspace_resume_to_remote_base = code_workspace_resume_epic -> code_workspace_remote_base "Refuses interrupted resume when the configured remote product head is unavailable or moved" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.resume-remote-base"
+    }
+}
+
 code_workspace_resume_to_history = code_workspace_resume_epic -> code_workspace_checkout_history "Requires fresh physical history before resumed preparation or registry refresh" {
     properties {
         "cascade.semanticId" "relationship.code.workspace.resume-history"
@@ -5405,6 +5444,24 @@ code_workspace_verified_to_history = code_workspace_verified_trunk -> code_works
 code_workspace_closeout_to_proof = code_workspace_closeout_history -> code_teams_history_proof "Compares fetched or canonical split-root board evidence with the pinned accepted revision" {
     properties {
         "cascade.semanticId" "relationship.code.workspace.closeout-history-proof"
+    }
+}
+
+code_workspace_operator_sync_to_verified = code_workspace_operator_sync -> code_workspace_verified_trunk "Uses a private freshly fetched checkout as revision-bound board proof" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.operator-sync-verified"
+    }
+}
+
+code_workspace_operator_sync_to_result = code_workspace_operator_sync -> code_workspace_operator_sync_result "Returns current, fast-forwarded, or bounded refusal evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.operator-sync-result"
+    }
+}
+
+code_workspace_fast_forward_to_operator_sync = code_workspace_fast_forward -> code_workspace_operator_sync "Delegates safe clean-trunk synchronization and preserves compatibility errors" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.fast-forward-operator-sync"
     }
 }
 

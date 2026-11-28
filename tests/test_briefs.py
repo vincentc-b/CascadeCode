@@ -314,65 +314,52 @@ def test_pull_guard_allows_runtime_sidecars_but_refuses_product_edits() -> None:
     assert _unsafe_tracked_changes(" M cascade/task/graph.py\n") == ["cascade/task/graph.py"]
 
 
-def test_pull_already_current_does_not_reject_tracked_edits(
+def test_pull_already_current_returns_proven_remote_sha(
     tmp_path: Path, monkeypatch
 ) -> None:
-    calls: list[list[str]] = []
+    from cascade.workspace.branch_synchronization import OperatorTrunkSyncResult
 
-    def git(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
-        calls.append(args)
-        if args == ["branch", "--show-current"]:
-            return subprocess.CompletedProcess(args, 0, "main\n", "")
-        if args == ["fetch", "origin", "main"]:
-            return subprocess.CompletedProcess(args, 0, "", "")
-        if args == ["rev-parse", "HEAD"]:
-            return subprocess.CompletedProcess(args, 0, "abc\n", "")
-        if args == ["rev-parse", "origin/main"]:
-            return subprocess.CompletedProcess(args, 0, "abc\n", "")
-        raise AssertionError(args)
-
-    monkeypatch.setattr("cascade.tracking._git", git)
+    monkeypatch.setattr(
+        "cascade.workspace.branch_synchronization.synchronize_operator_trunk",
+        lambda **kwargs: OperatorTrunkSyncResult(
+            True, "main", "abc", "abc", "current", board_fingerprint="proof"
+        ),
+    )
     assert fast_forward_trunk(tmp_path, "main") == "abc"
-    assert not [args for args in calls if args and args[0] == "status"]
-    assert not [args for args in calls if args and args[0] == "merge"]
 
 
-def test_pull_delegates_nonconflicting_dirty_fast_forward_to_git(
+def test_pull_refuses_dirty_fast_forward_with_reconciliation_prerequisite(
     tmp_path: Path, monkeypatch
 ) -> None:
-    heads = iter(["old\n", "new\n"])
-    calls: list[list[str]] = []
+    from cascade.workspace.branch_synchronization import OperatorTrunkSyncResult
 
-    def git(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
-        calls.append(args)
-        if args == ["branch", "--show-current"]:
-            return subprocess.CompletedProcess(args, 0, "main\n", "")
-        if args == ["fetch", "origin", "main"]:
-            return subprocess.CompletedProcess(args, 0, "", "")
-        if args == ["rev-parse", "HEAD"]:
-            return subprocess.CompletedProcess(args, 0, next(heads), "")
-        if args == ["rev-parse", "origin/main"]:
-            return subprocess.CompletedProcess(args, 0, "new\n", "")
-        if args == ["merge", "--ff-only", "origin/main"]:
-            return subprocess.CompletedProcess(args, 0, "Updating old..new\n", "")
-        raise AssertionError(args)
+    monkeypatch.setattr(
+        "cascade.workspace.branch_synchronization.synchronize_operator_trunk",
+        lambda **kwargs: OperatorTrunkSyncResult(
+            False, "main", "old", "new", "refused",
+            reason="dirty_checkout",
+            prerequisite="commit, stash, or otherwise reconcile operator changes and retry",
+            detail="operator checkout contains local changes",
+        ),
+    )
+    from cascade.board.errors import GitError
 
-    monkeypatch.setattr("cascade.tracking._git", git)
-    assert fast_forward_trunk(tmp_path, "main") == "new"
-    assert ["merge", "--ff-only", "origin/main"] in calls
+    with pytest.raises(GitError, match="reconcile operator changes"):
+        fast_forward_trunk(tmp_path, "main")
 
 
 def test_pull_reports_missing_remote_trunk_clearly(tmp_path: Path, monkeypatch) -> None:
-    def git(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
-        if args == ["branch", "--show-current"]:
-            return subprocess.CompletedProcess(args, 0, "main\n", "")
-        if args == ["fetch", "origin", "main"]:
-            return subprocess.CompletedProcess(
-                args, 128, "", "fatal: couldn't find remote ref main\n"
-            )
-        raise AssertionError(args)
+    from cascade.workspace.branch_synchronization import OperatorTrunkSyncResult
 
-    monkeypatch.setattr("cascade.tracking._git", git)
+    monkeypatch.setattr(
+        "cascade.workspace.branch_synchronization.synchronize_operator_trunk",
+        lambda **kwargs: OperatorTrunkSyncResult(
+            False, "main", "abc", None, "refused",
+            reason="board_proof_unavailable",
+            prerequisite="restore remote access and canonical board evidence, then retry",
+            detail="origin has no branch 'main'",
+        ),
+    )
     from cascade.board.errors import GitError
 
     with pytest.raises(GitError, match="origin has no branch 'main'"):

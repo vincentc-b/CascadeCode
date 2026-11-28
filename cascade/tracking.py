@@ -1430,42 +1430,19 @@ def fast_forward_trunk(
     *,
     remote: str = "origin",
 ) -> str:
-    """Fetch and safely fast-forward the checked-out trunk.
+    """Fetch, prove, and safely fast-forward a completely clean product trunk."""
 
-    Git itself rejects a merge that would overwrite local tracked changes.  A
-    blanket dirty-tree check is too strict: it prevents an already-current
-    pull and fast-forwards whose incoming paths do not overlap local edits.
-    """
+    from cascade.workspace.branch_synchronization import synchronize_operator_trunk
 
-    branch = _git(["branch", "--show-current"], root).stdout.strip()
-    if branch != trunk:
-        raise GitError(f"workspace must be on {trunk!r} to pull briefs")
-    fetch = _git(["fetch", remote, trunk], root)
-    if fetch.returncode != 0:
-        detail = (fetch.stderr or fetch.stdout).strip()
-        if (
-            "couldn't find remote ref" in detail
-            or "could not find remote ref" in detail
-        ):
-            raise GitError(
-                f"{remote} has no branch {trunk!r}; push or configure the product "
-                "trunk before pulling briefs"
-            )
-        raise GitError(detail or "fetch failed")
-    local_sha = _git(["rev-parse", "HEAD"], root).stdout.strip()
-    remote_sha_result = _git(["rev-parse", f"{remote}/{trunk}"], root)
-    if remote_sha_result.returncode != 0:
-        raise GitError(
-            (remote_sha_result.stderr or remote_sha_result.stdout).strip()
-            or f"remote branch {remote}/{trunk} is unavailable"
-        )
-    remote_sha = remote_sha_result.stdout.strip()
-    if local_sha == remote_sha:
-        return local_sha
-    merge = _git(["merge", "--ff-only", f"{remote}/{trunk}"], root)
-    if merge.returncode != 0:
-        raise GitError((merge.stderr or merge.stdout).strip() or "fast-forward failed")
-    return _git(["rev-parse", "HEAD"], root).stdout.strip()
+    result = synchronize_operator_trunk(
+        root=root, target=trunk, remote=remote
+    )
+    if not result.ok or result.remote_sha is None:
+        summary = result.detail or result.reason or "trunk synchronization refused"
+        if result.prerequisite:
+            summary = f"{summary}; {result.prerequisite}"
+        raise GitError(summary)
+    return result.remote_sha
 
 
 _RUNTIME_PREFIXES = (

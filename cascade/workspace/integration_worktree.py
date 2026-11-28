@@ -918,6 +918,9 @@ def create_integration_worktree(
     wt_path = integration_worktree_path(kind, work_id, trunk=trunk)
     wt_path.parent.mkdir(parents=True, exist_ok=True)
     base_sha = _resolve_ref(trunk, base_ref)
+    admission_ref = (
+        _prove_remote_product_base(trunk, base_sha) if kind == "epic" else base_ref
+    )
 
     if prepare is not None and (
         wt_path.exists() or _listed_worktree_state(trunk, wt_path)[0]
@@ -936,9 +939,11 @@ def create_integration_worktree(
         _prove_integration_checkout_history(
             trunk=trunk,
             checkout=wt_path,
-            base_ref=base_ref,
+            base_ref=admission_ref,
             base_sha=base_sha,
         )
+        if kind == "epic":
+            _prove_remote_product_base(trunk, base_sha)
     except Exception:
         # This checkout has not run caller preparation and has not been
         # registered, so it contains no admitted owner work.  Detach only this
@@ -1040,6 +1045,43 @@ def _prove_integration_checkout_history(
         )
 
 
+def _prove_remote_product_base(trunk: Path, base_sha: str) -> str:
+    """Fetch a configured product remote and bind Epic admission to its head.
+
+    Repositories without an ``origin`` retain local-only provisioning. Once a
+    remote is configured, an unavailable or moved target cannot be replaced by
+    a stale remote-tracking ref.
+    """
+
+    remote = _git(trunk, "config", "--get", "remote.origin.url", check=False)
+    if remote.returncode != 0 or not remote.stdout.strip():
+        return base_sha
+    from cascade.workspace.trunk import resolve_product_trunk
+
+    branch = resolve_product_trunk(trunk)
+    remote_ref = f"refs/remotes/origin/{branch}"
+    fetched = _git(
+        trunk,
+        "fetch",
+        "--no-tags",
+        "origin",
+        f"refs/heads/{branch}:{remote_ref}",
+        check=False,
+    )
+    if fetched.returncode != 0:
+        raise GitError(
+            (fetched.stderr or fetched.stdout).strip()
+            or f"remote product trunk origin/{branch} is unavailable"
+        )
+    remote_sha = _resolve_ref_or_none(trunk, remote_ref)
+    if remote_sha != base_sha:
+        raise GitError(
+            "integration checkout base is stale relative to the fetched product trunk; "
+            "refresh admission and retry"
+        )
+    return remote_ref
+
+
 def _resolve_ref_or_none(root: Path, ref: str) -> str | None:
     result = _git(root, "rev-parse", "--verify", f"{ref}^{{commit}}", check=False)
     return result.stdout.strip() if result.returncode == 0 else None
@@ -1085,14 +1127,16 @@ def resume_unstarted_epic_worktree(
         return None
     # A fast-forward preserves the existing checkout and every commit. The
     # approved revision, not the interrupted attempt's old base, owns new work.
-    git_run(["merge", "--ff-only", base_sha], entry.path)
     try:
+        admission_ref = _prove_remote_product_base(trunk, base_sha)
+        git_run(["merge", "--ff-only", base_sha], entry.path)
         _prove_integration_checkout_history(
             trunk=trunk.resolve(),
             checkout=entry.path,
-            base_ref=base_sha,
+            base_ref=admission_ref,
             base_sha=base_sha,
         )
+        _prove_remote_product_base(trunk, base_sha)
     except GitError:
         # The existing owner branch and checkout are recovery evidence.  A
         # failed fresh proof cannot authorize preparation or registry refresh.

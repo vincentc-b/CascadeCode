@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cascade.board.context import resolve_root
-from cascade.board.errors import SchemaError
+from cascade.board.errors import GitError, SchemaError
 from cascade.board.gitutil import _run, has_git, head_sha
 from cascade.board.parse import parse_doc
 from cascade.board.paths import column_for_status
@@ -58,6 +58,22 @@ class BranchSyncUpdateResult:
     owner_action: str = ""
     affected_ids: tuple[str, ...] = ()
     evidence_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class OperatorTrunkSyncResult:
+    """Revision-bound outcome for one safe operator-trunk synchronization."""
+
+    ok: bool
+    target: str
+    local_sha: str | None
+    remote_sha: str | None
+    sync_result: str
+    board_fingerprint: str | None = None
+    reason: str | None = None
+    owner: str = "operator"
+    prerequisite: str = ""
+    detail: str = ""
 
 
 def inspect_branch_synchronization(
@@ -474,6 +490,149 @@ def preflight_epic_trunk_promotion(
         return BranchSyncUpdateResult(ok=False, reason="wrong_branch")
 
     return BranchSyncUpdateResult(ok=True)
+
+
+def synchronize_operator_trunk(
+    *,
+    root: Path | None = None,
+    target: str | None = None,
+    remote: str = "origin",
+) -> OperatorTrunkSyncResult:
+    """Fetch, prove, and fast-forward one clean configured trunk checkout.
+
+    Refusals are structured so a caller can persist a bounded reconciliation
+    preview.  Fetching may refresh the remote-tracking ref, but the local branch,
+    HEAD, index, files and worktree registrations are not mutated on refusal.
+    """
+
+    from cascade.workspace.closeout import create_verified_trunk_workspace
+
+    trunk = locate_trunk(resolve_root(root))
+    local_sha = head_sha(trunk)
+    try:
+        configured = resolve_product_trunk(trunk)
+    except WorkspaceError as exc:
+        return OperatorTrunkSyncResult(
+            False, target or "", local_sha, None, "refused",
+            reason="ambiguous_trunk",
+            prerequisite="configure one product trunk and retry",
+            detail=str(exc),
+        )
+    if target is not None and target != configured:
+        return OperatorTrunkSyncResult(
+            False, target, local_sha, None, "refused", reason="wrong_target",
+            prerequisite=f"request the configured trunk {configured!r}",
+            detail=f"requested target {target!r} is not configured trunk {configured!r}",
+        )
+
+    try:
+        workspace = create_verified_trunk_workspace(
+            trunk, target=configured, remote=remote
+        )
+    except (GitError, OSError) as exc:
+        return OperatorTrunkSyncResult(
+            False, configured, local_sha, None, "refused",
+            reason="board_proof_unavailable",
+            prerequisite="restore remote access and canonical board evidence, then retry",
+            detail=str(exc),
+        )
+
+    with workspace:
+        remote_sha = workspace.revision
+        try:
+            fingerprint = workspace.verify_history()
+        except (GitError, OSError) as exc:
+            return OperatorTrunkSyncResult(
+                False, configured, local_sha, remote_sha, "refused",
+                reason="board_proof_stale",
+                prerequisite="fetch and prove the current physical board again",
+                detail=str(exc),
+            )
+
+        current = _current_branch(trunk)
+        if current != configured:
+            return OperatorTrunkSyncResult(
+                False, configured, local_sha, remote_sha, "refused",
+                board_fingerprint=fingerprint, reason="wrong_branch",
+                prerequisite=f"check out clean branch {configured!r} and retry",
+                detail=f"operator checkout is on {current or 'detached HEAD'}",
+            )
+        status = _run(
+            ["status", "--porcelain", "--untracked-files=all"], trunk, check=False
+        )
+        if status.returncode != 0 or status.stdout:
+            return OperatorTrunkSyncResult(
+                False, configured, local_sha, remote_sha, "refused",
+                board_fingerprint=fingerprint, reason="dirty_checkout",
+                prerequisite="commit, stash, or otherwise reconcile operator changes and retry",
+                detail="operator checkout contains staged, unstaged, or untracked changes",
+            )
+        if local_sha is None or head_sha(trunk) != local_sha:
+            return OperatorTrunkSyncResult(
+                False, configured, local_sha, remote_sha, "refused",
+                board_fingerprint=fingerprint, reason="local_target_changed",
+                prerequisite="refresh the checkout and retry",
+                detail="operator HEAD changed during admission",
+            )
+        if local_sha == remote_sha:
+            return OperatorTrunkSyncResult(
+                True, configured, local_sha, remote_sha, "current",
+                board_fingerprint=fingerprint,
+            )
+        if _run(
+            ["merge-base", "--is-ancestor", local_sha, remote_sha],
+            trunk,
+            check=False,
+        ).returncode != 0:
+            return OperatorTrunkSyncResult(
+                False, configured, local_sha, remote_sha, "refused",
+                board_fingerprint=fingerprint, reason="diverged",
+                prerequisite="reconcile the preserved local and remote heads, then retry",
+                detail=f"local {local_sha} cannot fast-forward to remote {remote_sha}",
+            )
+
+        # Mutation fence: refresh the remote and physical owner proof once more,
+        # then recheck every local precondition before merging the proven object.
+        try:
+            fingerprint = workspace.verify_history()
+        except (GitError, OSError) as exc:
+            return OperatorTrunkSyncResult(
+                False, configured, local_sha, remote_sha, "refused",
+                reason="target_changed",
+                prerequisite="fetch the moved target and prove a new board snapshot",
+                detail=str(exc),
+            )
+        status = _run(
+            ["status", "--porcelain", "--untracked-files=all"], trunk, check=False
+        )
+        if (
+            _current_branch(trunk) != configured
+            or head_sha(trunk) != local_sha
+            or status.returncode != 0
+            or bool(status.stdout)
+        ):
+            return OperatorTrunkSyncResult(
+                False, configured, head_sha(trunk), remote_sha, "refused",
+                board_fingerprint=fingerprint, reason="checkout_changed",
+                prerequisite="restore a clean configured trunk and retry",
+                detail="operator checkout changed after admission",
+            )
+        advanced = _run(["merge", "--ff-only", remote_sha], trunk, check=False)
+        final_sha = head_sha(trunk)
+        # A caller may be interrupted after Git updates the ref but before it
+        # observes command completion. The exact final head is authoritative,
+        # making the restarted operation idempotent.
+        if final_sha == remote_sha:
+            return OperatorTrunkSyncResult(
+                True, configured, local_sha, remote_sha, "fast_forwarded",
+                board_fingerprint=fingerprint,
+            )
+        return OperatorTrunkSyncResult(
+            False, configured, final_sha, remote_sha, "refused",
+            board_fingerprint=fingerprint, reason="fast_forward_failed",
+            prerequisite="inspect the preserved Git state and retry after reconciliation",
+            detail=(advanced.stderr or advanced.stdout).strip(),
+        )
 
 
 def merge_lifecycle_source(

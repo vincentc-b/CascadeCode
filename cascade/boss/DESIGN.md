@@ -174,7 +174,11 @@ ancestry or document mismatch also returns no accepted document.
 
 This proves acceptance, physical history retention and document presence on the
 observed remote revision; it does not independently establish required CI on the
-accepted merge SHA or synchronize the operator checkout.
+accepted merge SHA or imply that the operator checkout is synchronized. Workspace
+exposes those local facts separately as `OperatorTrunkSyncResult`: fetched and
+local SHAs, proof fingerprint, current/fast-forwarded/refused result, owner and
+prerequisite. A future verified-closeout decision must consume that current
+result rather than infer synchronization from this detached acceptance check.
 The review registry and Git remain the evidence stores. Restart repeats remote
 inspection, and normal context-manager exit cleans the private checkout.
 

@@ -182,6 +182,55 @@ def test_checkout_history_refusal_leaves_no_registry_branch_or_worktree(
     assert str(checkout) not in listed
 
 
+def test_epic_checkout_refuses_stale_fetched_remote_base_without_artifacts(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path / "product")
+    _initial_commit(root)
+    approved = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=root, check=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=root, check=True, capture_output=True)
+    writer = tmp_path / "writer"
+    subprocess.run(
+        ["git", "clone", "--branch", "main", str(remote), str(writer)],
+        check=True, capture_output=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=writer, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=writer, check=True
+    )
+    (writer / "remote.txt").write_text("moved\n", encoding="utf-8")
+    subprocess.run(["git", "add", "remote.txt"], cwd=writer, check=True)
+    subprocess.run(["git", "commit", "-m", "move remote"], cwd=writer, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=writer, check=True,
+                   capture_output=True)
+    branch = integration_branch("epic", "epic_001")
+    checkout = integration_worktree_path("epic", "epic_001", trunk=root)
+    before = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"], cwd=root, check=True,
+        capture_output=True, text=True,
+    ).stdout
+
+    with pytest.raises(GitError, match="base is stale"):
+        create_integration_worktree(
+            "epic", "epic_001", branch=branch, base_ref=approved, trunk=root
+        )
+
+    assert load_registry(root) == []
+    assert not _branch_exists(root, branch)
+    assert not checkout.exists()
+    assert subprocess.run(
+        ["git", "worktree", "list", "--porcelain"], cwd=root, check=True,
+        capture_output=True, text=True,
+    ).stdout == before
+
+
 def test_mutation_owner_rejects_changed_registry_identity(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
