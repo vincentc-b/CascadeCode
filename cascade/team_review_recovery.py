@@ -168,6 +168,14 @@ def publish_team_review_resolution(
         owner = recovery.get("owning_team") if isinstance(recovery, Mapping) else None
         if owner != {"kind": team_kind, "work_id": team_id}:
             raise PermissionError("durable review recovery belongs to a different team")
+        # Replay reports the result of this completed action, not a new
+        # publication against moving review heads. Fresh work needs admission.
+        if action.get("recovery_state") == "completed":
+            return {
+                "action_id": action_id,
+                "recovery_state": "completed",
+                "attempt_count": action.get("attempt_count"),
+            }
 
     existing_budget = read_incident_budget(action_id, root=trunk)
     next_eligible = (
