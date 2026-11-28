@@ -554,6 +554,77 @@ def _unavailable(reason: str) -> dict[str, object]:
     return {"available": False, "reason": reason}
 
 
+_FORGE_PAGE_SIZE = 100
+_FORGE_MAX_PAGES = 100
+
+
+def _paged_rows(
+    runner: Runner,
+    root: Path,
+    endpoint: str,
+    *,
+    command: str,
+    container: str | None = None,
+) -> tuple[list[object] | None, str | None]:
+    """Read every forge result page or return no partial evidence."""
+
+    rows: list[object] = []
+    separator = "&" if "?" in endpoint else "?"
+    for page in range(1, _FORGE_MAX_PAGES + 1):
+        payload, error, _ = _run_json(
+            runner,
+            [
+                command,
+                "api",
+                f"{endpoint}{separator}per_page={_FORGE_PAGE_SIZE}&page={page}",
+            ],
+            root,
+        )
+        if error:
+            return None, error
+        page_rows = (
+            payload.get(container)
+            if container and isinstance(payload, Mapping)
+            else payload
+        )
+        if not isinstance(page_rows, list):
+            return None, "forge pagination payload malformed"
+        rows.extend(page_rows)
+        if len(page_rows) < _FORGE_PAGE_SIZE:
+            return rows, None
+    return None, "forge pagination limit exceeded"
+
+
+def _check_state(value: object) -> str:
+    raw = str(value or "unknown").lower()
+    if raw in {"success", "passed", "neutral", "skipped"}:
+        return "success"
+    if raw in {
+        "failure",
+        "failed",
+        "error",
+        "cancelled",
+        "canceled",
+        "timed_out",
+        "action_required",
+    }:
+        return "failure"
+    if raw in {
+        "created",
+        "pending",
+        "queued",
+        "in_progress",
+        "requested",
+        "waiting",
+        "waiting_for_resource",
+        "preparing",
+        "scheduled",
+        "running",
+    }:
+        return "pending"
+    return "unknown"
+
+
 def _github_location(url: str) -> tuple[str, str, str] | None:
     match = re.match(r"https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)", url)
     return match.groups() if match else None
@@ -619,23 +690,7 @@ def _github_check_results(
             or item.get("status")
             or "unknown"
         ).lower()
-        status = {
-            "success": "success",
-            "passed": "success",
-            "neutral": "success",
-            "skipped": "success",
-            "failure": "failure",
-            "failed": "failure",
-            "error": "failure",
-            "cancelled": "failure",
-            "timed_out": "failure",
-            "action_required": "failure",
-            "pending": "pending",
-            "queued": "pending",
-            "in_progress": "pending",
-            "requested": "pending",
-            "waiting": "pending",
-        }.get(conclusion, "unknown")
+        status = _check_state(conclusion)
         order = str(
             item.get("completed_at")
             or item.get("started_at")
@@ -648,6 +703,14 @@ def _github_check_results(
             "generation": generation,
             "source_head": str(item.get("head_sha") or source_head),
             "observed_at": order or None,
+            "identity": {
+                "name": name,
+                "app_id": (
+                    item.get("app", {}).get("id")
+                    if isinstance(item.get("app"), Mapping)
+                    else None
+                ),
+            },
             "_order": (order, numeric),
         }
         if name not in rows or candidate["_order"] >= rows[name]["_order"]:
@@ -663,6 +726,72 @@ def _github_check_results(
         "statuses": {name: row["status"] for name, row in normalized.items()},
         "checks": normalized,
     }
+
+
+def _post_merge_ci(
+    *,
+    merge_sha: object,
+    target_head: str | None,
+    policy: Mapping[str, object],
+    results: Mapping[str, object],
+) -> dict[str, object]:
+    """Classify CI for the exact forge-accepted object, independently of source CI."""
+
+    base: dict[str, object] = {
+        "merge_sha": merge_sha if isinstance(merge_sha, str) else None,
+        "observed_target_sha": target_head,
+        "required_check_policy": dict(policy),
+        "required_check_results": dict(results),
+    }
+    if not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha):
+        return {**base, "state": "unknown", "reason": "merge_identity_unavailable"}
+    if not target_head or not re.fullmatch(r"[0-9a-f]{40}", target_head):
+        return {**base, "state": "unknown", "reason": "target_identity_unavailable"}
+    if policy.get("available") is not True:
+        return {
+            **base,
+            "state": "unknown",
+            "reason": "required_check_policy_unavailable",
+        }
+    if results.get("available") is not True or results.get("source_head") != merge_sha:
+        return {
+            **base,
+            "state": "unknown",
+            "reason": "required_check_results_unavailable",
+        }
+    required = policy.get("required")
+    statuses = results.get("statuses")
+    checks = results.get("checks")
+    if (
+        not isinstance(required, list)
+        or not isinstance(statuses, Mapping)
+        or not isinstance(checks, Mapping)
+    ):
+        return {**base, "state": "unknown", "reason": "check_evidence_malformed"}
+    missing = [name for name in required if name not in statuses]
+    if missing:
+        return {
+            **base,
+            "state": "pending",
+            "checks": missing,
+            "reason": "required_checks_missing",
+        }
+    if any(
+        not isinstance(checks.get(name), Mapping)
+        or checks[name].get("source_head") != merge_sha
+        or checks[name].get("generation") is None
+        or checks[name].get("generation") == ""
+        or isinstance(checks[name].get("generation"), bool)
+        for name in required
+    ):
+        return {**base, "state": "unknown", "reason": "check_identity_unavailable"}
+    failed = [name for name in required if statuses.get(name) == "failure"]
+    if failed:
+        return {**base, "state": "red", "checks": failed}
+    pending = [name for name in required if statuses.get(name) != "success"]
+    if pending:
+        return {**base, "state": "pending", "checks": pending}
+    return {**base, "state": "green", "checks": required}
 
 
 def _github_feedback(raw: Mapping[str, object], comments: object) -> dict[str, object]:
@@ -793,6 +922,69 @@ def _add_github_review_evidence(
         results.update(source_head=source_head, target_head=target_head)
     out["required_check_results"] = results
     out["review_feedback"] = _github_feedback(raw, out.get("comments"))
+    if str(out.get("state") or "") != "merged":
+        return
+    merge_sha = out.get("merge_sha")
+    if not isinstance(merge_sha, str):
+        out["post_merge_ci"] = _post_merge_ci(
+            merge_sha=merge_sha,
+            target_head=target_head,
+            policy=policy,
+            results=_unavailable("merge_identity_unavailable"),
+        )
+        return
+    check_rows, exact_check_error = _paged_rows(
+        runner,
+        root,
+        f"repos/{owner}/{repo}/commits/{merge_sha}/check-runs",
+        command="gh",
+        container="check_runs",
+    )
+    status_rows, exact_status_error = _paged_rows(
+        runner,
+        root,
+        f"repos/{owner}/{repo}/commits/{merge_sha}/status",
+        command="gh",
+        container="statuses",
+    )
+    if exact_check_error or exact_status_error:
+        exact_results: dict[str, object] = {
+            **_unavailable(
+                exact_check_error
+                or exact_status_error
+                or "post_merge_check_results_unavailable"
+            ),
+            "source_head": merge_sha,
+            "target_head": target_head,
+        }
+    else:
+        exact_results = _github_check_results(
+            {"check_runs": check_rows},
+            {"statuses": status_rows},
+            source_head=merge_sha,
+            target_head=target_head,
+        )
+    confirmed_branch, confirmed_error, _ = _run_json(
+        runner, ["gh", "api", f"repos/{owner}/{repo}/branches/{target_path}"], root
+    )
+    confirmed_target = _head_from_branch_payload(confirmed_branch)
+    if confirmed_target:
+        out["target_revision"] = confirmed_target
+    if confirmed_error or confirmed_target != target_head:
+        exact_results = {
+            **_unavailable(confirmed_error or "target_identity_changed"),
+            "source_head": merge_sha,
+            "target_head": confirmed_target,
+        }
+    exact_policy = dict(policy)
+    exact_policy["source_head"] = merge_sha
+    exact_policy["target_head"] = confirmed_target
+    out["post_merge_ci"] = _post_merge_ci(
+        merge_sha=merge_sha,
+        target_head=confirmed_target,
+        policy=exact_policy,
+        results=exact_results,
+    )
 
 
 def _gitlab_location(url: str) -> tuple[str, str] | None:
@@ -967,6 +1159,134 @@ def _add_gitlab_review_evidence(
             "checks": {},
         }
     out["required_check_results"] = results
+    if str(out.get("state") or "") == "merged":
+        merge_sha = out.get("merge_sha")
+        exact_results: dict[str, object]
+        if not isinstance(merge_sha, str):
+            exact_results = _unavailable("merge_identity_unavailable")
+        else:
+            exact_pipelines, exact_pipeline_error = _paged_rows(
+                runner,
+                root,
+                f"projects/{project_id}/pipelines?sha={quote(merge_sha, safe='')}",
+                command="glab",
+            )
+            exact_matching = [
+                item
+                for item in (exact_pipelines or [])
+                if isinstance(item, Mapping) and item.get("sha") == merge_sha
+            ]
+            exact_matching.sort(
+                key=lambda item: (
+                    str(item.get("updated_at") or item.get("created_at") or ""),
+                    int(item.get("id") or 0),
+                )
+            )
+            if exact_pipeline_error:
+                exact_results = _unavailable(exact_pipeline_error)
+            elif not exact_matching:
+                exact_results = {
+                    "available": True,
+                    "source_head": merge_sha,
+                    "target_head": target_head,
+                    "statuses": {},
+                    "checks": {},
+                }
+            else:
+                latest = exact_matching[-1]
+                pipeline_id = latest.get("id")
+                exact_jobs, exact_jobs_error = _paged_rows(
+                    runner,
+                    root,
+                    f"projects/{project_id}/pipelines/{pipeline_id}/jobs",
+                    command="glab",
+                )
+                if exact_jobs_error:
+                    exact_results = _unavailable(exact_jobs_error)
+                else:
+                    pipeline_status = _check_state(latest.get("status"))
+                    exact_checks: dict[str, dict[str, object]] = {
+                        "pipeline": {
+                            "status": pipeline_status,
+                            "generation": pipeline_id,
+                            "source_head": merge_sha,
+                            "observed_at": latest.get("updated_at")
+                            or latest.get("created_at"),
+                            "identity": {
+                                "name": "pipeline",
+                                "pipeline_id": pipeline_id,
+                            },
+                        }
+                    }
+                    for job in exact_jobs or []:
+                        if not isinstance(job, Mapping) or not isinstance(
+                            job.get("name"), str
+                        ):
+                            continue
+                        name = str(job["name"])
+                        candidate = {
+                            "status": _check_state(job.get("status")),
+                            "generation": {
+                                "pipeline_id": pipeline_id,
+                                "job_id": job.get("id"),
+                            },
+                            "source_head": merge_sha,
+                            "observed_at": job.get("finished_at")
+                            or job.get("started_at"),
+                            "identity": {
+                                "name": name,
+                                "pipeline_id": pipeline_id,
+                                "job_id": job.get("id"),
+                            },
+                        }
+                        previous = exact_checks.get(name)
+                        if previous is None or str(
+                            candidate["observed_at"] or ""
+                        ) >= str(previous.get("observed_at") or ""):
+                            exact_checks[name] = candidate
+                    exact_results = {
+                        "available": True,
+                        "source_head": merge_sha,
+                        "target_head": target_head,
+                        "statuses": {
+                            name: check["status"]
+                            for name, check in exact_checks.items()
+                        },
+                        "checks": exact_checks,
+                    }
+            exact_results.update(source_head=merge_sha, target_head=target_head)
+        confirmed_branch, confirmed_error, _ = _run_json(
+            runner,
+            [
+                "glab",
+                "api",
+                f"projects/{project_id}/repository/branches/{quote(target_branch, safe='')}",
+            ],
+            root,
+        )
+        confirmed_target = _head_from_branch_payload(confirmed_branch)
+        if confirmed_target:
+            out["target_revision"] = confirmed_target
+        if confirmed_error or confirmed_target != target_head:
+            exact_results = {
+                **_unavailable(confirmed_error or "target_identity_changed"),
+                "source_head": merge_sha,
+                "target_head": confirmed_target,
+            }
+        policy_raw = out.get("required_check_policy")
+        policy = (
+            dict(policy_raw)
+            if isinstance(policy_raw, Mapping)
+            else _unavailable("required_check_policy_unavailable")
+        )
+        policy["source_head"] = merge_sha
+        policy["target_head"] = confirmed_target
+        out["post_merge_ci"] = _post_merge_ci(
+            merge_sha=merge_sha,
+            target_head=confirmed_target,
+            policy=policy,
+            results=exact_results,
+        )
     approvals, approval_error, _ = _run_json(
         runner,
         ["glab", "api", f"projects/{project_id}/merge_requests/{iid}/approval_state"],

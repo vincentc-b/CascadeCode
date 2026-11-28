@@ -458,11 +458,25 @@ def _review_evidence_name(value: object) -> str:
     return value
 
 
-def _review_evidence_generation(value: object) -> str | int | None:
-    """Keep an authoritative generation losslessly within its scalar bound."""
+def _review_evidence_generation(
+    value: object,
+) -> str | int | dict[str, str | int | None] | None:
+    """Keep an authoritative scalar or compound generation within strict bounds."""
 
     if value is None:
         return None
+    if isinstance(value, Mapping):
+        if len(value) > 4:
+            raise ValueError("compound check generation has too many fields")
+        normalized: dict[str, str | int | None] = {}
+        for key, item in value.items():
+            name = _review_evidence_name(key)
+            normalized[name] = _review_evidence_generation_scalar(item)
+        return normalized
+    return _review_evidence_generation_scalar(value)
+
+
+def _review_evidence_generation_scalar(value: object) -> str | int | None:
     if isinstance(value, bool) or not isinstance(value, (str, int)):
         raise ValueError("check generation must be a string or integer")
     if isinstance(value, str):
@@ -472,6 +486,27 @@ def _review_evidence_generation(value: object) -> str | int | None:
     if len(str(abs(value))) > _REVIEW_EVIDENCE_MAX_INTEGER_DIGITS:
         raise ValueError("integer check generation exceeds the decimal-digit limit")
     return value
+
+
+def _review_evidence_identity(value: object, *, fallback: str) -> dict[str, object]:
+    raw = value if isinstance(value, Mapping) else {"name": fallback}
+    if len(raw) > 6:
+        raise ValueError("check identity has too many fields")
+    identity: dict[str, object] = {}
+    for key, item in raw.items():
+        name = _review_evidence_name(key)
+        if item is None:
+            identity[name] = None
+        elif isinstance(item, bool) or not isinstance(item, (str, int)):
+            raise ValueError("check identity value must be a string or integer")
+        elif isinstance(item, str):
+            identity[name] = _review_evidence_name(item)
+        elif len(str(abs(item))) > _REVIEW_EVIDENCE_MAX_INTEGER_DIGITS:
+            raise ValueError("check identity integer exceeds the digit limit")
+        else:
+            identity[name] = item
+    identity.setdefault("name", fallback)
+    return identity
 
 
 def _review_evidence_unavailable_marker(observed_at: str) -> dict[str, object]:
@@ -506,6 +541,24 @@ def _review_evidence_unavailable_marker(observed_at: str) -> dict[str, object]:
             "actionable": False,
             "actionable_count": 0,
         },
+        "prospective_result": {
+            "state": "unavailable",
+            "source_sha": None,
+            "observed_target_sha": None,
+        },
+        "accepted_merge_identity": {
+            "available": False,
+            "reason": _REVIEW_EVIDENCE_UNAVAILABLE,
+        },
+        "post_merge_ci": {
+            "state": "unknown",
+            "reason": _REVIEW_EVIDENCE_UNAVAILABLE,
+            "merge_sha": None,
+            "observed_target_sha": None,
+            "required_check_policy": {"available": False},
+            "required_check_results": {"available": False},
+        },
+        "observed_target_sha": None,
         "review_observed_at": observed_at,
     }
 
@@ -539,6 +592,23 @@ def record_feature_review_evidence(
 
     observed_at = datetime.now(timezone.utc).isoformat()
     trunk = locate_trunk(root)
+    expected = _load(trunk).get(feature_id)
+    if not isinstance(expected, dict):
+        return False
+    expected_generation = int(expected.get("current_generation") or 0)
+    expected_evidence_revision = int(expected.get("review_evidence_revision") or 0)
+    expected_route = {
+        "url": expected.get("url"),
+        "source_branch": expected.get("source_branch"),
+        "target_branch": expected.get("target_branch"),
+        "source_revision": expected.get("source_head"),
+    }
+    if any(
+        snapshot.get(field) is not None and snapshot.get(field) != value
+        for field, value in expected_route.items()
+        if isinstance(value, str) and value
+    ):
+        return False
     try:
         health_raw = snapshot.get("review_health")
         health_raw = health_raw if isinstance(health_raw, Mapping) else {}
@@ -587,21 +657,23 @@ def record_feature_review_evidence(
             raise ValueError("check statuses must be a mapping")
         statuses_raw = statuses_raw if isinstance(statuses_raw, Mapping) else {}
         check_results_raw = results_raw.get("checks")
-        if check_results_raw is not None and not isinstance(
-            check_results_raw, Mapping
-        ):
+        if check_results_raw is not None and not isinstance(check_results_raw, Mapping):
             raise ValueError("check results must be a mapping")
         check_results_raw = (
             check_results_raw if isinstance(check_results_raw, Mapping) else {}
         )
         status_names = [_review_evidence_name(name) for name in statuses_raw]
         check_names = [_review_evidence_name(name) for name in check_results_raw]
-        normalized_generations: dict[str, str | int | None] = {}
+        normalized_generations: dict[str, object] = {}
+        normalized_identities: dict[str, dict[str, object]] = {}
         for name, raw_check in check_results_raw.items():
             if not isinstance(raw_check, Mapping):
                 raise ValueError("check result must be a mapping")
             normalized_generations[name] = _review_evidence_generation(
                 raw_check.get("generation")
+            )
+            normalized_identities[name] = _review_evidence_identity(
+                raw_check.get("identity"), fallback=name
             )
         all_names = sorted(set(status_names) | set(check_names))
         names = all_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]
@@ -620,6 +692,7 @@ def record_feature_review_evidence(
             checks[name] = {
                 "status": status or "unknown",
                 "generation": normalized_generations.get(name),
+                "identity": normalized_identities.get(name, {"name": name}),
                 "source_head": text(check.get("source_head"), 80),
                 "observed_at": text(check.get("observed_at"), 64),
             }
@@ -645,12 +718,123 @@ def record_feature_review_evidence(
             if isinstance(actionable_raw, list)
             else 0,
         }
+        post_raw = snapshot.get("post_merge_ci")
+        post_raw = post_raw if isinstance(post_raw, Mapping) else {}
+        post_policy_raw = post_raw.get("required_check_policy")
+        post_policy_raw = (
+            post_policy_raw if isinstance(post_policy_raw, Mapping) else {}
+        )
+        post_required_raw = post_policy_raw.get("required")
+        if post_required_raw is not None and not isinstance(post_required_raw, list):
+            raise ValueError("post-merge required checks must be a list")
+        post_required = (
+            [_review_evidence_name(name) for name in post_required_raw]
+            if isinstance(post_required_raw, list)
+            else []
+        )
+        post_policy = {
+            "available": post_policy_raw.get("available") is True,
+            "reason": text(
+                post_policy_raw.get("reason") or post_policy_raw.get("error")
+            ),
+            "source_head": text(post_policy_raw.get("source_head"), 80),
+            "target_head": text(post_policy_raw.get("target_head"), 80),
+            "required": post_required[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS],
+            "required_omitted": max(
+                0, len(post_required) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS
+            ),
+        }
+        post_results_raw = post_raw.get("required_check_results")
+        post_results_raw = (
+            post_results_raw if isinstance(post_results_raw, Mapping) else {}
+        )
+        post_statuses_raw = post_results_raw.get("statuses")
+        post_statuses_raw = (
+            post_statuses_raw if isinstance(post_statuses_raw, Mapping) else {}
+        )
+        post_checks_raw = post_results_raw.get("checks")
+        if post_checks_raw is not None and not isinstance(post_checks_raw, Mapping):
+            raise ValueError("post-merge check results must be a mapping")
+        post_checks_raw = (
+            post_checks_raw if isinstance(post_checks_raw, Mapping) else {}
+        )
+        post_names = sorted(
+            {
+                *(_review_evidence_name(name) for name in post_statuses_raw),
+                *(_review_evidence_name(name) for name in post_checks_raw),
+            }
+        )
+        post_statuses: dict[str, object] = {}
+        post_checks: dict[str, object] = {}
+        for name in post_names[:_REVIEW_EVIDENCE_MAX_CHECK_ROWS]:
+            raw_check = post_checks_raw.get(name)
+            raw_check = raw_check if isinstance(raw_check, Mapping) else {}
+            status = text(
+                post_statuses_raw.get(name)
+                or raw_check.get("status")
+                or raw_check.get("conclusion"),
+                40,
+            )
+            post_statuses[name] = status or "unknown"
+            post_checks[name] = {
+                "status": status or "unknown",
+                "generation": _review_evidence_generation(raw_check.get("generation")),
+                "identity": _review_evidence_identity(
+                    raw_check.get("identity"), fallback=name
+                ),
+                "source_head": text(raw_check.get("source_head"), 80),
+                "observed_at": text(raw_check.get("observed_at"), 64),
+            }
+        post_results = {
+            "available": post_results_raw.get("available") is True,
+            "reason": text(
+                post_results_raw.get("reason") or post_results_raw.get("error")
+            ),
+            "source_head": text(post_results_raw.get("source_head"), 80),
+            "target_head": text(post_results_raw.get("target_head"), 80),
+            "statuses": post_statuses,
+            "checks": post_checks,
+            "checks_omitted": max(0, len(post_names) - _REVIEW_EVIDENCE_MAX_CHECK_ROWS),
+        }
+        merge_identity_raw = snapshot.get("accepted_merge_identity")
+        merge_identity_raw = (
+            merge_identity_raw if isinstance(merge_identity_raw, Mapping) else {}
+        )
+        accepted_identity = {
+            "available": merge_identity_raw.get("available") is True,
+            "reason": text(merge_identity_raw.get("reason")),
+            "review_url": text(merge_identity_raw.get("review_url"), 512),
+            "source_branch": text(merge_identity_raw.get("source_branch"), 256),
+            "target_branch": text(merge_identity_raw.get("target_branch"), 256),
+            "source_revision": text(merge_identity_raw.get("source_revision"), 80),
+            "merge_sha": text(merge_identity_raw.get("merge_sha"), 80),
+            "observed_target_head": text(
+                merge_identity_raw.get("observed_target_head"), 80
+            ),
+        }
+        post_merge_ci = {
+            "state": text(post_raw.get("state"), 20) or "unknown",
+            "reason": text(post_raw.get("reason")),
+            "merge_sha": text(post_raw.get("merge_sha"), 80),
+            "observed_target_sha": text(post_raw.get("observed_target_sha"), 80),
+            "required_check_policy": post_policy,
+            "required_check_results": post_results,
+        }
         observation = {
             "review_health": health,
             "required_check_policy": policy,
             "required_check_results": results,
+            "prospective_result": {
+                "state": health["state"],
+                "source_sha": text(snapshot.get("source_revision"), 80),
+                "observed_target_sha": text(snapshot.get("target_revision"), 80),
+            },
+            "accepted_merge_identity": accepted_identity,
+            "post_merge_ci": post_merge_ci,
+            "observed_target_sha": text(snapshot.get("target_revision"), 80),
             "review_feedback": feedback,
             "review_observed_at": observed_at,
+            "review_evidence_revision": expected_evidence_revision + 1,
         }
         serialized = json.dumps(
             observation, ensure_ascii=False, separators=(",", ":"), sort_keys=True
@@ -661,10 +845,26 @@ def record_feature_review_evidence(
         _update_record(
             trunk,
             feature_id,
-            _review_evidence_unavailable_marker(observed_at),
+            {
+                **_review_evidence_unavailable_marker(observed_at),
+                "review_evidence_revision": expected_evidence_revision + 1,
+            },
+            expected_generation=expected_generation,
+            expected_url=expected.get("url"),
+            expected_evidence_revision=expected_evidence_revision,
         )
         return False
-    return _update_record(trunk, feature_id, observation) is not None
+    return (
+        _update_record(
+            trunk,
+            feature_id,
+            observation,
+            expected_generation=expected_generation,
+            expected_url=expected.get("url"),
+            expected_evidence_revision=expected_evidence_revision,
+        )
+        is not None
+    )
 
 
 def _load(root: Path) -> dict[str, dict[str, object]]:
@@ -880,10 +1080,9 @@ def matching_exact_result_receipt(
         )
     ):
         return None
-    if (
-        candidate.get("source_sha") != snapshot.get("source_revision")
-        or candidate.get("target_sha") != record.get("target_head")
-    ):
+    if candidate.get("source_sha") != snapshot.get("source_revision") or candidate.get(
+        "target_sha"
+    ) != record.get("target_head"):
         return None
     state, receipt = match_review_validation_receipt(
         incident_id,
@@ -968,7 +1167,16 @@ def _accept_current_review_generation(
         return False
     accepted_identity = _actual_accepted_merge_identity(record, snapshot)
     exact_proof = matching_exact_result_receipt(record, snapshot, root=root)
-    if accepted_identity is None or exact_proof is None:
+    post_merge_ci = snapshot.get("post_merge_ci")
+    if (
+        accepted_identity is None
+        or exact_proof is None
+        or not isinstance(post_merge_ci, Mapping)
+        or post_merge_ci.get("state") != "green"
+        or post_merge_ci.get("merge_sha") != accepted_identity.get("merge_sha")
+        or post_merge_ci.get("observed_target_sha")
+        != accepted_identity.get("observed_target_head")
+    ):
         return False
     merge_sha = accepted_identity["merge_sha"]
     source_revision = snapshot.get("source_revision")
@@ -986,6 +1194,8 @@ def _accept_current_review_generation(
             "accepted_target_head": record.get("target_head"),
             "accepted_merge_identity": accepted_identity,
             "accepted_candidate_proof": exact_proof or None,
+            "post_merge_ci": dict(post_merge_ci),
+            "observed_target_sha": accepted_identity.get("observed_target_head"),
             "reconciliation_status": "accepted",
             **(
                 {
@@ -1046,6 +1256,9 @@ def _update_record(
     *,
     create: bool = False,
     only_if_absent: bool = False,
+    expected_generation: int | None = None,
+    expected_url: object = None,
+    expected_evidence_revision: int | None = None,
 ) -> dict[str, object] | None:
     """Merge one feature's fields into the latest registry without losing peers."""
 
@@ -1058,6 +1271,17 @@ def _update_record(
             existing = {}
         elif only_if_absent and existing:
             return dict(existing)
+        if expected_generation is not None and (
+            int(existing.get("current_generation") or 0) != expected_generation
+            or existing.get("url") != expected_url
+        ):
+            return None
+        if (
+            expected_evidence_revision is not None
+            and int(existing.get("review_evidence_revision") or 0)
+            != expected_evidence_revision
+        ):
+            return None
         updated = dict(existing)
         updated.update(changes)
         if "seen_comments" in changes:
@@ -1136,6 +1360,10 @@ def _store_review_generation(
             "exact_candidate_proof",
             "accepted_merge_identity",
             "accepted_candidate_proof",
+            "prospective_result",
+            "post_merge_ci",
+            "observed_target_sha",
+            "review_evidence_revision",
         ):
             if field not in generation_row:
                 updated.pop(field, None)
@@ -1195,7 +1423,16 @@ def _record_forge_acceptance(
 ) -> None:
     accepted_identity = _actual_accepted_merge_identity(record, snapshot)
     exact_proof = matching_exact_result_receipt(record, snapshot, root=root)
-    if accepted_identity is None or exact_proof is None:
+    post_merge_ci = snapshot.get("post_merge_ci")
+    if (
+        accepted_identity is None
+        or exact_proof is None
+        or not isinstance(post_merge_ci, Mapping)
+        or post_merge_ci.get("state") != "green"
+        or post_merge_ci.get("merge_sha") != accepted_identity.get("merge_sha")
+        or post_merge_ci.get("observed_target_sha")
+        != accepted_identity.get("observed_target_head")
+    ):
         return
     merge_sha = accepted_identity["merge_sha"]
     source = accepted_identity["source_revision"]
@@ -1209,6 +1446,8 @@ def _record_forge_acceptance(
         "source_revision": source,
         "accepted_merge_identity": accepted_identity,
         "accepted_candidate_proof": exact_proof or None,
+        "post_merge_ci": dict(post_merge_ci),
+        "observed_target_sha": accepted_identity.get("observed_target_head"),
     }
     if _forge_acceptance(record) != receipt:
         _update_record(root, feature_id, {"forge_acceptance": receipt})
@@ -1733,8 +1972,7 @@ def _review_evidence_projection(
                 raise ValueError("omitted check count must be a non-negative integer")
             omitted = max(omitted, normalized_omitted)
         if health_state == "green" and (
-            policy.get("available") is not True
-            or results.get("available") is not True
+            policy.get("available") is not True or results.get("available") is not True
         ):
             raise ValueError("green evidence requires available policy and results")
     except (TypeError, ValueError, UnicodeError):
@@ -1858,7 +2096,9 @@ def _accountable_review_projection(
     projection = _feature_review_projection(record, state)
     repair_view = _repair_projection(repair)
     evidence = _review_evidence_projection(record, repair)
-    epic_id = _review_target_epic(record) or (str(meta.parent) if meta and meta.parent else None)
+    epic_id = _review_target_epic(record) or (
+        str(meta.parent) if meta and meta.parent else None
+    )
     next_prerequisite = (
         evidence.get("next_prerequisite")
         or repair_view.get("next_prerequisite")
@@ -1938,7 +2178,10 @@ def feature_delivery_views(
 
     trunk = locate_trunk(root)
     state = _load(trunk)
-    from cascade.feature.repair import current_feature_repair_record, current_feature_repair_records
+    from cascade.feature.repair import (
+        current_feature_repair_record,
+        current_feature_repair_records,
+    )
     from cascade.workspace.integration_worktree import merged_board_readonly
 
     ids = set(feature_ids)
@@ -2789,6 +3032,18 @@ def _finalize_merged_review_record(
 ) -> bool:
     from cascade.boss.rollup import try_complete_feature
 
+    if snapshot is not None:
+        accepted_identity = _actual_accepted_merge_identity(record, snapshot)
+        post_merge_ci = snapshot.get("post_merge_ci")
+        if (
+            accepted_identity is None
+            or not isinstance(post_merge_ci, Mapping)
+            or post_merge_ci.get("state") != "green"
+            or post_merge_ci.get("merge_sha") != accepted_identity.get("merge_sha")
+            or post_merge_ci.get("observed_target_sha")
+            != accepted_identity.get("observed_target_head")
+        ):
+            return False
     try:
         _sync_merged_target(trunk, mr)
         epic_root = _close_merged_feature_on_target(feature_id, record, trunk=trunk)

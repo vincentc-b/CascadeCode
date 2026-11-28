@@ -567,6 +567,243 @@ def test_github_newer_failed_check_generation_wins_over_old_green(
     assert snapshot["review_health"] == {"state": "failed", "checks": ["tests"]}
 
 
+def test_github_merged_ci_pages_exact_merge_and_ignores_source_green(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tracking, "_FORGE_PAGE_SIZE", 2)
+    mr = tracking.MergeRequest(
+        "https://github.com/example/project/pull/21",
+        "21",
+        "github",
+        "feat/x",
+        "main",
+        False,
+    )
+    source_sha, merge_sha, target_sha = "a" * 40, "b" * 40, "c" * 40
+
+    def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+        if args[:3] == ["gh", "pr", "view"]:
+            payload = {
+                "state": "MERGED",
+                "url": mr.url,
+                "headRefName": mr.source_branch,
+                "baseRefName": mr.target_branch,
+                "commits": [{"oid": source_sha}],
+                "mergeCommit": {"oid": merge_sha},
+                "mergeable": "MERGEABLE",
+                "mergeStateStatus": "CLEAN",
+                "comments": [],
+                "reviews": [],
+                "reviewDecision": "APPROVED",
+            }
+            return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+        endpoint = args[-1]
+        if endpoint.endswith("/comments"):
+            payload = []
+        elif endpoint.endswith("/branches/main"):
+            payload = {"commit": {"sha": target_sha}}
+        elif endpoint.endswith("/protection/required_status_checks"):
+            payload = {"contexts": ["tests"]}
+        elif endpoint.endswith(f"/commits/{source_sha}/check-runs"):
+            payload = {
+                "check_runs": [
+                    {
+                        "id": 1,
+                        "name": "tests",
+                        "head_sha": source_sha,
+                        "conclusion": "success",
+                    }
+                ]
+            }
+        elif endpoint.endswith(f"/commits/{source_sha}/status"):
+            payload = {"statuses": []}
+        elif endpoint.endswith("check-runs?per_page=2&page=1"):
+            payload = {
+                "check_runs": [
+                    {
+                        "id": 1,
+                        "name": "tests",
+                        "head_sha": merge_sha,
+                        "conclusion": "success",
+                        "completed_at": "2026-01-01T00:00:00Z",
+                    },
+                    {
+                        "id": 2,
+                        "name": "lint",
+                        "head_sha": merge_sha,
+                        "conclusion": "success",
+                        "completed_at": "2026-01-01T00:00:00Z",
+                    },
+                ]
+            }
+        elif endpoint.endswith("check-runs?per_page=2&page=2"):
+            payload = {
+                "check_runs": [
+                    {
+                        "id": 3,
+                        "name": "tests",
+                        "head_sha": merge_sha,
+                        "conclusion": "failure",
+                        "completed_at": "2026-01-02T00:00:00Z",
+                    }
+                ]
+            }
+        elif "/status?per_page=2&page=" in endpoint:
+            payload = {"statuses": []}
+        else:
+            raise AssertionError(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
+
+    assert snapshot["required_check_results"]["statuses"]["tests"] == "success"
+    assert snapshot["post_merge_ci"]["state"] == "red"
+    assert snapshot["post_merge_ci"]["merge_sha"] == merge_sha
+    exact = snapshot["post_merge_ci"]["required_check_results"]["checks"]["tests"]
+    assert exact["generation"] == 3
+    assert exact["source_head"] == merge_sha
+
+
+def test_github_incomplete_exact_merge_pagination_is_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tracking, "_FORGE_PAGE_SIZE", 1)
+    mr = tracking.MergeRequest(
+        "https://github.com/example/project/pull/22",
+        "22",
+        "github",
+        "feat/x",
+        "main",
+        False,
+    )
+    source_sha, merge_sha, target_sha = "a" * 40, "b" * 40, "c" * 40
+
+    def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+        if args[:3] == ["gh", "pr", "view"]:
+            payload = {
+                "state": "MERGED",
+                "url": mr.url,
+                "headRefName": mr.source_branch,
+                "baseRefName": mr.target_branch,
+                "commits": [{"oid": source_sha}],
+                "mergeCommit": {"oid": merge_sha},
+                "mergeable": "MERGEABLE",
+                "mergeStateStatus": "CLEAN",
+                "comments": [],
+                "reviews": [],
+            }
+            return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+        endpoint = args[-1]
+        if endpoint.endswith("/comments"):
+            payload = []
+        elif endpoint.endswith("/branches/main"):
+            payload = {"commit": {"sha": target_sha}}
+        elif endpoint.endswith("/protection/required_status_checks"):
+            payload = {"contexts": ["tests"]}
+        elif endpoint.endswith(f"/commits/{source_sha}/check-runs"):
+            payload = {"check_runs": []}
+        elif endpoint.endswith(f"/commits/{source_sha}/status"):
+            payload = {"statuses": []}
+        elif endpoint.endswith("check-runs?per_page=1&page=1"):
+            payload = {"check_runs": [{"id": 1, "name": "tests"}]}
+        elif endpoint.endswith("check-runs?per_page=1&page=2"):
+            return subprocess.CompletedProcess(args, 1, "", "page unavailable")
+        elif "/status?per_page=1&page=" in endpoint:
+            payload = {"statuses": []}
+        else:
+            raise AssertionError(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
+
+    assert snapshot["post_merge_ci"]["state"] == "unknown"
+    assert snapshot["post_merge_ci"]["reason"] == "required_check_results_unavailable"
+
+
+def test_gitlab_merged_ci_uses_exact_merge_pipeline_pages(tmp_path: Path) -> None:
+    mr = tracking.MergeRequest(
+        "https://gitlab.example/group/project/-/merge_requests/23",
+        "23",
+        "gitlab",
+        "feat/x",
+        "main",
+        False,
+    )
+    source_sha, merge_sha, target_sha = "a" * 40, "b" * 40, "c" * 40
+    move_target = False
+    branch_calls = 0
+
+    def runner(args: list[str], root: Path) -> subprocess.CompletedProcess[str]:
+        nonlocal branch_calls
+        if args[:3] == ["glab", "mr", "view"]:
+            payload = {
+                "state": "merged",
+                "merged_at": "2026-01-03T00:00:00Z",
+                "web_url": mr.url,
+                "source_branch": mr.source_branch,
+                "target_branch": mr.target_branch,
+                "sha": source_sha,
+                "merge_commit_sha": merge_sha,
+                "merge_status": "can_be_merged",
+                "notes": [],
+            }
+        elif "/repository/branches/" in args[-1]:
+            branch_calls += 1
+            observed = "d" * 40 if move_target and branch_calls % 2 == 0 else target_sha
+            payload = {"commit": {"sha": observed}}
+        elif args[-1] == "projects/group%2Fproject":
+            payload = {"only_allow_merge_if_pipeline_succeeds": True}
+        elif args[-1].endswith("/merge_requests/23/pipelines"):
+            payload = [
+                {
+                    "id": 1,
+                    "sha": source_sha,
+                    "status": "success",
+                    "updated_at": "2026-01-02T00:00:00Z",
+                }
+            ]
+        elif args[-1].endswith("/pipelines/1/jobs"):
+            payload = []
+        elif "pipelines?sha=" in args[-1]:
+            payload = [
+                {
+                    "id": 2,
+                    "sha": merge_sha,
+                    "status": "success",
+                    "updated_at": "2026-01-03T00:00:00Z",
+                }
+            ]
+        elif args[-1].endswith("/pipelines/2/jobs?per_page=100&page=1"):
+            payload = [{"id": 20, "name": "tests", "status": "success"}]
+        elif args[-1].endswith("/approval_state"):
+            payload = {"rules": []}
+        else:
+            raise AssertionError(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    snapshot = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
+
+    assert snapshot["required_check_results"]["source_head"] == source_sha
+    assert snapshot["post_merge_ci"]["state"] == "green"
+    assert snapshot["post_merge_ci"]["merge_sha"] == merge_sha
+    assert (
+        snapshot["post_merge_ci"]["required_check_results"]["checks"]["pipeline"][
+            "generation"
+        ]
+        == 2
+    )
+
+    move_target = True
+    branch_calls = 0
+    moved = tracking.merge_request_snapshot(tmp_path, mr, runner=runner)
+    assert moved["target_revision"] == "d" * 40
+    assert moved["post_merge_ci"]["state"] == "unknown"
+    assert (
+        moved["post_merge_ci"]["required_check_results"]["reason"]
+        == "target_identity_changed"
+    )
+
+
 def test_github_feedback_distinguishes_approval_wait_and_actionable_change(
     tmp_path: Path,
 ) -> None:

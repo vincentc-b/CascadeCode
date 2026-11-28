@@ -94,6 +94,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [_require_open_review_repair_identity](../review.py) | Join scoped repair publication to the admitted original review identity, observation or checkpointed action. |
 | [matching_exact_result_receipt](../review.py) | Re-read the Task-owned settled receipt and compare complete candidate, review, profile and runtime identity before acceptance and independent repair verification. |
 | [_actual_accepted_merge_identity](../review.py) | Require forge URL, route, source, actual merge SHA and observed target head for the current review generation without substituting ancestry or the prospective candidate. |
+| [_accept_current_review_generation](../review.py) | Admit closeout only when the current candidate receipt, accepted identity and exact-SHA post-merge CI green observation agree on merge and target identity. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -108,7 +109,9 @@ flowchart TD
     Review --> Receipt{Exact candidate receipt still matches?}
     Receipt -->|no| Preserve
     Receipt -->|yes| Accept[Observe actual forge merge identity]
-    Accept --> Target{Accepted merge on intended Epic target?}
+    Accept --> MergeCI{Required CI green on exact accepted SHA?}
+    MergeCI -->|unknown, pending or red| Preserve
+    MergeCI -->|yes| Target{Accepted merge on intended Epic target?}
     Target -->|no| Preserve
     Target -->|yes| Source[Persist verified repair source as terminal]
     Source --> Event[Emit FeatureCompleted once]
@@ -126,6 +129,10 @@ stop this route before push or review creation. Other already-admitted legacy
 delivery routes may retain their linked follow-up behavior; they cannot be
 selected by an open-review repair action. Registry writes are atomic, so restart
 joins the checkpointed repair generation without creating a duplicate review.
+Prospective green, forge acceptance and exact post-merge CI are separate
+generation facts. Target synchronization, lifecycle closeout and retirement do
+not begin while exact accepted-SHA CI is unknown, pending or red. A callback for
+an older generation or evidence revision cannot replace the current receipt.
 
 Actions in `executions.json` retain authoritative delivery and repair evidence;
 the pending merge list is a scheduling index. Feature records in `reviews.json`

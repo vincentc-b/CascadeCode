@@ -2340,6 +2340,15 @@ code_boss_accepted_identity = element "_actual_accepted_merge_identity" "Functio
     }
 }
 
+code_boss_accept_generation = element "_accept_current_review_generation" "Function" "Fence closeout to one current review generation whose candidate receipt, accepted merge identity, observed target and exact-SHA post-merge CI green evidence agree." {
+    properties {
+        "cascade.semanticId" "element.code.boss.accept-generation"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_accept_current_review_generation"
+    }
+}
+
 code_boss_open_review_identity = element "_require_open_review_repair_identity" "Function" "Bind publication to the admitted original review observation or its checkpointed repair action." {
     properties {
         "cascade.semanticId" "element.code.boss.open-review-repair-identity"
@@ -2931,6 +2940,24 @@ code_boss_reconcile_to_exact_result = code_boss_reconcile -> code_boss_exact_res
 code_boss_reconcile_to_accepted_identity = code_boss_reconcile -> code_boss_accepted_identity "Separates actual forge acceptance from prospective proof" {
     properties {
         "cascade.semanticId" "relationship.code-boss-reconcile-to-accepted-identity"
+    }
+}
+
+code_boss_reconcile_to_accept_generation = code_boss_reconcile -> code_boss_accept_generation "Requires exact accepted-SHA CI green before target synchronization and closeout" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-reconcile-to-accept-generation"
+    }
+}
+
+code_boss_accept_generation_to_exact_result = code_boss_accept_generation -> code_boss_exact_result "Matches the prospective candidate receipt without substituting it for merged CI" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-accept-generation-to-exact-result"
+    }
+}
+
+code_boss_accept_generation_to_identity = code_boss_accept_generation -> code_boss_accepted_identity "Binds accepted merge and observed target identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-accept-generation-to-accepted-identity"
     }
 }
 
@@ -4700,6 +4727,24 @@ code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Nor
     }
 }
 
+code_watchdog_forge_pages = element "_paged_rows" "Function" "Read every explicit GitHub or GitLab result page through the scripted CLI transport; errors and the finite safety bound discard partial evidence." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.forge-pages"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "_paged_rows"
+    }
+}
+
+code_watchdog_post_merge_ci = element "_post_merge_ci" "Function" "Classify policy and newest-generation check identities only when results are bound to the exact accepted merge SHA and fresh target observation." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.post-merge-ci"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/tracking.py"
+        "cascade.sourceSymbol" "_post_merge_ci"
+    }
+}
+
 code_watchdog_review_evidence_health = element "_review_health" "Function" "Classify normalized current-generation evidence as green, failed, pending, missing, stale, approval-only, actionable feedback, conflict, unavailable or terminal." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-evidence-health"
@@ -4709,7 +4754,7 @@ code_watchdog_review_evidence_health = element "_review_health" "Function" "Clas
     }
 }
 
-code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Persist a normalized health observation with capped rows and selected text in the canonical review registry; check-name keys and string generations retain input length." {
+code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Atomically persist bounded prospective, accepted-identity, post-merge CI and observed-target facts in the fenced current review generation." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-evidence-record"
         "cascade.parent" "element.component.watchdog"
@@ -4784,6 +4829,24 @@ code_workspace_delivery_to_invoke = code_workspace_delivery_locked -> code_works
 code_watchdog_health_to_snapshot = code_watchdog_review_health -> code_watchdog_review_snapshot "Reads authoritative review identity, head, policy, check-generation and feedback facts before routing" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-snapshot"
+    }
+}
+
+code_watchdog_snapshot_to_forge_pages = code_watchdog_review_snapshot -> code_watchdog_forge_pages "Reads all exact accepted-SHA check, status, pipeline and job pages" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-snapshot-to-forge-pages"
+    }
+}
+
+code_watchdog_forge_pages_to_post_merge_ci = code_watchdog_forge_pages -> code_watchdog_post_merge_ci "Provides complete newest-generation exact-SHA results or unavailable evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-forge-pages-to-post-merge-ci"
+    }
+}
+
+code_watchdog_post_merge_ci_to_record = code_watchdog_post_merge_ci -> code_watchdog_review_evidence_record "Persists the independent post-merge dimension under generation and evidence-revision fences" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-post-merge-ci-to-evidence-record"
     }
 }
 

@@ -303,6 +303,8 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [inspect_exact_validation_material / match_review_validation_receipt](review_validation.py) | Establish the complete candidate/review/profile/runtime identity and physical board before reservation; reuse only an exact settled green or fence exact deterministic red. |
 | [record_exact_candidate_proof / matching_exact_result_receipt](review.py) | Bind the settled candidate proof to one review generation and make publication, acceptance and independent postcheck consume the same exact receipt comparison. |
 | [_actual_accepted_merge_identity](review.py) / [merge_request_snapshot](tracking.py) | Keep actual forge merge SHA, observed target head, route and local generation separate from the prospective candidate proof; incomplete identity fails closed. |
+| [_paged_rows / _post_merge_ci](tracking.py) | Read every result page for the exact accepted merge SHA and classify its required checks independently from source-head validation; incomplete pagination or identity remains unknown. |
+| [record_feature_review_evidence](review.py) | Bound and atomically persist separate prospective, accepted-identity, exact post-merge CI and observed-target dimensions in the current immutable review generation. |
 | [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
 | [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
 | [validate_publication_board](review_validation.py) | Request Board's exhaustive read-only identity scan for the exact publication checkout before validation. Board owns physical schema and hierarchy invariants; Teams owns this publication gate. |
@@ -581,6 +583,23 @@ Runner boundary in `cascade.tracking`. Fixed `gh api` and `glab api` argument
 vectors make production adapters replaceable by deterministic tests without a
 second forge client, credential store, scheduler or persistence boundary.
 
+`REQ-REVIEW-EVIDENCE-003`: A merged review retains four independent facts:
+prospective source validation, the exact forge-accepted merge identity,
+post-merge CI for that merge SHA, and the freshly observed target SHA. GitHub
+check runs/statuses and GitLab pipelines/jobs are read through every result page.
+Each check retains its forge identity and newest generation. Source-head or a
+later target-head green result cannot satisfy post-merge CI. Unknown policy,
+offline transport, incomplete pagination, missing merge identity or a changed
+review route remains `unknown`; only all required results bound to the exact
+accepted SHA produce `green`.
+
+`REQ-REVIEW-EVIDENCE-004`: The review registry normalizes these dimensions to
+bounded rows and text, writes them atomically into the current generation, and
+increments an evidence revision under the registry lock. The generation, URL,
+route and source fence rejects duplicate concurrent or late historical callbacks;
+advancing a generation clears its compatibility projection without rewriting
+the retained historical row.
+
 ```mermaid
 flowchart LR
     Review[Original review identity] --> Snapshot[merge_request_snapshot]
@@ -596,11 +615,28 @@ flowchart LR
     Results -. missing or stale .-> Blocked[Typed non-green evidence]
 ```
 
+```mermaid
+flowchart TD
+    Accepted[Fresh accepted merge identity] --> Pages[Read every exact-SHA result page]
+    Pages -->|complete| Latest[Select newest generation per check identity]
+    Pages -->|offline / incomplete| Unknown[Persist post-merge CI unknown]
+    Latest --> Policy{Current target policy known?}
+    Policy -->|no| Unknown
+    Policy -->|yes, red or pending| NonGreen[Persist exact red or pending]
+    Policy -->|all required exact-SHA green| Green[Persist exact green]
+    Green --> Fence{Generation, URL, route and source still current?}
+    NonGreen --> Fence
+    Unknown --> Fence
+    Fence -->|yes| Registry[Atomic bounded generation receipt]
+    Fence -->|no| Preserve[Preserve newer evidence]
+```
+
 Normal evidence flow is exercised by the GitHub and GitLab scripted transport
 cases in [tracking adapter tests](../tests/test_tracking_find.py), including a
-confirmed empty target policy and newest-generation selection. The same tests
+confirmed empty target policy, exact-merge pagination and newest-generation selection. The same tests
 cover unavailable policy, a missing required result, stale source evidence and a
-newer failure after an older success. The integrated Watchdog Code view is
+newer failure after an older success; review-generation tests cover compound
+forge identity, atomic persistence and stale-generation replay. The integrated Watchdog Code view is
 [`cascade-watchdog-code`](../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 and its source contract pins both normalization and classification symbols.
 The [Watchdog open-review contract](watchdog/DESIGN.md#open-review-observation)

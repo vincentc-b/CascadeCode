@@ -12,7 +12,10 @@ import pytest
 from cascade.board.store import read_doc, write_doc
 from cascade.board.types import CancellationFeedback
 from cascade.tracking import MergeRequest
-from cascade.review_validation import ExactValidationMaterial, exact_material_fingerprint
+from cascade.review_validation import (
+    ExactValidationMaterial,
+    exact_material_fingerprint,
+)
 from cascade.watchdog.events import append_event
 from cascade.watchdog.types import Event
 from tests.support import add_doc, make_repo
@@ -148,11 +151,13 @@ def test_exact_candidate_receipt_is_shared_by_acceptance_and_fenced_on_drift(
     monkeypatch.setattr(
         "cascade.review_validation.match_review_validation_receipt",
         lambda incident_id, candidate, **_kwargs: (
-            "matching_green",
-            receipt,
-        )
-        if incident_id == "review:12" and candidate == material
-        else ("admission_required", None),
+            (
+                "matching_green",
+                receipt,
+            )
+            if incident_id == "review:12" and candidate == material
+            else ("admission_required", None)
+        ),
     )
     assert review.record_exact_candidate_proof(
         "feat_001", "review:12", "validator:12", material, root=root
@@ -167,6 +172,11 @@ def test_exact_candidate_receipt_is_shared_by_acceptance_and_fenced_on_drift(
         "source_revision": source_sha,
         "target_revision": observed_target,
         "merge_sha": merge_sha,
+        "post_merge_ci": {
+            "state": "green",
+            "merge_sha": merge_sha,
+            "observed_target_sha": observed_target,
+        },
     }
 
     assert review._accept_current_review_generation(
@@ -208,6 +218,109 @@ def test_new_generation_drops_prior_exact_candidate_proof(tmp_path: Path) -> Non
     assert first["generation"] == 1
     assert "candidate_proof_required" not in second
     assert "exact_candidate_proof" not in second
+
+
+def test_post_merge_evidence_is_independent_bounded_and_generation_fenced(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    source_sha, target_sha = "a" * 40, "b" * 40
+    merge_sha, observed_target = "c" * 40, "d" * 40
+    current = _projection("https://example.test/pulls/30")
+    current.update(source_head=source_sha, target_head=target_sha)
+    review._store_review_generation(
+        root, "feat_001", current, generation=1, action_id="repair:one"
+    )
+    snapshot = {
+        "state": "merged",
+        "url": current["url"],
+        "source_branch": current["source_branch"],
+        "target_branch": current["target_branch"],
+        "source_revision": source_sha,
+        "target_revision": observed_target,
+        "merge_sha": merge_sha,
+        "review_health": {"state": "terminal", "reason": "merged"},
+        "required_check_policy": {
+            "available": True,
+            "source_head": source_sha,
+            "target_head": observed_target,
+            "required": ["tests"],
+        },
+        "required_check_results": {
+            "available": True,
+            "source_head": source_sha,
+            "statuses": {"tests": "success"},
+            "checks": {
+                "tests": {
+                    "status": "success",
+                    "generation": 1,
+                    "source_head": source_sha,
+                }
+            },
+        },
+        "accepted_merge_identity": {
+            "available": True,
+            "review_url": current["url"],
+            "source_branch": current["source_branch"],
+            "target_branch": current["target_branch"],
+            "source_revision": source_sha,
+            "merge_sha": merge_sha,
+            "observed_target_head": observed_target,
+        },
+        "post_merge_ci": {
+            "state": "red",
+            "merge_sha": merge_sha,
+            "observed_target_sha": observed_target,
+            "required_check_policy": {
+                "available": True,
+                "target_head": observed_target,
+                "required": ["tests"],
+            },
+            "required_check_results": {
+                "available": True,
+                "source_head": merge_sha,
+                "target_head": observed_target,
+                "statuses": {"tests": "failure"},
+                "checks": {
+                    "tests": {
+                        "status": "failure",
+                        "generation": {"pipeline_id": 9, "job_id": 12},
+                        "identity": {"name": "tests", "app_id": 7},
+                        "source_head": merge_sha,
+                    }
+                },
+            },
+        },
+        "review_feedback": {"available": True, "actionable": False},
+    }
+
+    assert review.record_feature_review_evidence("feat_001", snapshot, root=root)
+    persisted = review.review_record_for_feature("feat_001", root=root)
+    assert persisted is not None
+    assert persisted["prospective_result"]["source_sha"] == source_sha
+    assert persisted["accepted_merge_identity"]["merge_sha"] == merge_sha
+    assert persisted["post_merge_ci"]["state"] == "red"
+    exact = persisted["post_merge_ci"]["required_check_results"]["checks"]["tests"]
+    assert exact["generation"] == {"pipeline_id": 9, "job_id": 12}
+    assert exact["identity"] == {"name": "tests", "app_id": 7}
+    assert persisted["observed_target_sha"] == observed_target
+
+    assert review.record_feature_review_evidence("feat_001", snapshot, root=root)
+    duplicate = review.review_record_for_feature("feat_001", root=root)
+    assert duplicate is not None
+    assert duplicate["review_evidence_revision"] == 2
+    assert duplicate["post_merge_ci"] == persisted["post_merge_ci"]
+
+    newer = {**current, "url": "https://example.test/pulls/31"}
+    review._store_review_generation(
+        root, "feat_001", newer, generation=2, action_id="repair:two"
+    )
+    assert not review.record_feature_review_evidence("feat_001", snapshot, root=root)
+    latest = review.review_record_for_feature("feat_001", root=root)
+    assert latest is not None
+    assert latest["current_generation"] == 2
+    assert latest["url"] == newer["url"]
+    assert "post_merge_ci" not in latest
 
 
 def test_generation_save_failure_replays_without_overwriting_acceptance(
@@ -418,7 +531,9 @@ def test_changed_review_target_head_is_refused_before_repair_publication(
     root = make_repo(tmp_path)
     _repair_publication_board(root, monkeypatch)
     current = _projection("https://example.test/pulls/1")
-    review._store_review_generation(root, "feat_001", current, generation=0, action_id=None)
+    review._store_review_generation(
+        root, "feat_001", current, generation=0, action_id=None
+    )
     monkeypatch.setattr(
         review,
         "merge_request_snapshot",
@@ -479,9 +594,7 @@ def test_merged_original_review_refuses_scoped_repair_without_creating_follow_up
     root = make_repo(tmp_path)
     _repair_publication_board(root, monkeypatch)
     old = _projection("https://example.test/pulls/1")
-    review._store_review_generation(
-        root, "feat_001", old, generation=0, action_id=None
-    )
+    review._store_review_generation(root, "feat_001", old, generation=0, action_id=None)
     old_mr = review._record_to_mr(old)
     monkeypatch.setattr(
         review,
