@@ -1,0 +1,70 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "25ae27aebc7fbe1c4726e7502073d72a3554ebfb",
+  "proposal": {
+    "owner_work_id": "feat_054_001",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade",
+    "design_owner_directory": "cascade",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_054",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/2_active/feat_054_001_validate_exact_merge_results_with_isolated_fresh_checks.md",
+      "revision": "25ae27aebc7fbe1c4726e7502073d72a3554ebfb",
+      "content_digest": "08d647ef25db714eef666c4918232379d0c9f3ff4ab8600d201ea96cdc3e8dac"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "owning_work": "feat_054_001",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "acb1d5fd063c431791682ee29067f2ca41423cf5"
+      },
+      "content_digest": "f51f3b03cef24739a9f17ebdc648977b2c8808eeb1a721070cf726d4797895e9"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-REVIEW-PUBLISH-001",
+      "REQ-RECOVERY-BUDGET-001"
+    ],
+    "decision_citations": [
+      "DEC-REVIEW-PUBLISH-001",
+      "DEC-RECOVERY-BUDGET-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-team-components",
+      "cascade-teams-code",
+      "cascade-task-code",
+      "cascade-workspace-code",
+      "cascade-boss-code"
+    ],
+    "affected_work_ids": [
+      "feat_054_001"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "The exact Feature revision records Task 1 integration evidence and the canonical primary-acceptance limitation; its only change after the Task 1 implementation commit is work-record text. Task 1 already updated cascade/DESIGN.md and the pinned model, views and source contract under the existing Teams owner, with no new actor, container, store or Workspace public API. This no-diagram-change decision covers the Feature document revision only; it does not accept the merged implementation model as the final Feature architecture. Task 2 must bind exact receipts and Task 3 must reconcile accepted merge evidence and the final diagram changes. The current Teams source contract passed 14 tests, and the reviewed Feature diff passes git diff --check. Pinned rendering, browser navigation and final receipt/restart behavior remain delivery obligations. The completed Task 1 primary acceptance section remains TBD and requires a supported lifecycle correction before Feature completion."
+  }
+}

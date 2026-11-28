@@ -6,6 +6,7 @@ import subprocess
 import tomllib
 import hashlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -34,6 +35,7 @@ from cascade.task.incident_budget import (
 from cascade.review_validation import (
     review_validation_environment,
     reserve_review_validation,
+    settle_interrupted_review_validation,
     settle_unused_review_validation,
 )
 from cascade.workspace.integration_worktree import locate_trunk
@@ -166,6 +168,35 @@ def publish_team_review_resolution(
         owner = recovery.get("owning_team") if isinstance(recovery, Mapping) else None
         if owner != {"kind": team_kind, "work_id": team_id}:
             raise PermissionError("durable review recovery belongs to a different team")
+        # Replay reports the result of this completed action, not a new
+        # publication against moving review heads. Fresh work needs admission.
+        if action.get("recovery_state") == "completed":
+            return {
+                "action_id": action_id,
+                "recovery_state": "completed",
+                "attempt_count": action.get("attempt_count"),
+            }
+
+    existing_budget = read_incident_budget(action_id, root=trunk)
+    next_eligible = (
+        existing_budget.get("next_eligible_at")
+        if isinstance(existing_budget, Mapping)
+        else None
+    )
+    if isinstance(next_eligible, str):
+        try:
+            backoff_until = datetime.fromisoformat(next_eligible).astimezone(timezone.utc)
+        except ValueError:
+            backoff_until = None
+        if backoff_until is not None and datetime.now(timezone.utc) < backoff_until:
+            return {
+                "action_id": action_id,
+                "recovery_state": action.get("recovery_state"),
+                "attempt_count": action.get("attempt_count"),
+                "reason": "validation_budget_transient_backoff",
+                "incident_id": action_id,
+                "claim_id": f"review-publication:{action_id}",
+            }
 
     # A clean local merge is not a new owner decision on every health poll.
     # Bind retries to the actual resolution and the operator-owned check policy.
@@ -173,13 +204,41 @@ def publish_team_review_resolution(
     from cascade.review_validation import (
         ReviewValidationAdmissionError,
         approved_review_validation_profile,
+        exact_review_identity,
+        inspect_exact_validation_material,
+        match_review_validation_receipt,
         preflight_review_validation,
     )
 
     validation_profile = None
     try:
+        from cascade.validation_command import review_validation_command
+
+        local_head_for_profile = _git(
+            worktree, "rev-parse", "--verify", "HEAD^{commit}"
+        )
+        modified_for_profile = tuple(
+            path
+            for path in (
+                _git(
+                    worktree,
+                    "diff",
+                    "--name-only",
+                    f"{heads[1]}..{local_head_for_profile}",
+                )
+                or ""
+            ).splitlines()
+            if path
+        )
+        approved_command = validation_command(trunk)
         validation_profile = approved_review_validation_profile(
-            trunk, command=validation_command(trunk)
+            trunk,
+            command=review_validation_command(
+                trunk,
+                worktree,
+                modified_for_profile,
+                configured_command=approved_command,
+            ),
         )
         preflight_review_validation(validation_profile, cwd=worktree)
     except (ReviewValidationAdmissionError, ValueError) as exc:
@@ -195,10 +254,63 @@ def publish_team_review_resolution(
             ),
         }
 
+    publication_preflight = prepare_review_rebase_turn(action_id, root=trunk)
+    if publication_preflight.turn is None:
+        blocker = publication_preflight.blocker
+        return {
+            "action_id": action_id,
+            "recovery_state": "awaiting_owner_decision",
+            "reason": blocker.code if blocker is not None else "preflight_failed",
+            "detail": blocker.message if blocker is not None else "review preflight failed",
+        }
+    admitted_turn = publication_preflight.turn
+    local_head = _git(worktree, "rev-parse", "--verify", "HEAD^{commit}")
+    durable_review = resolution_action(action_id, root=trunk)
+    request = durable_review.get("request") if isinstance(durable_review, Mapping) else None
+    if not isinstance(request, Mapping) or not isinstance(local_head, str):
+        return {
+            "action_id": action_id,
+            "recovery_state": "awaiting_owner_decision",
+            "reason": "review_identity_unavailable",
+        }
+    review_fields = exact_review_identity(
+        action_id,
+        admitted_turn.review_id,
+        source_ref,
+        target_ref,
+        admitted_turn.observed_source_sha,
+        admitted_turn.observed_target_sha,
+        request,
+    )
+    if review_fields is None:
+        return {
+            "action_id": action_id,
+            "recovery_state": "awaiting_owner_decision",
+            "reason": "review_identity_unavailable",
+        }
+    inspection = inspect_exact_validation_material(
+        worktree,
+        local_head,
+        admitted_turn.observed_target_sha,
+        profile=validation_profile,
+        review_identity=review_fields,
+    )
+    if inspection.material is None:
+        return {
+            "action_id": action_id,
+            "recovery_state": "awaiting_owner_decision",
+            "reason": inspection.reason or "candidate_identity_unavailable",
+            "detail": inspection.owner_action,
+        }
+    validation_material = inspection.material
+
     generation = {
-        "source_head": _git(worktree, "rev-parse", "HEAD"),
+        "source_head": local_head,
         "source_tree": _git(worktree, "rev-parse", "HEAD^{tree}"),
-        "observed_heads": list(heads),
+        "observed_heads": [
+            admitted_turn.observed_source_sha,
+            admitted_turn.observed_target_sha,
+        ],
         "validation_command": list(validation_profile.command),
         "validation_timeout_seconds": validation_profile.timeout_seconds,
         "validation_profile": {
@@ -210,6 +322,8 @@ def publish_team_review_resolution(
         },
         "budget_policy": {"id": POLICY_ID, "version": POLICY_VERSION},
         "environment_revision": review_validation_environment(),
+        "exact_validation_material": validation_material.identity,
+        "exact_validation_fingerprint": validation_material.fingerprint,
     }
     config_path = trunk / "cascade.toml"
     config = tomllib.loads(config_path.read_text()) if config_path.exists() else {}
@@ -269,16 +383,45 @@ def publish_team_review_resolution(
         f"{len(validator_operations) + 1}"
     )
     claim_id = f"review-publication:{action_id}"
-    budget_decision, validation_operation = reserve_review_validation(
-        action_id,
-        claim_id,
-        operation_id,
-        root=trunk,
-        timeout=float(generation["validation_timeout_seconds"]),
-        environment_revision=dict(generation["environment_revision"]),
-        profile=validation_profile,
+    receipt_state, reusable_receipt = match_review_validation_receipt(
+        action_id, validation_material, root=trunk
     )
-    if validation_operation is None:
+    validation_operation = None
+    if receipt_state == "same_material_fenced":
+        return {
+            "action_id": action_id,
+            "recovery_state": action.get("recovery_state"),
+            "attempt_count": action.get("attempt_count"),
+            "reason": "validation_budget_deterministic_material_unchanged",
+            "incident_id": action_id,
+            "claim_id": claim_id,
+            "operation_id": reusable_receipt.get("operation_id") if reusable_receipt else None,
+        }
+    if receipt_state == "unavailable":
+        return {
+            "action_id": action_id,
+            "recovery_state": action.get("recovery_state"),
+            "attempt_count": action.get("attempt_count"),
+            "reason": "validation_receipt_unavailable",
+            "incident_id": action_id,
+            "claim_id": claim_id,
+            "operation_id": reusable_receipt.get("operation_id") if reusable_receipt else None,
+        }
+    if receipt_state == "matching_green" and reusable_receipt is not None:
+        operation_id = str(reusable_receipt["operation_id"])
+    else:
+        budget_decision, validation_operation = reserve_review_validation(
+            action_id,
+            claim_id,
+            operation_id,
+            root=trunk,
+            timeout=float(generation["validation_timeout_seconds"]),
+            environment_revision=dict(generation["environment_revision"]),
+            profile=validation_profile,
+            material=validation_material,
+        )
+        reusable_receipt = None
+    if receipt_state != "matching_green" and validation_operation is None:
         return {
             "action_id": action_id,
             "recovery_state": action.get("recovery_state"),
@@ -315,7 +458,8 @@ def publish_team_review_resolution(
         for decision in decisions:
             decision_id = decision.get("decision_id")
             if decision.get("owner") != team_kind or not isinstance(decision_id, str):
-                settle_unused_review_validation(validation_operation)
+                if validation_operation is not None:
+                    settle_unused_review_validation(validation_operation)
                 raise PermissionError(
                     "review recovery has an unresolved decision for another team"
                 )
@@ -328,9 +472,10 @@ def publish_team_review_resolution(
             )
 
     validation_consumed = False
+    validation_started = False
 
     def execute(_context: object) -> dict[str, object]:
-        nonlocal validation_consumed
+        nonlocal validation_consumed, validation_started
         preflight = prepare_review_rebase_turn(action_id, root=trunk)
         if preflight.turn is None:
             blocker = preflight.blocker
@@ -366,14 +511,19 @@ def publish_team_review_resolution(
             ).splitlines()
             if path
         )
+        validation_started = reusable_receipt is None
         publication = check_and_publish_review_rebase(
             turn,
             ReviewRebaseExecution(True, local_head, modified),
             validation_operation=validation_operation,
+            validation_material=validation_material,
+            reusable_receipt=reusable_receipt,
         )
         current_budget = read_incident_budget(action_id, root=trunk) or {}
         receipt = (current_budget.get("operations") or {}).get(operation_id) or {}
-        validation_consumed = receipt.get("state") == "settled"
+        validation_consumed = (
+            reusable_receipt is not None or receipt.get("state") == "settled"
+        )
         if not publication.published:
             blocker = publication.blocker
             raise ActionFailure(
@@ -395,6 +545,24 @@ def publish_team_review_resolution(
                     ],
                 },
             )
+        if team_kind == "feature_team" and validation_material is not None:
+            from cascade.review import record_exact_candidate_proof
+
+            if not record_exact_candidate_proof(
+                team_id,
+                action_id,
+                operation_id,
+                validation_material,
+                root=trunk,
+            ):
+                raise ActionFailure(
+                    "owner_decision",
+                    "The exact candidate proof could not be bound to the current review.",
+                    metadata={
+                        "reason": "review_candidate_proof_changed",
+                        "publication_generation": generation,
+                    },
+                )
         return {
             "metadata": {
                 "published_head": publication.source_head,
@@ -419,8 +587,11 @@ def publish_team_review_resolution(
         if not validation_consumed:
             current_budget = read_incident_budget(action_id, root=trunk) or {}
             receipt = (current_budget.get("operations") or {}).get(operation_id) or {}
-            if receipt.get("state") == "reserved":
-                settle_unused_review_validation(validation_operation)
+            if validation_operation is not None and receipt.get("state") == "reserved":
+                if validation_started:
+                    settle_interrupted_review_validation(validation_operation)
+                else:
+                    settle_unused_review_validation(validation_operation)
     result = {
         "action_id": action_id,
         "recovery_state": completed.get("recovery_state"),

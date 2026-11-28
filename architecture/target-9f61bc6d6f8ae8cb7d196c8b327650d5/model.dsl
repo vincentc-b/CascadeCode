@@ -62,7 +62,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.agent"
             }
         }
-        team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs." "cascade.epic/feature/task" {
+        team_component = component "Tier teams" "Runs persistent Epic/Feature and bounded Task graphs, exact candidate validation, proof binding and leased review publication." "cascade.epic/feature/task" {
             properties {
                 "cascade.designPath" "cascade/DESIGN.md"
                 "cascade.semanticId" "element.component.teams"
@@ -91,7 +91,7 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.designPath" "cascade/watchdog/DESIGN.md"
             }
         }
-        boss_component = component "Boss" "Owns rollups, merge gates, and completion." "cascade.boss" {
+        boss_component = component "Boss" "Owns rollups, merge gates, review acceptance orchestration, and completion." "cascade.boss" {
             properties {
                 "cascade.semanticId" "element.component.boss"
             }
@@ -2250,6 +2250,24 @@ code_boss_review_route = element "_require_repair_review_route" "Function" "Requ
     }
 }
 
+code_boss_exact_result = element "matching_exact_result_receipt" "Function" "Re-match the generation-bound candidate proof through the Teams receipt reader before acceptance and independent repair verification." {
+    properties {
+        "cascade.semanticId" "element.code.boss.exact-result"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "matching_exact_result_receipt"
+    }
+}
+
+code_boss_accepted_identity = element "_actual_accepted_merge_identity" "Function" "Require actual forge merge SHA, observed target head, URL, route, source and local review generation separately from candidate proof." {
+    properties {
+        "cascade.semanticId" "element.code.boss.accepted-identity"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_actual_accepted_merge_identity"
+    }
+}
+
 code_boss_open_review_identity = element "_require_open_review_repair_identity" "Function" "Bind publication to the admitted original review observation or its checkpointed repair action." {
     properties {
         "cascade.semanticId" "element.code.boss.open-review-repair-identity"
@@ -2670,7 +2688,7 @@ code_task_budget_exhaust = element "record_incident_budget_exhaustion" "Function
     }
 }
 
-code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, policy, material generation, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
+code_task_budget_reserve = element "reserve_incident_operation" "Function" "Atomically verify lineage, exact review material receipt identity, policy, backoff, elapsed deadline, live claim and cumulative remaining allowance." {
     properties {
         "cascade.semanticId" "element.code.task.incident-budget-reserve"
         "cascade.parent" "element.component.task-team"
@@ -2829,6 +2847,18 @@ code_boss_rollup_to_review = code_boss_feature -> code_boss_review "Uses" {
 code_boss_review_to_route = code_boss_review -> code_boss_review_route "Checks fresh forge route" {
     properties {
         "cascade.semanticId" "relationship.code-boss-review-to-review-route"
+    }
+}
+
+code_boss_reconcile_to_exact_result = code_boss_reconcile -> code_boss_exact_result "Requires the original settled candidate receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-reconcile-to-exact-result"
+    }
+}
+
+code_boss_reconcile_to_accepted_identity = code_boss_reconcile -> code_boss_accepted_identity "Separates actual forge acceptance from prospective proof" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-reconcile-to-accepted-identity"
     }
 }
 
@@ -3378,6 +3408,51 @@ code_teams_validation_profile = element "ReviewValidationProfile" "Dataclass" "B
     }
 }
 
+code_teams_validation_material = element "ExactValidationMaterial" "Dataclass" "Carry immutable JSON-safe candidate, review generation, approved profile and effective runtime/dependency/import identity plus its canonical fingerprint." {
+    properties {
+        "cascade.semanticId" "element.code.teams.validation-material"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ExactValidationMaterial"
+    }
+}
+
+code_teams_material_inspect = element "inspect_exact_validation_material" "Function" "Preflight the approved profile, materialize the exact result and scan its physical board before any validator reservation." {
+    properties {
+        "cascade.semanticId" "element.code.teams.material-inspect"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "inspect_exact_validation_material"
+    }
+}
+
+code_teams_receipt_match = element "match_review_validation_receipt" "Function" "Reuse only settled green complete-material evidence; fence exact deterministic red and fail closed on legacy receipts." {
+    properties {
+        "cascade.semanticId" "element.code.teams.receipt-match"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "match_review_validation_receipt"
+    }
+}
+
+code_teams_proof_bind = element "record_exact_candidate_proof" "Function" "Bind one settled exact candidate receipt to the matching current review URL, route and generation after leased publication." {
+    properties {
+        "cascade.semanticId" "element.code.teams.proof-bind"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "record_exact_candidate_proof"
+    }
+}
+
+code_teams_review_identity = element "exact_review_identity" "Function" "Canonicalize the durable review URL, route, observed heads and generation for admission and pre-push refresh." {
+    properties {
+        "cascade.semanticId" "element.code.teams.review-identity"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "exact_review_identity"
+    }
+}
+
 code_teams_validate_publish = element "check_and_publish_review_rebase" "Function" "Validate immutable source then recheck policy, remote heads and authority before leased push." {
     properties {
         "cascade.semanticId" "element.code.teams.validate_publish"
@@ -3393,6 +3468,51 @@ code_teams_validator = element "run_review_validation" "Function" "Verify a live
         "cascade.parent" "element.component.teams"
         "cascade.sourcePath" "cascade/review_validation.py"
         "cascade.sourceSymbol" "run_review_validation"
+    }
+}
+
+code_teams_candidate_materialize = element "materialize_exact_merge_candidate" "Function" "Clone into an owned private checkout, resolve the exact source/target commits with Git's merge path, and remove only the owned checkout on exit." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-materialize"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "materialize_exact_merge_candidate"
+    }
+}
+
+code_teams_candidate = element "ExactMergeCandidate" "Dataclass" "Carry exact source, target, prospective commit and tree identity plus the live private checkout during its bounded context." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ExactMergeCandidate"
+    }
+}
+
+code_teams_candidate_refusal = element "MergeCandidateRefusal" "Dataclass" "Represent missing, unknown or conflicted exact-pair refusal with finite owner action and bounded diagnostics." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-refusal"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "MergeCandidateRefusal"
+    }
+}
+
+code_teams_candidate_validate = element "validate_exact_merge_candidate" "Function" "Scan candidate lifecycle documents, purge candidate bytecode, pin source and dependency identity, and run the approved bounded argv." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-validate"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "validate_exact_merge_candidate"
+    }
+}
+
+code_teams_candidate_evidence = element "ExactCandidateValidation" "Dataclass" "Classify exact candidate evidence as passed, product assertion, fixture/environment, timeout or unavailable with finite owner action." {
+    properties {
+        "cascade.semanticId" "element.code.teams.candidate-evidence"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "ExactCandidateValidation"
     }
 }
 
@@ -3567,6 +3687,60 @@ code_teams_publication_to_code_teams_budget_reserve = code_teams_publication -> 
     }
 }
 
+code_teams_publication_to_material_inspect = code_teams_publication -> code_teams_material_inspect "Establishes exact result, board and runtime identity before reservation" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-material-inspect"
+    }
+}
+
+code_teams_publication_to_receipt_match = code_teams_publication -> code_teams_receipt_match "Reuses or fences only complete exact-material receipts" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-receipt-match"
+    }
+}
+
+code_teams_publication_to_proof_bind = code_teams_publication -> code_teams_proof_bind "Attaches the settled proof after leased publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-publication-to-proof-bind"
+    }
+}
+
+code_teams_proof_bind_to_receipt_match = code_teams_proof_bind -> code_teams_receipt_match "Retains the identity consumed by the shared matcher" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-proof-bind-to-receipt-match"
+    }
+}
+
+code_boss_exact_result_to_teams_match = code_boss_exact_result -> code_teams_receipt_match "Consumes the same exact receipt comparison as publication" {
+    properties {
+        "cascade.semanticId" "relationship.code-boss-exact-result-to-teams-match"
+    }
+}
+
+code_teams_material_inspect_to_material = code_teams_material_inspect -> code_teams_validation_material "Returns canonical immutable identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-material-inspect-to-validation-material"
+    }
+}
+
+code_teams_receipt_match_to_material = code_teams_receipt_match -> code_teams_validation_material "Compares every receipt field and fingerprint" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-receipt-match-to-validation-material"
+    }
+}
+
+code_teams_budget_reserve_to_material = code_teams_budget_reserve -> code_teams_validation_material "Persists exact material on the existing incident operation receipt" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-budget-reserve-to-validation-material"
+    }
+}
+
+code_teams_material_inspect_to_review_identity = code_teams_material_inspect -> code_teams_review_identity "Includes the durable review generation in candidate material" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-material-inspect-to-review-identity"
+    }
+}
+
 code_teams_budget_reserve_to_code_task_budget_reserve = code_teams_budget_reserve -> code_task_budget_reserve "Consumes the Task-owned cumulative gate" {
     properties {
         "cascade.semanticId" "relationship.code-teams-budget-reserve-to-code-task-budget-reserve"
@@ -3585,9 +3759,39 @@ code_teams_validation_operation_to_code_teams_validation_profile = code_teams_va
     }
 }
 
-code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_validator "Runs repository checks" {
+code_teams_validate_publish_to_code_teams_validator = code_teams_validate_publish -> code_teams_candidate_validate "Validates the isolated exact candidate" {
     properties {
         "cascade.semanticId" "relationship.code-teams-validate-publish-to-code-teams-validator"
+    }
+}
+
+code_teams_candidate_validate_to_materialize = code_teams_candidate_validate -> code_teams_candidate_materialize "Owns one private exact-pair checkout" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-validate-to-materialize"
+    }
+}
+
+code_teams_candidate_materialize_to_candidate = code_teams_candidate_materialize -> code_teams_candidate "Yields prospective commit and tree identity" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-materialize-to-candidate"
+    }
+}
+
+code_teams_candidate_materialize_to_refusal = code_teams_candidate_materialize -> code_teams_candidate_refusal "Returns typed missing, unknown or conflict refusal" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-materialize-to-refusal"
+    }
+}
+
+code_teams_candidate_validate_to_validator = code_teams_candidate_validate -> code_teams_validator "Runs unchanged approved argv in the candidate" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-validate-to-validator"
+    }
+}
+
+code_teams_candidate_validate_to_evidence = code_teams_candidate_validate -> code_teams_candidate_evidence "Returns bounded classified evidence" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-candidate-validate-to-evidence"
     }
 }
 
@@ -4415,7 +4619,7 @@ code_watchdog_actionable_review = element "_route_actionable_review_health" "Fun
     }
 }
 
-code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, mergeability, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
+code_watchdog_review_snapshot = element "merge_request_snapshot" "Function" "Normalize original review identity, exact head pair, actual accepted merge identity, authoritative required-check policy/results and human review evidence through fixed CLI arguments." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-snapshot"
         "cascade.parent" "element.component.watchdog"
@@ -4946,7 +5150,7 @@ code_workspace_fast_forward = element "fast_forward_trunk" "Function" "Fetch and
     }
 }
 
-code_teams_publish_to_board_scan = code_teams_validate_publish -> code_teams_board_scan "Refuses malformed physical source before checks" {
+code_teams_publish_to_board_scan = code_teams_candidate_validate -> code_teams_board_scan "Refuses malformed physical candidate documents before checks" {
     properties {
         "cascade.semanticId" "relationship.code.teams.publish-board-scan"
     }

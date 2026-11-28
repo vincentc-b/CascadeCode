@@ -526,8 +526,9 @@ def _operation_receipt_id(incident_id: str, operation_id: str) -> str:
 
 
 def _review_validator_material(
-    record: Mapping[str, Any], actions: Mapping[str, Mapping[str, Any]], operation_id: str
-) -> str | None:
+    record: Mapping[str, Any], actions: Mapping[str, Mapping[str, Any]], operation_id: str,
+    attributes: Mapping[str, Any] | None,
+) -> tuple[str, dict[str, Any]] | None:
     """Bind review checks to admitted inputs, not changing attempts or commit metadata."""
     action_id = record.get("original_action_id")
     action = actions.get(action_id, {})
@@ -542,16 +543,17 @@ def _review_validator_material(
     ).hexdigest()
     if not operation_id.startswith(f"review-validator:{action_id}:{generation_digest}:"):
         return None
-    keys = (
-        "source_tree", "validation_command", "validation_timeout_seconds",
-        "budget_policy", "environment_revision",
-    )
-    if any(identity.get(key) is None for key in keys):
+    exact = identity.get("exact_validation_material")
+    supplied = attributes.get("exact_validation_material") if attributes else None
+    if not isinstance(exact, Mapping) or supplied != exact:
         return None
-    material = {key: identity[key] for key in keys}
-    return hashlib.sha256(
+    material = _json_mapping(exact, field="exact validation material")
+    fingerprint = hashlib.sha256(
         json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+    if attributes.get("material_fingerprint") != fingerprint:
+        return None
+    return fingerprint, material
 
 
 def reserve_incident_operation(
@@ -627,11 +629,15 @@ def reserve_incident_operation(
         if not material_bound:
             return _decision("owner_decision", "material_generation_unbound")
         material = None
+        exact_material = None
         original_action = _actions(payload).get(record.get("original_action_id"), {})
         if kind == "review_validator" and original_action.get("action_kind") == "review_rebase":
-            material = _review_validator_material(record, _actions(payload), operation_id)
-            if material is None:
+            material_result = _review_validator_material(
+                record, _actions(payload), operation_id, launch_attributes
+            )
+            if material_result is None:
                 return _decision("owner_decision", "review_material_unbound")
+            material, exact_material = material_result
             for receipt in operations.values():
                 if receipt.get("kind") != kind or receipt.get("state") != "settled":
                     continue
@@ -738,6 +744,7 @@ def reserve_incident_operation(
             receipt["attributes"] = launch_attributes
         if material is not None:
             receipt["material_fingerprint"] = material
+            receipt["exact_validation_material"] = exact_material
         operations = dict(operations)
         operations[operation_id] = receipt
         record["operations"] = operations

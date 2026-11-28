@@ -791,6 +791,170 @@ def review_callback_is_current(
     )
 
 
+def _actual_accepted_merge_identity(
+    record: Mapping[str, object], snapshot: Mapping[str, object]
+) -> dict[str, object] | None:
+    """Return complete forge acceptance identity; never infer it from Git ancestry."""
+
+    if snapshot.get("state") != "merged":
+        return None
+    observed = snapshot.get("accepted_merge_identity")
+    if isinstance(observed, Mapping):
+        if observed.get("available") is not True:
+            return None
+        identity = dict(observed)
+    else:
+        identity = {
+            "available": True,
+            "review_url": snapshot.get("url"),
+            "source_branch": snapshot.get("source_branch"),
+            "target_branch": snapshot.get("target_branch"),
+            "source_revision": snapshot.get("source_revision"),
+            "merge_sha": snapshot.get("merge_sha"),
+            "observed_target_head": snapshot.get("target_revision"),
+        }
+    expected = {
+        "review_url": record.get("url"),
+        "source_branch": record.get("source_branch"),
+        "target_branch": record.get("target_branch"),
+        "source_revision": record.get("source_head"),
+    }
+    if any(identity.get(key) != value for key, value in expected.items()):
+        return None
+    if any(
+        not isinstance(identity.get(field), str) or not identity.get(field)
+        for field in ("review_url", "source_branch", "target_branch", "source_revision")
+    ):
+        return None
+    if any(
+        not isinstance(identity.get(field), str)
+        or not re.fullmatch(r"[0-9a-f]{40}", str(identity[field]))
+        for field in ("source_revision", "merge_sha", "observed_target_head")
+    ):
+        return None
+    identity["review_generation"] = int(record.get("current_generation") or 0)
+    return identity
+
+
+def matching_exact_result_receipt(
+    record: Mapping[str, object], snapshot: Mapping[str, object], *, root: Path
+) -> dict[str, object] | None:
+    """Match the candidate proof using the same receipt reader as publication."""
+
+    proof = record.get("exact_candidate_proof")
+    if not isinstance(proof, Mapping):
+        return None if record.get("candidate_proof_required") is True else {}
+    incident_id = proof.get("incident_id")
+    identity = proof.get("identity")
+    fingerprint = proof.get("fingerprint")
+    if not isinstance(incident_id, str) or not isinstance(identity, dict):
+        return None
+    from cascade.review_validation import (
+        ExactValidationMaterial,
+        exact_material_fingerprint,
+        match_review_validation_receipt,
+    )
+
+    if (
+        not isinstance(fingerprint, str)
+        or exact_material_fingerprint(identity) != fingerprint
+    ):
+        return None
+    review_identity = identity.get("review")
+    candidate = identity.get("candidate")
+    if not isinstance(review_identity, Mapping) or not isinstance(candidate, Mapping):
+        return None
+    expected_route = {
+        "review_url": record.get("url"),
+        "source_ref": record.get("source_branch"),
+        "target_ref": record.get("target_branch"),
+    }
+    if any(review_identity.get(key) != value for key, value in expected_route.items()):
+        return None
+    if any(
+        snapshot.get(observed) != record.get(stored)
+        for observed, stored in (
+            ("url", "url"),
+            ("source_branch", "source_branch"),
+            ("target_branch", "target_branch"),
+        )
+    ):
+        return None
+    if (
+        candidate.get("source_sha") != snapshot.get("source_revision")
+        or candidate.get("target_sha") != record.get("target_head")
+    ):
+        return None
+    state, receipt = match_review_validation_receipt(
+        incident_id,
+        ExactValidationMaterial(identity, fingerprint),
+        root=root,
+    )
+    if state != "matching_green" or not isinstance(receipt, dict):
+        return None
+    operation_id = proof.get("operation_id")
+    if operation_id is not None and receipt.get("operation_id") != operation_id:
+        return None
+    return {
+        "incident_id": incident_id,
+        "operation_id": receipt.get("operation_id"),
+        "fingerprint": fingerprint,
+        "identity": identity,
+    }
+
+
+def record_exact_candidate_proof(
+    feature_id: str,
+    incident_id: str,
+    operation_id: str,
+    material: object,
+    *,
+    root: Path,
+) -> bool:
+    """Attach a settled publication proof to its current immutable review route."""
+
+    identity = getattr(material, "identity", None)
+    fingerprint = getattr(material, "fingerprint", None)
+    if not isinstance(identity, dict) or not isinstance(fingerprint, str):
+        return False
+    from cascade.review_validation import match_review_validation_receipt
+
+    state, receipt = match_review_validation_receipt(incident_id, material, root=root)
+    if (
+        state != "matching_green"
+        or not isinstance(receipt, dict)
+        or receipt.get("operation_id") != operation_id
+    ):
+        return False
+    current = review_record_for_feature(feature_id, root=root)
+    review_identity = identity.get("review")
+    if not isinstance(current, dict) or not isinstance(review_identity, Mapping):
+        return False
+    if any(
+        review_identity.get(field) != current.get(record_field)
+        for field, record_field in (
+            ("review_url", "url"),
+            ("source_ref", "source_branch"),
+            ("target_ref", "target_branch"),
+        )
+    ):
+        return False
+    _update_record(
+        root,
+        feature_id,
+        {
+            "candidate_proof_required": True,
+            "exact_candidate_proof": {
+                "incident_id": incident_id,
+                "operation_id": operation_id,
+                "fingerprint": fingerprint,
+                "identity": identity,
+            },
+        },
+    )
+    return True
+
+
 def _accept_current_review_generation(
     feature_id: str,
     record: dict[str, object],
@@ -802,7 +966,11 @@ def _accept_current_review_generation(
 ) -> bool:
     if not review_callback_is_current(feature_id, record, root=root, snapshot=snapshot):
         return False
-    merge_sha = snapshot.get("merge_sha")
+    accepted_identity = _actual_accepted_merge_identity(record, snapshot)
+    exact_proof = matching_exact_result_receipt(record, snapshot, root=root)
+    if accepted_identity is None or exact_proof is None:
+        return False
+    merge_sha = accepted_identity["merge_sha"]
     source_revision = snapshot.get("source_revision")
     _update_record(
         root,
@@ -816,6 +984,8 @@ def _accept_current_review_generation(
                 else record.get("source_head")
             ),
             "accepted_target_head": record.get("target_head"),
+            "accepted_merge_identity": accepted_identity,
+            "accepted_candidate_proof": exact_proof or None,
             "reconciliation_status": "accepted",
             **(
                 {
@@ -962,6 +1132,10 @@ def _store_review_generation(
             "stacked_acceptance",
             "integration_target_branch",
             "stack_integration_sha",
+            "candidate_proof_required",
+            "exact_candidate_proof",
+            "accepted_merge_identity",
+            "accepted_candidate_proof",
         ):
             if field not in generation_row:
                 updated.pop(field, None)
@@ -1019,15 +1193,12 @@ def _record_forge_acceptance(
     *,
     root: Path,
 ) -> None:
-    merge_sha = snapshot.get("merge_sha")
-    source = snapshot.get("source_revision")
-    if (
-        not isinstance(merge_sha, str)
-        or not re.fullmatch(r"[0-9a-f]{40}", merge_sha)
-        or not isinstance(source, str)
-        or not re.fullmatch(r"[0-9a-f]{40}", source)
-    ):
+    accepted_identity = _actual_accepted_merge_identity(record, snapshot)
+    exact_proof = matching_exact_result_receipt(record, snapshot, root=root)
+    if accepted_identity is None or exact_proof is None:
         return
+    merge_sha = accepted_identity["merge_sha"]
+    source = accepted_identity["source_revision"]
     if not review_callback_is_current(feature_id, record, root=root, snapshot=snapshot):
         return
     receipt = {
@@ -1036,6 +1207,8 @@ def _record_forge_acceptance(
         "generation": int(record.get("current_generation") or 0),
         "merge_sha": merge_sha,
         "source_revision": source,
+        "accepted_merge_identity": accepted_identity,
+        "accepted_candidate_proof": exact_proof or None,
     }
     if _forge_acceptance(record) != receipt:
         _update_record(root, feature_id, {"forge_acceptance": receipt})

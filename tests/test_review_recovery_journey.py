@@ -283,14 +283,11 @@ def test_deterministic_review_retries_require_new_material_within_original_budge
     assert publish()['reason'] == 'validation_budget_deterministic_material_unchanged'
     _monitor_in_new_process(root)
     _git(root, 'commit', '--allow-empty', '-m', 'Cosmetic commit')
-    assert publish()['reason'] == 'validation_budget_deterministic_material_unchanged'
-    assert calls.read_text().splitlines() == ['1']
-
-    _policy(root, [*command, "2"], 10)
+    # Source SHA is part of exact material even when the tree is unchanged.
     assert publish()['recovery_state'] == 'awaiting_owner_decision'
-    _policy(root, [*command, "1"], 10)
+    assert calls.read_text().splitlines() == ['1', '1']
     assert publish()['reason'] == 'validation_budget_deterministic_material_unchanged'
-    assert calls.read_text().splitlines() == ['1', '2']
+    assert calls.read_text().splitlines() == ['1', '1']
     assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == turn.observed_source_sha
 
     _policy(root, [*command, "0"], 10)
@@ -302,7 +299,7 @@ def test_deterministic_review_retries_require_new_material_within_original_budge
     assert budget['charged']['tool_attempts'] == 3
     assert len(budget['operations']) == 3
     assert load_action(turn.action_id, root=root)['attempt_count'] == 3
-    assert calls.read_text().splitlines() == ['1', '2', '0']
+    assert calls.read_text().splitlines() == ['1', '1', '0']
     assert _git(root, 'ls-remote', 'origin', 'refs/heads/feat/feat_035_001').split()[0] == _git(root, 'rev-parse', 'HEAD')
 
 
@@ -374,7 +371,7 @@ from pathlib import Path
 import subprocess
 Path('new-unvalidated.txt').write_text('arrived while checks were running')
 subprocess.run(['git', 'add', 'new-unvalidated.txt'], check=True)
-subprocess.run(['git', 'commit', '-m', 'concurrent source change'], check=True)
+subprocess.run(['git', '-c', 'user.name=Test User', '-c', 'user.email=test@example.com', 'commit', '-m', 'concurrent source change'], check=True)
 ''')
     else:
         validator.write_text("from pathlib import Path\np = Path('cascade.toml')\np.write_text(p.read_text().replace('review_timeout_seconds = 10', 'review_timeout_seconds = 20'))\n")

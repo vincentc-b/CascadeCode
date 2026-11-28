@@ -127,27 +127,38 @@ the [producer benchmark](../tests/watchdog/benchmark_audit_producer.py) and
 
 ## Review publication safeguards
 
-`REQ-REVIEW-PUBLISH-001`: a Git conflict resolution is not publishable until its
-physical checkout contains valid lifecycle documents with unique IDs, repository
-checks succeed within a finite budget, and the admitted remote heads and source
-lease still match. `review_validation.validate_publication_board` scans the actual
-source checkout, including in split-repository sessions; it does not redirect to a
-tracking root or silently omit malformed drafts as a normal board projection may.
+`REQ-REVIEW-PUBLISH-001`: a Git conflict resolution is not publishable until Git
+can materialize the freshly observed source and target commits into one prospective
+result commit/tree in a private checkout, that candidate contains valid lifecycle
+documents with unique IDs, repository checks succeed within a finite budget, and
+the admitted remote heads and source lease still match.
+`review_validation.validate_publication_board` scans the physical candidate,
+including in split-repository sessions; it does not redirect to a tracking root or
+silently omit malformed drafts as a normal board projection may.
 Duplicate backlog/completed copies are rejected without choosing or deleting one.
 This check establishes document consistency, not full Epic acceptance. It
-runs on the guarded review-publication source worktree; it is not a universal
+runs against an owned exact-pair candidate; it is not a universal
 precondition on every forge merge of a changed target. Successful source
 publication or forge merge alone does not prove that the actual merged target
 has unique board IDs or passes its own configured CI. An independent target
 check and local/remote trunk convergence remain separate evidence.
 
-`DEC-REVIEW-PUBLISH-001`: `review_rebase.check_and_publish_review_rebase` checks the
-board before spawning validation. Review publication uses changed Python test files,
-direct tests for changed modules, and the review publication safeguard tests.
+`DEC-REVIEW-PUBLISH-001`: `review_rebase.check_and_publish_review_rebase` delegates
+to a Teams-owned exact-candidate adapter before publication. The adapter creates a
+non-local private clone, checks out the exact target, invokes Git's merge machinery
+for the exact source, and returns deterministic prospective commit/tree identity or
+a typed missing, unknown, or conflict refusal. It removes only its owned temporary
+checkout; operator and team worktrees, refs, indexes and caches are read-only inputs.
+Review publication uses changed Python test files, direct tests for changed modules,
+and the review publication safeguard tests.
 An explicit repository-owned `validation.command` takes precedence; Task validation
 keeps its existing command. `validation.review_timeout_seconds` defaults to 300
-seconds and accepts 1–3600 seconds. Validation runs without a shell in its own
-process group, with file-backed output and bounded 64 KiB diagnostic tails. Timeout or cancellation
+seconds and accepts 1–3600 seconds. Before spawn the adapter scans candidate board
+files and removes candidate bytecode. The child receives the candidate as its sole
+`PYTHONPATH`, a fresh private bytecode prefix, disabled user-site imports, and hashes
+of the prospective tree and candidate dependency declarations. Validation runs
+without a shell in its own process group, with file-backed output and bounded,
+path-sanitized 64 KiB diagnostic tails. Timeout or cancellation
 kills the check group and reaps its leader. Failure preserves the checkout and
 returns a typed blocker; it never falls back to weaker checks or publishes anyway.
 A hard kill of the hosting process can still orphan validator children; the owning
@@ -173,7 +184,10 @@ verified reconciliation evidence, never merely from an enqueued investigation.
 Validation: `tests/test_review_publication_safeguards.py`,
 `tests/test_review_rebase.py`, and `tests/task/test_action_recovery.py` cover invalid
 boards, unchanged remotes on refusal, bounded checks, descendant cleanup, abrupt
-owner exit, PID reuse, live/unknown owners and durable exactly-once handoff.
+owner exit, PID reuse, live/unknown owners and durable exactly-once handoff. The
+publication safeguard fixture also covers real Git candidate red/green behavior,
+equal-size same-second Python corrections, stale tracked bytecode removal,
+deterministic identity, private cleanup, typed refusals and pre-spawn board failure.
 
 These safeguards remain inside the existing supervisor, lifecycle-recovery and
 review-publication components; they add no C4 container or external service.
@@ -199,34 +213,47 @@ shell, child processes and remote provider work are not isolated by this local
 ledger or by C4 component boundaries.
 
 Every production validator is admitted separately from its material publication
-generation. `publish_team_review_resolution` binds the canonical incident and
-policy-bearing generation, then resolves a named validation profile and reserves
-the approved worst-case validator runtime
+generation. `publish_team_review_resolution` refreshes the durable review and
+remote heads, resolves a named validation profile, materializes the prospective
+result, and scans its physical board before it binds the canonical incident and
+reserves the approved worst-case validator runtime
 under one top-level claim and one unique operation receipt. A changed source,
 target, validation profile, policy version, or interpreter environment can make a
 generation materially eligible, but only remaining incident-wide allowance grants
-a permit. The profile binds exact argv, coverage class, policy owner, approval
-revision and finite timeout/attempt budget; executable and working-directory
-feasibility is checked before spawn. Clocks and diagnostic reports are absent
-from the generation. Unknown classification fails closed. A deterministic
-`review_rebase` validator failure fences the settled receipt's validation
-material (source tree, command, timeout, policy and runtime identity), not the
-remaining incident allowance. Previously failed material stays fenced across
-restart and A–B–A changes. Legacy receipts without verified material remain
-conservative. Validators linked to a different original action retain the
-incident-wide deterministic failure gate. Transient failure retains persisted
-bounded backoff and at most three operations.
+a permit. The immutable material contains exact source and target SHAs,
+prospective commit/tree, review URL/identity/generation, exact argv and coverage,
+policy owner and approval revision, finite timeout/attempt budget, incident policy,
+and effective interpreter digest, dependency bytes and import roots. Clocks,
+temporary checkout paths and diagnostics are absent. Only a settled green receipt
+with every field and fingerprint equal is reusable. Deterministic red fences that
+exact material across restart and A–B–A changes; legacy or incomplete receipts
+fail closed. Transient failure retains persisted bounded backoff and at most three
+operations.
 The legacy action attempt bound is never enlarged by generation admission.
 
 `run_review_validation` verifies the live receipt before `Popen`, starts a local
 process group, and settles known runtime on green, red, launch failure and timeout.
 Timeout or interruption stops the complete local group; interruption retains the
-worst-case reservation conservatively. Provider work is metered separately at
+worst-case reservation conservatively. `validate_exact_merge_candidate` classifies
+evidence as product assertion, fixture/environment, timeout or unavailable and
+supplies a finite owner action; fixture repair never changes the approved argv or
+coverage. Provider work is metered separately at
 the shared Agent adapter boundary, which reserves a paid turn and worst-case model
 runtime before dispatch and settles one normalized invocation receipt. A green check
 is still insufficient to publish after source, target, validation policy,
 authorization, credentials or remote lease drift. Remote ancestry reconciliation
 is the authoritative completion check after an interrupted push.
+
+After a successful leased publication, `record_exact_candidate_proof` attaches
+the receipt's immutable candidate/review/profile/runtime identity to the matching
+current review generation. Forge acceptance remains a different fact:
+`merge_request_snapshot` reports the actual accepted commit, observed target head,
+URL and source/target route, and review reconciliation stores those fields with
+the local review generation. `matching_exact_result_receipt` reuses the Teams
+matcher before acceptance and again during the independent repair postcheck. A
+changed generation, route, source, original target, prospective result, profile
+or runtime makes the proof unusable. Missing actual merge or target identity
+fails closed. The candidate commit/tree is not merged-revision CI proof.
 
 ### Publication implementation and recovery
 
@@ -245,30 +272,43 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [admit_provider_turn / settle_provider_turn](agent/provider_metering.py) | Consume the Task-owned allowance immediately around an incident-related provider dispatch and retain normalized invocation evidence plus the validated launch route without granting route-specific allowance. |
 | [extend_incident_budget / record_incident_budget_exhaustion](task/incident_budget.py) | Retain one exhaustion escalation and accept only independently authenticated finite additions within trusted maxima. |
 | [reserve_budgeted_operation / settle_budgeted_operation](watchdog/reservations.py) | Consume the Task gate after a distinct Watchdog capability claim without owning another allowance. |
-| [check_and_publish_review_rebase](review_rebase.py) | Check the immutable local source, validate, recheck policy/remote authority and push that SHA under the source lease. |
+| [check_and_publish_review_rebase](review_rebase.py) | Validate the exact source/target candidate, recheck policy/remote authority and push the admitted source SHA under its lease. |
 | [reserve_review_validation / run_review_validation](review_validation.py) | Reserve worst-case runtime before spawn, optionally bind the receipt to its live provider parent, verify the receipt, stop the process group, bound diagnostics and settle every exit. |
+| [inspect_exact_validation_material / match_review_validation_receipt](review_validation.py) | Establish the complete candidate/review/profile/runtime identity and physical board before reservation; reuse only an exact settled green or fence exact deterministic red. |
+| [record_exact_candidate_proof / matching_exact_result_receipt](review.py) | Bind the settled candidate proof to one review generation and make publication, acceptance and independent postcheck consume the same exact receipt comparison. |
+| [_actual_accepted_merge_identity](review.py) / [merge_request_snapshot](tracking.py) | Keep actual forge merge SHA, observed target head, route and local generation separate from the prospective candidate proof; incomplete identity fails closed. |
+| [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
+| [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
 | [validate_publication_board](review_validation.py) | Parse every physical lifecycle-column document in the publication checkout and reject symlinks, malformed records and duplicate IDs before validation. Board owns schema invariants; Teams owns this publication gate. |
 
 The `cascade-teams-code` node `element.code.teams.board-scan` links this gate
-to the [Board parser](board/parse.py). It reads the source checkout, not a
-prospective forge merge tree, and does not prove terminal-history preservation
+to the [Board parser](board/parse.py). It reads the prospective Git merge
+candidate and does not prove terminal-history preservation
 or cross-root hierarchy. Its failure prevents validator execution and push;
 it does not repair or select among conflicting records.
 
 ```mermaid
 flowchart TD
-    Owner[Owner publication request] --> Generation[Recheck exact generation and durable claim]
-    Generation -->|eligible| Budget[Reserve cumulative allowance under live claim]
-    Budget -->|permit| Checks[Validate immutable source and board]
+    Owner[Owner publication request] --> Generation[Refresh review, source, target and profile]
+    Generation --> Candidate[Materialize exact source and target in private Git checkout]
+    Candidate -->|missing / unknown / conflict| Preserve[Preserve shared state and return finite owner action]
+    Candidate -->|commit and tree| Board[Parse physical candidate lifecycle documents]
+    Board -->|malformed / duplicate| Preserve
+    Board -->|valid| Receipt{Exact durable receipt?}
+    Receipt -->|matching green| Recheck[Refresh every material and authority field]
+    Receipt -->|deterministic red| Preserve
+    Receipt -->|absent or changed| Budget[Reserve cumulative allowance under live claim]
+    Budget -->|permit| Checks[Run approved argv with fresh imports and dependency identity]
     Budget -->|pending / exhausted / owner decision| Pending[Retain pending or refusal]
-    Generation -->|not material / live / gated| Pending[Retain pending or refusal]
     Checks --> Settle[Settle exact receipt]
-    Settle -->|red / timeout / interrupted| Preserve[Preserve checkout and conservative charge]
-    Settle -->|green| Recheck[Recheck source, policy, remote heads and authority]
+    Settle -->|red / timeout / interrupted| Preserve
+    Settle -->|green| Recheck
     Recheck -->|match| Push[Lease-publish tested SHA]
     Recheck -->|drift| Preserve
-    Push --> Receipt[Record publication evidence]
-    Receipt --> Verify[Independent obligation-specific postcheck]
+    Push --> Proof[Bind exact candidate proof to review generation]
+    Proof --> Accept{Fresh actual forge merge identity?}
+    Accept -->|missing / changed| Preserve
+    Accept -->|complete| Verify[Re-match receipt in independent postcheck]
 ```
 
 The action ledger and review registry survive restart. A reserved operation whose

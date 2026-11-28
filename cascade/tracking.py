@@ -492,6 +492,42 @@ def merge_request_snapshot(
         _add_github_review_evidence(root, mr, raw, out, runner=runner)
     else:
         _add_gitlab_review_evidence(root, mr, raw, out, runner=runner)
+    if state == "merged":
+        accepted_fields = {
+            "review_url": observed_url,
+            "source_branch": source_branch,
+            "target_branch": target_branch,
+            "source_revision": out.get("source_revision"),
+            "merge_sha": out.get("merge_sha"),
+            "observed_target_head": out.get("target_revision"),
+        }
+        invalid = next(
+            (
+                name
+                for name, value in accepted_fields.items()
+                if not isinstance(value, str) or not value.strip()
+            ),
+            None,
+        )
+        merge_identity: dict[str, object]
+        malformed_sha = next(
+            (
+                name
+                for name in ("source_revision", "merge_sha", "observed_target_head")
+                if not re.fullmatch(
+                    r"[0-9a-f]{40}", str(accepted_fields.get(name) or "")
+                )
+            ),
+            None,
+        )
+        if invalid is not None or malformed_sha is not None:
+            merge_identity = {
+                "available": False,
+                "reason": f"accepted_{invalid or malformed_sha}_unavailable",
+            }
+        else:
+            merge_identity = {"available": True, **accepted_fields}
+        out["accepted_merge_identity"] = merge_identity
     out["review_health"] = _review_health(out)
     return out
 
