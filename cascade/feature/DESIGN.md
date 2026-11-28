@@ -227,6 +227,16 @@ the same publication action and current repair generation. A merged, closed,
 missing or replaced original review is outside this scoped route and fails
 before push or review creation.
 
+Accepted or closed work is deliberately outside `admit_open_review_repair`.
+Post-merge red evidence therefore retains the original Feature owner and
+accepted lineage but cannot create a repair action until an authenticated human
+authorizes a supported corrective scope on the current target. The Watchdog
+reports that exact approval/capability prerequisite; Feature does not reinterpret
+the old review as open, reactivate the unchanged accepted document, or reserve a
+child that its state machine cannot execute. Open-review work continues to join
+its existing owner and incident budget, and its independent verification receipt
+must include exact accepted-merge CI green evidence.
+
 
 ## Approval evidence and readiness
 

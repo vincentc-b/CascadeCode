@@ -94,7 +94,7 @@ own forge state. These functions collaborate within the local supervisor.
 | [_require_open_review_repair_identity](../review.py) | Join scoped repair publication to the admitted original review identity, observation or checkpointed action. |
 | [matching_exact_result_receipt](../review.py) | Re-read the Task-owned settled receipt and compare complete candidate, review, profile and runtime identity before acceptance and independent repair verification. |
 | [_actual_accepted_merge_identity](../review.py) | Require forge URL, route, source, actual merge SHA and observed target head for the current review generation without substituting ancestry or the prospective candidate. |
-| [_accept_current_review_generation](../review.py) | Admit closeout only when the current candidate receipt, accepted identity and exact-SHA post-merge CI green observation agree on merge and target identity. |
+| [_accept_current_review_generation](../review.py) | Admit closeout only when the current candidate receipt, accepted identity and exact-SHA post-merge CI green observation agree, then atomically recheck generation, URL, evidence revision, route and observed heads before closing the row. |
 | [ensure_feature_review / reconcile_feature_review_completions](../review.py) | Publish and observe current forge evidence; call closeout after acceptance. |
 | [task_lifecycle_lock](../task/lifecycle_lock.py) | Reentrant process lock then tracking-trunk `flock`; synchronizes execution, actions and lifecycle mutation. |
 | [prove_terminal_retirement](../workspace/integration_worktree.py) | Recheck terminal shared Feature delivery, then verify and canonically persist every terminal descendant before best-effort checkout retirement. |
@@ -131,8 +131,10 @@ selected by an open-review repair action. Registry writes are atomic, so restart
 joins the checkpointed repair generation without creating a duplicate review.
 Prospective green, forge acceptance and exact post-merge CI are separate
 generation facts. Target synchronization, lifecycle closeout and retirement do
-not begin while exact accepted-SHA CI is unknown, pending or red. A callback for
-an older generation or evidence revision cannot replace the current receipt.
+not begin while exact accepted-SHA CI is unknown, pending or red. The final
+acceptance write compares the observed generation, URL, evidence revision, route
+and heads under the registry lock; a callback superseded during proof resolution
+returns pending and cannot replace or close the current receipt.
 
 Actions in `executions.json` retain authoritative delivery and repair evidence;
 the pending merge list is a scheduling index. Feature records in `reviews.json`
@@ -172,24 +174,35 @@ match the source blob, while a completed document must match title, children and
 body. Missing registration, unavailable forge evidence, wrong route, absent merge
 ancestry or document mismatch also returns no accepted document.
 
-This proves acceptance, physical history retention and document presence on the
-observed remote revision; it does not independently establish required CI on the
-accepted merge SHA or imply that the operator checkout is synchronized. Workspace
-exposes those local facts separately as `OperatorTrunkSyncResult`: fetched and
-local SHAs, proof fingerprint, current/fast-forwarded/refused result, owner and
-prerequisite. A future verified-closeout decision must consume that current
-result rather than infer synchronization from this detached acceptance check.
-The review registry and Git remain the evidence stores. Restart repeats remote
-inspection, and normal context-manager exit cleans the private checkout.
+`REQ-BOSS-CLOSEOUT-002`: Epic review acceptance is not verified closure.
+`_merged_epic_review_landed` requires the accepted identity and post-merge CI to
+name the same merge SHA and freshly fetched target, then consumes Workspace's
+physical-board fingerprint and `OperatorTrunkSyncResult` independently. The
+registry retains the observation generation, accepted SHA, observed target,
+post-merge result, board proof, local/remote heads and sync result. Only matching
+green CI, a valid board and a current or successful fast-forward set
+`verified_closure`; only that receipt permits completion notification and
+worktree retirement. A dirty, diverged, wrong-branch or moved checkout is
+preserved and records its operator prerequisite.
+
+`DEC-BOSS-CLOSEOUT-002`: Keep these receipts in the existing review registry and
+reuse Workspace's safe synchronization boundary. Restart repeats remote
+inspection and rejoins the same material observation identity; a stale or
+interrupted observation cannot promote a newer generation. Completion event
+deduplication and terminal document persistence remain separate idempotent
+steps, so interruption after Git or registry persistence resumes without a
+duplicate notification. Normal context-manager exit cleans the private checkout.
 
 ```mermaid
 flowchart TD
     Route[Expected source and trunk route] --> Fetch[Workspace fetch and detached inspection]
-    Fetch --> Forge{Fresh forge state merged?}
+    Fetch --> Forge{Fresh accepted identity and exact-SHA CI green?}
     Forge -->|yes| Ancestor{Accepted merge on fetched trunk?}
     Ancestor -->|yes| History{Pinned physical history retained?}
     History -->|yes| Document{Epic document matches?}
-    Document -->|yes| Accept[Return accepted remote document]
+    Document -->|yes| Sync{Physical board proven and operator trunk converged?}
+    Sync -->|yes| Accept[Persist verified generation and return remote document]
+    Sync -->|no| Wait
     Forge -->|no or unavailable| Wait[Retain closeout obligation]
     Ancestor -->|no| Wait
     History -->|no or unavailable| Wait

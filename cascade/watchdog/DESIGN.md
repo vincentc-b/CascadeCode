@@ -451,6 +451,24 @@ The postcheck cases in
 cover changed heads, red results and malformed generations without weakening the
 exact repair-generation fence.
 
+`REQ-WATCHDOG-REVIEW-002`: Accepted reviews remain observable until their exact
+merge-SHA checks are green. `reconcile_open_review_health` persists the fresh
+accepted identity and post-merge result before it retires earlier health work.
+Pending or unavailable evidence remains a typed polling wait. Red accepted work
+is not sent through the open-review repair action, because that action cannot
+process a closed review; the projection retains the original Feature or Epic
+owner, accepted URL, merge SHA and target and reports
+`authorize_supported_corrective_scope_on_current_target`. This preserves the
+accepted lineage and makes the missing human approval/capability explicit
+without reopening unchanged work or enqueueing an unprocessable action.
+
+The independent `reconcile_open_review_repair` postcheck also requires green
+post-merge CI bound to the accepted merge and observed target. A source-head
+green result can no longer mark the repair verified after the merged object is
+red, pending or unavailable. Polling and GET projections remain read-only; only
+the existing producer lane persists observations or changes an exact repair
+generation.
+
 ## Recovery admission and active-path authority
 
 `REQ-WATCHDOG-REPAIR-001`: Audit repair requires a fresh canonical incident,

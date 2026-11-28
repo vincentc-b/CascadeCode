@@ -40,6 +40,31 @@ def test_epic_review_snapshot_round_trips_all_close_fields(tmp_path: Path) -> No
     assert record["review_url"] == snapshot.review_url
 
 
+def test_verified_epic_snapshot_keeps_independent_closure_receipts(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    snapshot = EpicReviewSnapshot(
+        stage="completed",
+        review_url="https://github.example/acme/project/pull/17",
+        source_branch="epic/epic_001",
+        target_branch="main",
+        forge_state="merged",
+        generation=3,
+        observation_identity="observation-3",
+        accepted_merge_sha="a" * 40,
+        observed_target_sha="b" * 40,
+        post_merge_ci={"state": "green", "merge_sha": "a" * 40},
+        board_fingerprint="board-proof",
+        sync_receipt={"ok": True, "remote_sha": "b" * 40, "sync_result": "current"},
+        verified_closure=True,
+    )
+
+    persist_epic_review_snapshot("epic_001", snapshot, root=root)
+
+    assert epic_review_snapshot("epic_001", root=root) == snapshot
+
+
 def test_feature_review_poll_ignores_epic_close_record(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     persist_epic_review_snapshot(
@@ -61,12 +86,19 @@ def test_epic_review_snapshot_loads_legacy_merge_request_record(tmp_path: Path) 
     root = make_repo(tmp_path)
     path = root / ".cascade" / "reviews.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"epic_001": {
-        "url": "https://gitlab.example/acme/project/-/merge_requests/3",
-        "source_branch": "epic/epic_001",
-        "target_branch": "main",
-        "closed": False,
-    }}), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "epic_001": {
+                    "url": "https://gitlab.example/acme/project/-/merge_requests/3",
+                    "source_branch": "epic/epic_001",
+                    "target_branch": "main",
+                    "closed": False,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     loaded = epic_review_snapshot("epic_001", root=root)
 
@@ -75,7 +107,9 @@ def test_epic_review_snapshot_loads_legacy_merge_request_record(tmp_path: Path) 
     assert loaded.forge_state == "open"
 
 
-@pytest.mark.parametrize("url", ["javascript:alert(1)", "/pull/1", "https://u:p@example/pull/1"])
+@pytest.mark.parametrize(
+    "url", ["javascript:alert(1)", "/pull/1", "https://u:p@example/pull/1"]
+)
 def test_epic_review_snapshot_rejects_unsafe_review_urls(url: str) -> None:
     with pytest.raises(ValueError, match="review URL"):
         EpicReviewSnapshot(
@@ -164,7 +198,9 @@ def test_epic_with_unresolved_close_review_stays_in_active_board_column(
     root = make_repo(tmp_path, git=False)
     add_doc(root, id="epic_001", title="Root epic", tier="epic", status="completed")
     blocker = (
-        EpicCloseBlocker(code="review_lookup_failed", message="Retry review lookup.", retryable=True)
+        EpicCloseBlocker(
+            code="review_lookup_failed", message="Retry review lookup.", retryable=True
+        )
         if stage == "blocked"
         else None
     )
@@ -185,7 +221,9 @@ def test_epic_with_unresolved_close_review_stays_in_active_board_column(
 
     assert [row["id"] for row in board["epics"]["2_active"]] == ["epic_001"]
     assert board["epics"]["3_completed"] == []
-    assert board["epics"]["2_active"][0]["implementation_review"]["close_stage"] == stage
+    assert (
+        board["epics"]["2_active"][0]["implementation_review"]["close_stage"] == stage
+    )
 
 
 def test_epic_moves_to_completed_column_after_review_close_reconciles(

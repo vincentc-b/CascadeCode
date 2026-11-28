@@ -2349,7 +2349,7 @@ code_boss_accepted_identity = element "_actual_accepted_merge_identity" "Functio
     }
 }
 
-code_boss_accept_generation = element "_accept_current_review_generation" "Function" "Fence closeout to one current review generation whose candidate receipt, accepted merge identity, observed target and exact-SHA post-merge CI green evidence agree." {
+code_boss_accept_generation = element "_accept_current_review_generation" "Function" "Resolve matching candidate, merge and exact-SHA CI evidence, then atomically compare generation, URL, evidence revision, route and heads before closing the current row." {
     properties {
         "cascade.semanticId" "element.code.boss.accept-generation"
         "cascade.parent" "element.component.boss"
@@ -2574,7 +2574,7 @@ code_watchdog_postcheck = element "reconcile_parent_lifecycle_incident" "Functio
     }
 }
 
-code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Refresh the original review, target and normalized check generations, then fence exact current-generation verification before every closeout." {
+code_watchdog_repair_postcheck = element "reconcile_open_review_repair" "Function" "Refresh the original review, target, source checks and accepted merge-SHA checks, then fence exact current-generation verification before every closeout." {
     properties {
         "cascade.semanticId" "element.code.watchdog.repair-postcheck"
         "cascade.parent" "element.component.watchdog"
@@ -3315,7 +3315,7 @@ code_watchdog_repair_authority = element "repair_event_authorizes" "Function" "J
     }
 }
 
-code_feature_repair_verify = element "mark_feature_repair_verified" "Function" "Persist only an independently verified receipt naming the exact current action, repair generation and corrected checked source head." {
+code_feature_repair_verify = element "mark_feature_repair_verified" "Function" "Persist only an independently verified receipt naming the exact action, repair generation, corrected source and green accepted merge-SHA evidence." {
     properties {
         "cascade.semanticId" "element.code.feature.repair-verify"
         "cascade.parent" "element.component.feature-team"
@@ -4709,7 +4709,7 @@ code_workspace_retained_feature = element "_retained_feature_delivery" "Function
     }
 }
 
-code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify normalized open-review evidence, persist its bounded current presentation in the review registry, return non-provider typed waits, and route actionable evidence through one Feature repair owner." {
+code_watchdog_review_health = element "reconcile_open_review_health" "Function" "Classify bounded open and accepted review evidence; route open failures through one Feature owner and retain accepted post-merge waits without reopening lineage." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-health"
         "cascade.parent" "element.component.watchdog"
@@ -4724,6 +4724,15 @@ code_watchdog_actionable_review = element "_route_actionable_review_health" "Fun
         "cascade.parent" "element.component.watchdog"
         "cascade.sourcePath" "cascade/review_health.py"
         "cascade.sourceSymbol" "_route_actionable_review_health"
+    }
+}
+
+code_watchdog_accepted_review = element "_reconcile_accepted_review_health" "Function" "Persist exact accepted merge-SHA evidence; retire only green health work and report the human corrective-scope gate for red closed work." {
+    properties {
+        "cascade.semanticId" "element.code.watchdog.accepted-review-health"
+        "cascade.parent" "element.component.watchdog"
+        "cascade.sourcePath" "cascade/review_health.py"
+        "cascade.sourceSymbol" "_reconcile_accepted_review_health"
     }
 }
 
@@ -4868,6 +4877,18 @@ code_watchdog_health_to_evidence_record = code_watchdog_review_health -> code_wa
 code_watchdog_health_to_actionable_review = code_watchdog_review_health -> code_watchdog_actionable_review "Routes only failed checks, actionable feedback and confirmed conflicts" {
     properties {
         "cascade.semanticId" "relationship.code-watchdog-health-to-actionable-review"
+    }
+}
+
+code_watchdog_health_to_accepted_review = code_watchdog_review_health -> code_watchdog_accepted_review "Keeps accepted post-merge evidence in the bounded producer lane" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-health-to-accepted-review"
+    }
+}
+
+code_watchdog_accepted_review_to_snapshot = code_watchdog_accepted_review -> code_watchdog_review_snapshot "Refreshes accepted identity and exact merge-SHA checks without mutation authority" {
+    properties {
+        "cascade.semanticId" "relationship.code-watchdog-accepted-review-to-snapshot"
     }
 }
 
@@ -5285,7 +5306,7 @@ code_teams_history_refusal = element "TerminalHistoryRefusal" "Dataclass" "Carry
     }
 }
 
-code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry, first-parent terminal-history proof and matching Epic document in a detached fetched trunk checkout." {
+code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Join fresh accepted identity, exact merge-SHA green CI, first-parent board proof, safe operator sync and matching Epic document before persisting verified closure." {
     properties {
         "cascade.semanticId" "element.code.boss.merged-epic"
         "cascade.parent" "element.component.boss"
@@ -5468,5 +5489,11 @@ code_workspace_fast_forward_to_operator_sync = code_workspace_fast_forward -> co
 code_boss_landed_to_history = code_boss_merged_epic -> code_workspace_closeout_history "Rechecks the accepted merge first-parent history before consuming the Epic document" {
     properties {
         "cascade.semanticId" "relationship.code.boss.landed-history"
+    }
+}
+
+code_boss_landed_to_operator_sync = code_boss_merged_epic -> code_workspace_operator_sync "Consumes independent board and local/remote synchronization receipts before verified closure" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.landed-operator-sync"
     }
 }

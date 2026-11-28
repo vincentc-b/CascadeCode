@@ -345,6 +345,30 @@ def test_open_review_postcheck_marks_only_exact_current_green_generation(
                         }
                     },
                 },
+                "post_merge_ci": {
+                    "state": "green",
+                    "merge_sha": "merge",
+                    "observed_target_sha": "merged-target",
+                    "required_check_policy": {
+                        "available": True,
+                        "source_head": "merge",
+                        "target_head": "merged-target",
+                        "required": ["tests"],
+                    },
+                    "required_check_results": {
+                        "available": True,
+                        "source_head": "merge",
+                        "target_head": "merged-target",
+                        "statuses": {"tests": "success"},
+                        "checks": {
+                            "tests": {
+                                "status": "success",
+                                "source_head": "merge",
+                                "generation": 23,
+                            }
+                        },
+                    },
+                },
             }
         ),
     )

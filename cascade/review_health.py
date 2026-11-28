@@ -106,12 +106,21 @@ def reconcile_open_review_health(
     if owner_id is not None:
         records = {owner_id: records[owner_id]} if owner_id in records else {}
     for owner_id, record in sorted(records.items()):
+        owner = board.by_id.get(owner_id)
         if (
             record.get("stage") == "completed"
             or str(record.get("state") or record.get("forge_state") or "").lower()
             == "merged"
+            or (
+                record.get("closed") is True
+                and isinstance(record.get("accepted_merge_sha"), str)
+            )
         ):
-            _reconcile_completed_review(owner_id, trunk)
+            results.append(
+                _reconcile_accepted_review_health(
+                    owner_id, trunk, record, forge=forge, owner=owner
+                )
+            )
             continue
         if record.get("closed"):
             continue
@@ -121,7 +130,6 @@ def reconcile_open_review_health(
         source_ref = str(record.get("source_branch") or "").strip()
         target_ref = str(record.get("target_branch") or "").strip()
         url = str(record.get("url") or record.get("review_url") or "").strip()
-        owner = board.by_id.get(owner_id)
         if (
             not source_ref
             or not target_ref
@@ -328,6 +336,99 @@ def reconcile_open_review_health(
     return results
 
 
+def _reconcile_accepted_review_health(
+    owner_id: str,
+    root: Path,
+    record: Mapping[str, object],
+    *,
+    forge: str,
+    owner: Any,
+) -> dict[str, object]:
+    """Observe accepted work without reopening it or granting repair authority."""
+
+    url = str(record.get("url") or record.get("review_url") or "").strip()
+    source_ref = str(record.get("source_branch") or "").strip()
+    target_ref = str(record.get("target_branch") or "").strip()
+    if not url or not source_ref or not target_ref:
+        return _health_wait(
+            owner_id, "capability_unavailable", "accepted_review_identity_missing"
+        )
+    review = MergeRequest(
+        url=url,
+        number=str(record.get("number") or "") or None,
+        forge=str(record.get("forge") or forge),
+        source_branch=source_ref,
+        target_branch=target_ref,
+        draft=bool(record.get("draft", False)),
+    )
+    try:
+        snapshot = merge_request_snapshot(root, review)
+    except (GitError, OSError, ValueError):
+        return _health_wait(
+            owner_id, "evidence_unavailable", "post_merge_forge_observation_failed"
+        )
+    try:
+        persisted = record_feature_review_evidence(owner_id, snapshot, root=root)
+    except OSError:
+        persisted = False
+    if not persisted:
+        return _health_wait(
+            owner_id, "evidence_unavailable", "post_merge_evidence_persistence_failed"
+        )
+    accepted = snapshot.get("accepted_merge_identity")
+    post_merge = snapshot.get("post_merge_ci")
+    if (
+        snapshot.get("state") != "merged"
+        or not isinstance(accepted, Mapping)
+        or accepted.get("available") is not True
+    ):
+        return _health_wait(
+            owner_id, "evidence_unavailable", "accepted_merge_identity_unavailable"
+        )
+    merge_sha = accepted.get("merge_sha")
+    if (
+        not isinstance(post_merge, Mapping)
+        or post_merge.get("merge_sha") != merge_sha
+        or post_merge.get("observed_target_sha") != accepted.get("observed_target_head")
+    ):
+        return _health_wait(
+            owner_id, "evidence_unavailable", "post_merge_evidence_stale"
+        )
+    state = str(post_merge.get("state") or "unknown")
+    reason = str(post_merge.get("reason") or f"post_merge_ci_{state}")
+    if state == "green":
+        _reconcile_completed_review(owner_id, root)
+        return {
+            "owner_id": owner_id,
+            "outcome": "completed",
+            "merge_sha": merge_sha,
+            "post_merge_ci": "green",
+        }
+    if state in {"pending", "unknown"}:
+        return _health_wait(owner_id, state, reason, post_merge)
+
+    # Accepted work cannot use the open-review repair route: that route would
+    # reopen unchanged accepted lineage and its admission guard rejects closed
+    # reviews. Until a human authorizes a supported corrective scope on the
+    # current target, retain the original owner and report the exact gate.
+    owner_kind = getattr(owner, "tier", None) or str(record.get("kind") or "review")
+    result = _health_wait(
+        owner_id,
+        "approval_required",
+        "accepted_review_corrective_scope_requires_human_approval",
+        post_merge,
+    )
+    result.update(
+        owner=f"{owner_kind}:{owner_id}",
+        prerequisite="authorize_supported_corrective_scope_on_current_target",
+        accepted_review_url=url,
+        accepted_merge_sha=merge_sha,
+        target_ref=target_ref,
+        original_lineage_preserved=True,
+    )
+    return result
+
+
 def _health_wait(
     owner_id: str,
     wait_type: str,
@@ -441,7 +542,9 @@ def _blocker_identity(evidence: Mapping[str, object]) -> str:
         "blocker": blocker,
     }
     return hashlib.sha256(
-        json.dumps(identity, sort_keys=True, separators=(",", ":"), default=str).encode()
+        json.dumps(
+            identity, sort_keys=True, separators=(",", ":"), default=str
+        ).encode()
     ).hexdigest()
 
 
@@ -466,8 +569,12 @@ def _record_downstream_review_fence(
         target_ref=target_ref,
         blocker_identity=_blocker_identity(evidence),
         evidence_generation=evidence_generation,
-        repair_action_id=(repair_action_id if isinstance(repair_action_id, str) else None),
-        repair_generation=(repair_generation if type(repair_generation) is int else None),
+        repair_action_id=(
+            repair_action_id if isinstance(repair_action_id, str) else None
+        ),
+        repair_generation=(
+            repair_generation if type(repair_generation) is int else None
+        ),
         root=root,
     )
 

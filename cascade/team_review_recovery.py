@@ -135,6 +135,17 @@ def publish_team_review_resolution(
         return retry_review_health(
             action_id, team_kind=team_kind, team_id=team_id, root=trunk
         )
+    if existing is not None and existing.get("recovery_state") == "completed":
+        recovery = existing.get("recovery")
+        owner = recovery.get("owning_team") if isinstance(recovery, Mapping) else None
+        if owner != {"kind": team_kind, "work_id": team_id}:
+            raise PermissionError("durable review recovery belongs to a different team")
+        return {
+            "action_id": action_id,
+            "recovery_state": "completed",
+            "attempt_count": existing.get("attempt_count", 0),
+            "replayed": True,
+        }
     worktree, source_ref, target_ref, heads = _authorization(
         action_id, team_kind=team_kind, team_id=team_id, trunk=trunk
     )
@@ -177,7 +188,9 @@ def publish_team_review_resolution(
     )
     if isinstance(next_eligible, str):
         try:
-            backoff_until = datetime.fromisoformat(next_eligible).astimezone(timezone.utc)
+            backoff_until = datetime.fromisoformat(next_eligible).astimezone(
+                timezone.utc
+            )
         except ValueError:
             backoff_until = None
         if backoff_until is not None and datetime.now(timezone.utc) < backoff_until:
@@ -253,12 +266,16 @@ def publish_team_review_resolution(
             "action_id": action_id,
             "recovery_state": "awaiting_owner_decision",
             "reason": blocker.code if blocker is not None else "preflight_failed",
-            "detail": blocker.message if blocker is not None else "review preflight failed",
+            "detail": blocker.message
+            if blocker is not None
+            else "review preflight failed",
         }
     admitted_turn = publication_preflight.turn
     local_head = _git(worktree, "rev-parse", "--verify", "HEAD^{commit}")
     durable_review = resolution_action(action_id, root=trunk)
-    request = durable_review.get("request") if isinstance(durable_review, Mapping) else None
+    request = (
+        durable_review.get("request") if isinstance(durable_review, Mapping) else None
+    )
     if not isinstance(request, Mapping) or not isinstance(local_head, str):
         return {
             "action_id": action_id,
@@ -387,7 +404,9 @@ def publish_team_review_resolution(
             "reason": "validation_budget_deterministic_material_unchanged",
             "incident_id": action_id,
             "claim_id": claim_id,
-            "operation_id": reusable_receipt.get("operation_id") if reusable_receipt else None,
+            "operation_id": reusable_receipt.get("operation_id")
+            if reusable_receipt
+            else None,
         }
     if receipt_state == "unavailable":
         return {
@@ -397,7 +416,9 @@ def publish_team_review_resolution(
             "reason": "validation_receipt_unavailable",
             "incident_id": action_id,
             "claim_id": claim_id,
-            "operation_id": reusable_receipt.get("operation_id") if reusable_receipt else None,
+            "operation_id": reusable_receipt.get("operation_id")
+            if reusable_receipt
+            else None,
         }
     if receipt_state == "matching_green" and reusable_receipt is not None:
         operation_id = str(reusable_receipt["operation_id"])

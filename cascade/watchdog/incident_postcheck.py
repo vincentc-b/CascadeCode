@@ -230,7 +230,9 @@ def _observe_repair_review(
         isinstance(accepted_identity, Mapping)
         and accepted_identity.get("available") is not True
     ):
-        return _pending("accepted_merge_identity_unavailable", "refresh_forge_observation")
+        return _pending(
+            "accepted_merge_identity_unavailable", "refresh_forge_observation"
+        )
 
     merge_sha = snapshot.get("merge_sha")
     if (
@@ -243,6 +245,23 @@ def _observe_repair_review(
         or not merge_sha
     ):
         return _pending("accepted_generation_missing", "reconcile_review_acceptance")
+    post_merge = snapshot.get("post_merge_ci")
+    if (
+        not isinstance(post_merge, Mapping)
+        or post_merge.get("merge_sha") != merge_sha
+        or post_merge.get("observed_target_sha") != target_head
+    ):
+        return _pending("post_merge_evidence_stale", "refresh_exact_merge_checks")
+    post_state = post_merge.get("state")
+    if post_state == "red":
+        return _pending(
+            "post_merge_checks_red", "authorize_corrective_scope_on_current_target"
+        )
+    if post_state != "green":
+        return _pending(
+            f"post_merge_checks_{post_state or 'unknown'}",
+            "wait_for_exact_merge_checks",
+        )
     integrated = _intended_target_contains(
         repo, str(action["target_ref"]), target_head, merge_sha
     )
@@ -263,6 +282,7 @@ def _observe_repair_review(
         "accepted_merge_sha": merge_sha,
         "required_check_policy": check_result["required_check_policy"],
         "required_check_results": check_result["required_check_results"],
+        "post_merge_ci": dict(post_merge),
         "forge_state": snapshot.get("state"),
     }
 

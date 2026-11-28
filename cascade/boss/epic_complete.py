@@ -61,7 +61,9 @@ class EpicCompleteResult:
         if self.review_url is not None:
             validate_review_url(self.review_url)
         if self.close_stage == "blocked" and self.blocker is None:
-            raise ValueError("blocked epic close result requires actionable blocker details")
+            raise ValueError(
+                "blocked epic close result requires actionable blocker details"
+            )
 
 
 def reset_epic_close_prompt_surfaces() -> None:
@@ -200,7 +202,9 @@ def try_complete_epic_result(
         return _finish_epic_completion_result(epic_id, root=root)
 
 
-def confirm_epic_complete(epic_id: WorkId, by: Principal, *, root: Path | None = None) -> bool:
+def confirm_epic_complete(
+    epic_id: WorkId, by: Principal, *, root: Path | None = None
+) -> bool:
     """Human-only: move the epic to completed and emit ``EpicCompleted`` on ``war_room``."""
 
     return confirm_epic_complete_result(epic_id, by, root=root).ok
@@ -239,17 +243,12 @@ def _finish_epic_completion_result(
     epic_meta = board.by_id[epic_id]
     if epic_meta.tier != "epic":
         return EpicCompleteResult(ok=False, reason="wrong_tier")
-    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
-    from cascade.workspace.architecture_review import ArchitectureProposalError
-
-    try:
-        require_lifecycle_review_gate(epic_id, "closeout", root=repo)
-    except ArchitectureProposalError as exc:
-        return EpicCompleteResult(ok=False, reason=str(exc))
     if epic_meta.status == "completed" and epic_meta.path.parent.name == "3_completed":
         if _completed_on_operator_trunk(epic_id, repo):
             review_state = epic_review_snapshot(epic_id, root=repo)
-            if review_state is not None and review_state.stage != "completed":
+            if review_state is not None and not (
+                review_state.stage == "completed" and review_state.verified_closure
+            ):
                 review_state = refresh_epic_review_snapshot(epic_id, root=repo)
                 if (
                     review_state is None
@@ -261,26 +260,53 @@ def _finish_epic_completion_result(
                         if review_state is not None
                         else EpicCompleteResult(ok=False, reason="review_failed")
                     )
-                # The pulled trunk already contains the terminal document;
-                # record the accepted review before marking the Epic complete.
+                from cascade.review import detect_forge
+
+                forge = detect_forge(repo)
+                review = MergeRequest(
+                    url=review_state.review_url or "",
+                    number=None,
+                    forge=forge or "github",
+                    source_branch=review_state.source_branch or "",
+                    target_branch=review_state.target_branch or "",
+                    draft=False,
+                )
+                if (
+                    forge is None
+                    or _merged_epic_review_landed(epic_id, review, repo) is None
+                ):
+                    latest = epic_review_snapshot(epic_id, root=repo)
+                    return (
+                        _epic_review_result(latest)
+                        if latest is not None and latest.stage == "blocked"
+                        else EpicCompleteResult(ok=False, reason="verification_pending")
+                    )
+                review_state = epic_review_snapshot(epic_id, root=repo)
+                if review_state is None or not review_state.verified_closure:
+                    return EpicCompleteResult(ok=False, reason="verification_pending")
                 persist_epic_review_snapshot(
-                    epic_id,
-                    EpicReviewSnapshot(
-                        stage="completed",
-                        review_url=review_state.review_url,
-                        source_branch=review_state.source_branch,
-                        target_branch=review_state.target_branch,
-                        forge_state="merged",
-                    ),
-                    root=repo,
+                    epic_id, _completed_epic_snapshot(review_state), root=repo
                 )
             _emit_epic_completed(epic_id, repo)
             _retire_epic_worktree(epic_id, repo)
             return EpicCompleteResult(ok=True, close_stage="completed")
         review_state = epic_review_snapshot(epic_id, root=repo)
-        if review_state is not None and review_state.stage == "completed":
+        if (
+            review_state is not None
+            and review_state.stage == "completed"
+            and review_state.verified_closure
+        ):
             _emit_epic_completed(epic_id, repo)
-            return EpicCompleteResult(ok=True, close_stage="completed", forge_state="merged")
+            return EpicCompleteResult(
+                ok=True, close_stage="completed", forge_state="merged"
+            )
+    from cascade.lifecycle_review_gate import require_lifecycle_review_gate
+    from cascade.workspace.architecture_review import ArchitectureProposalError
+
+    try:
+        require_lifecycle_review_gate(epic_id, "closeout", root=repo)
+    except ArchitectureProposalError as exc:
+        return EpicCompleteResult(ok=False, reason=str(exc))
     blocker = _epic_close_blocker(epic_id, repo=repo, board=board)
     if blocker is not None:
         return blocker
@@ -334,6 +360,9 @@ def _finish_epic_completion_result(
     if review is not None:
         remote_doc = _merged_epic_review_landed(epic_id, review, repo)
         if remote_doc is None:
+            latest = epic_review_snapshot(epic_id, root=repo)
+            if latest is not None and latest.stage == "blocked":
+                return _epic_review_result(latest)
             return EpicCompleteResult(
                 ok=False,
                 reason="pending_epic_review",
@@ -351,16 +380,11 @@ def _finish_epic_completion_result(
             if entry is None:
                 return EpicCompleteResult(ok=False, reason="checkout_missing")
             move_doc(epic_id, "completed", root=entry.path)
+            verified = epic_review_snapshot(epic_id, root=repo)
+            if verified is None or not verified.verified_closure:
+                return EpicCompleteResult(ok=False, reason="verification_pending")
             persist_epic_review_snapshot(
-                epic_id,
-                EpicReviewSnapshot(
-                    stage="completed",
-                    review_url=review.url,
-                    source_branch=review.source_branch,
-                    target_branch=review.target_branch,
-                    forge_state="merged",
-                ),
-                root=repo,
+                epic_id, _completed_epic_snapshot(verified), root=repo
             )
             _emit_epic_completed(epic_id, repo)
             return EpicCompleteResult(
@@ -401,7 +425,9 @@ def _epic_review_result(snapshot: EpicReviewSnapshot) -> EpicCompleteResult:
 
     return EpicCompleteResult(
         ok=False,
-        reason="pending_epic_review" if snapshot.stage != "blocked" else "review_failed",
+        reason="pending_epic_review"
+        if snapshot.stage != "blocked"
+        else "review_failed",
         review_url=snapshot.review_url,
         close_stage=snapshot.stage,
         source_branch=snapshot.source_branch,
@@ -412,14 +438,18 @@ def _epic_review_result(snapshot: EpicReviewSnapshot) -> EpicCompleteResult:
 
 
 def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
-    """Return the reviewed remote doc only after forge and trunk verification."""
+    """Return the reviewed remote doc only after CI, board and sync verification."""
 
     import subprocess
 
     from cascade.board.store import read_doc_in_worktree
     from cascade.review import merge_request_snapshot
+    from cascade.workspace.branch_synchronization import synchronize_operator_trunk
     from cascade.workspace.closeout import create_verified_trunk_workspace
-    from cascade.workspace.integration_worktree import get_integration_worktree, locate_trunk
+    from cascade.workspace.integration_worktree import (
+        get_integration_worktree,
+        locate_trunk,
+    )
     from cascade.workspace.trunk import resolve_product_trunk
 
     trunk = locate_trunk(repo)
@@ -437,19 +467,71 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
             if snapshot.get("state") != "merged":
                 return None
         except GitError:
+            _persist_epic_verification_blocker(
+                epic_id,
+                repo,
+                "forge_evidence_unavailable",
+                "Retry the exact forge observation.",
+            )
             return None
         merge_sha = snapshot.get("merge_sha")
-        if not isinstance(merge_sha, str) or len(merge_sha) != 40:
+        accepted = snapshot.get("accepted_merge_identity")
+        post_merge = snapshot.get("post_merge_ci")
+        if (
+            not isinstance(merge_sha, str)
+            or len(merge_sha) != 40
+            or not isinstance(accepted, dict)
+            or accepted.get("available") is not True
+            or accepted.get("merge_sha") != merge_sha
+            or not isinstance(post_merge, dict)
+            or post_merge.get("state") != "green"
+            or post_merge.get("merge_sha") != merge_sha
+            or post_merge.get("observed_target_sha") != workspace.revision
+            or accepted.get("observed_target_head") != workspace.revision
+        ):
+            post_state = (
+                str(post_merge.get("state") or "unknown")
+                if isinstance(post_merge, dict)
+                else "unknown"
+            )
+            reason = (
+                str(post_merge.get("reason") or post_merge.get("state") or "unknown")
+                if isinstance(post_merge, dict)
+                else "unavailable"
+            )
+            _persist_epic_verification_blocker(
+                epic_id,
+                repo,
+                "post_merge_ci_red"
+                if post_state == "red"
+                else "post_merge_ci_not_green",
+                (
+                    "Authorize a supported corrective scope on the current target."
+                    if post_state == "red"
+                    else f"Wait for fresh green checks on the accepted merge SHA ({reason})."
+                ),
+                snapshot=snapshot,
+                owner=f"epic:{epic_id}",
+                prerequisite=(
+                    "authorize_supported_corrective_scope_on_current_target"
+                    if post_state == "red"
+                    else "retry_exact_merge_ci_observation"
+                ),
+            )
             return None
         landed = subprocess.run(
             ["git", "merge-base", "--is-ancestor", merge_sha, workspace.revision],
-            cwd=checkout, capture_output=True, text=True,
+            cwd=checkout,
+            capture_output=True,
+            text=True,
         )
         if landed.returncode != 0:
             return None
         accepted_parent = subprocess.run(
             ["git", "rev-parse", "--verify", f"{merge_sha}^1"],
-            cwd=checkout, capture_output=True, text=True,
+            cwd=checkout,
+            capture_output=True,
+            text=True,
         )
         if accepted_parent.returncode != 0:
             return None
@@ -457,11 +539,51 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
         if not isinstance(source_revision, str) or len(source_revision) != 40:
             return None
         try:
-            workspace.verify_history(
+            board_fingerprint = workspace.verify_history(
                 source_revision=source_revision,
                 accepted_revision=accepted_parent.stdout.strip(),
             )
         except GitError:
+            _persist_epic_verification_blocker(
+                epic_id,
+                repo,
+                "physical_board_unavailable",
+                "Repair and re-prove the current remote physical board.",
+                snapshot=snapshot,
+                owner="operator",
+                prerequisite="repair_and_reprove_current_physical_board",
+            )
+            return None
+        sync = synchronize_operator_trunk(root=trunk, target=target)
+        if (
+            not sync.ok
+            or sync.remote_sha != workspace.revision
+            or not sync.board_fingerprint
+        ):
+            _persist_epic_verification_blocker(
+                epic_id,
+                repo,
+                f"trunk_sync_{sync.reason or 'unavailable'}",
+                sync.prerequisite or "Reconcile the operator trunk and retry.",
+                snapshot=snapshot,
+                board_fingerprint=board_fingerprint,
+                sync=sync,
+                owner=sync.owner,
+                prerequisite=sync.prerequisite,
+            )
+            return None
+        try:
+            workspace.refresh_target()
+        except GitError:
+            _persist_epic_verification_blocker(
+                epic_id,
+                repo,
+                "target_moved",
+                "Observe and verify the new target generation.",
+                snapshot=snapshot,
+                owner="operator",
+                prerequisite="observe_and_verify_new_target_generation",
+            )
             return None
         entry = get_integration_worktree(trunk, "epic", epic_id)
         if entry is None or not entry.path.is_dir():
@@ -479,25 +601,175 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
                 and remote_doc.meta.children == source_doc.meta.children
                 and remote_doc.body == source_doc.body
             )
-            return remote_doc if accepted else None
-        if remote_doc.meta.status != "active" or remote_doc.meta.path.parent.name != "2_active":
+            if not accepted:
+                return None
+            _persist_verified_epic_closure(
+                epic_id, repo, snapshot, board_fingerprint, sync
+            )
+            return remote_doc
+        if (
+            remote_doc.meta.status != "active"
+            or remote_doc.meta.path.parent.name != "2_active"
+        ):
             return None
         # An ancestry relation alone is insufficient: a merge can resolve the
         # activation pointer by keeping the trunk stub instead of the live spec.
         source_blob = subprocess.run(
             ["git", "rev-parse", f"{review.source_branch}:{source_path}"],
-            cwd=checkout, capture_output=True, text=True,
+            cwd=checkout,
+            capture_output=True,
+            text=True,
         )
         target_blob = subprocess.run(
             ["git", "rev-parse", f"{workspace.revision}:{source_path}"],
-            cwd=checkout, capture_output=True, text=True,
+            cwd=checkout,
+            capture_output=True,
+            text=True,
         )
         accepted = (
             source_blob.returncode == 0
             and target_blob.returncode == 0
             and source_blob.stdout.strip() == target_blob.stdout.strip()
         )
-        return remote_doc if accepted else None
+        if not accepted:
+            return None
+        _persist_verified_epic_closure(epic_id, repo, snapshot, board_fingerprint, sync)
+        return remote_doc
+
+
+def _sync_receipt(sync) -> dict[str, object]:
+    return {
+        "ok": sync.ok,
+        "target": sync.target,
+        "local_sha": sync.local_sha,
+        "remote_sha": sync.remote_sha,
+        "sync_result": sync.sync_result,
+        "board_fingerprint": sync.board_fingerprint,
+        "reason": sync.reason,
+        "owner": sync.owner,
+        "prerequisite": sync.prerequisite,
+    }
+
+
+def _persist_epic_verification_blocker(
+    epic_id: WorkId,
+    repo: Path,
+    code: str,
+    message: str,
+    *,
+    snapshot: dict[str, object] | None = None,
+    board_fingerprint: str | None = None,
+    sync=None,
+    owner: str | None = None,
+    prerequisite: str | None = None,
+) -> None:
+    """Persist independent failed dimensions without inventing closure."""
+
+    current = epic_review_snapshot(epic_id, root=repo)
+    if current is None:
+        return
+    accepted = snapshot.get("accepted_merge_identity") if snapshot else None
+    accepted = accepted if isinstance(accepted, dict) else {}
+    post_merge = snapshot.get("post_merge_ci") if snapshot else None
+    post_merge = (
+        dict(post_merge)
+        if isinstance(post_merge, dict)
+        else dict(current.post_merge_ci)
+    )
+    persist_epic_review_snapshot(
+        epic_id,
+        EpicReviewSnapshot(
+            stage="blocked",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state="merged"
+            if snapshot and snapshot.get("state") == "merged"
+            else current.forge_state,
+            blocker=EpicCloseBlocker(
+                code=code,
+                message=message,
+                retryable=True,
+                owner=owner,
+                prerequisite=prerequisite,
+            ),
+            generation=current.generation,
+            observation_identity=current.observation_identity,
+            accepted_merge_sha=(
+                str(accepted.get("merge_sha"))
+                if accepted.get("merge_sha")
+                else current.accepted_merge_sha
+            ),
+            observed_target_sha=(
+                str(accepted.get("observed_target_head"))
+                if accepted.get("observed_target_head")
+                else current.observed_target_sha
+            ),
+            post_merge_ci=post_merge,
+            board_fingerprint=board_fingerprint or current.board_fingerprint,
+            sync_receipt=_sync_receipt(sync)
+            if sync is not None
+            else dict(current.sync_receipt),
+        ),
+        root=repo,
+    )
+
+
+def _persist_verified_epic_closure(
+    epic_id: WorkId,
+    repo: Path,
+    snapshot: dict[str, object],
+    board_fingerprint: str,
+    sync,
+) -> None:
+    current = epic_review_snapshot(epic_id, root=repo)
+    accepted = snapshot.get("accepted_merge_identity")
+    post_merge = snapshot.get("post_merge_ci")
+    if (
+        current is None
+        or not isinstance(accepted, dict)
+        or not isinstance(post_merge, dict)
+    ):
+        return
+    persist_epic_review_snapshot(
+        epic_id,
+        EpicReviewSnapshot(
+            stage="implementation_review_pending",
+            review_url=current.review_url,
+            source_branch=current.source_branch,
+            target_branch=current.target_branch,
+            forge_state="merged",
+            generation=current.generation,
+            observation_identity=current.observation_identity,
+            accepted_merge_sha=str(accepted["merge_sha"]),
+            observed_target_sha=str(accepted["observed_target_head"]),
+            post_merge_ci=dict(post_merge),
+            board_fingerprint=board_fingerprint,
+            sync_receipt=_sync_receipt(sync),
+            verified_closure=True,
+        ),
+        root=repo,
+    )
+
+
+def _completed_epic_snapshot(current: EpicReviewSnapshot) -> EpicReviewSnapshot:
+    """Advance only the already verified generation to terminal closeout."""
+
+    return EpicReviewSnapshot(
+        stage="completed",
+        review_url=current.review_url,
+        source_branch=current.source_branch,
+        target_branch=current.target_branch,
+        forge_state="merged",
+        generation=current.generation,
+        observation_identity=current.observation_identity,
+        accepted_merge_sha=current.accepted_merge_sha,
+        observed_target_sha=current.observed_target_sha,
+        post_merge_ci=dict(current.post_merge_ci),
+        board_fingerprint=current.board_fingerprint,
+        sync_receipt=dict(current.sync_receipt),
+        verified_closure=True,
+    )
 
 
 def _completed_on_operator_trunk(epic_id: WorkId, repo: Path) -> bool:
@@ -620,7 +892,9 @@ def _child_feature_satisfies_closeout(child: WorkMeta, parent: WorkMeta) -> bool
         or not child.cancellation_reason
     ):
         return False
-    feedback = [item for item in parent.cancellation_feedback if item.child_id == child.id]
+    feedback = [
+        item for item in parent.cancellation_feedback if item.child_id == child.id
+    ]
     if len(feedback) != 1:
         return False
     disposition = feedback[0]

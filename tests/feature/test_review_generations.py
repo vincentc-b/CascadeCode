@@ -192,6 +192,64 @@ def test_exact_candidate_receipt_is_shared_by_acceptance_and_fenced_on_drift(
     assert review.matching_exact_result_receipt(current, drifted, root=root) is None
 
 
+def test_acceptance_rejects_generation_advanced_during_proof_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_repo(tmp_path)
+    source_sha, target_sha = "a" * 40, "b" * 40
+    merge_sha, observed_target = "c" * 40, "d" * 40
+    first = _projection("https://example.test/pulls/12")
+    first.update(source_head=source_sha, target_head=target_sha)
+    first = review._store_review_generation(
+        root,
+        "feat_001",
+        first,
+        generation=1,
+        action_id="feature_repair:feat_001:one",
+    )
+    second = {
+        **first,
+        "url": "https://example.test/pulls/13",
+        "source_head": "e" * 40,
+    }
+
+    def advance_generation(*_args, **_kwargs):
+        review._store_review_generation(
+            root,
+            "feat_001",
+            second,
+            generation=2,
+            action_id="feature_repair:feat_001:two",
+        )
+        return {}
+
+    monkeypatch.setattr(review, "matching_exact_result_receipt", advance_generation)
+    snapshot = {
+        "state": "merged",
+        "url": first["url"],
+        "source_branch": first["source_branch"],
+        "target_branch": first["target_branch"],
+        "source_revision": source_sha,
+        "target_revision": observed_target,
+        "merge_sha": merge_sha,
+        "post_merge_ci": {
+            "state": "green",
+            "merge_sha": merge_sha,
+            "observed_target_sha": observed_target,
+        },
+    }
+
+    assert not review._accept_current_review_generation(
+        "feat_001", first, snapshot, root=root
+    )
+    current = review.review_record_for_feature("feat_001", root=root)
+    assert current is not None
+    assert current["current_generation"] == 2
+    assert current["url"] == second["url"]
+    assert current["closed"] is False
+    assert current["reconciliation_status"] == "pending"
+
+
 def test_new_generation_drops_prior_exact_candidate_proof(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     projection = _projection("https://example.test/pulls/20")

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import fcntl
 import json
+import hashlib
 import logging
 import os
 import re
 import subprocess
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Mapping
@@ -89,6 +90,8 @@ class EpicCloseBlocker:
     code: str
     message: str
     retryable: bool
+    owner: str | None = None
+    prerequisite: str | None = None
 
     def __post_init__(self) -> None:
         if not self.code.strip() or any(char.isspace() for char in self.code):
@@ -101,6 +104,16 @@ class EpicCloseBlocker:
             )
         if not isinstance(self.retryable, bool):
             raise ValueError("epic close blocker retryable must be boolean")
+        for label, value in (
+            ("owner", self.owner),
+            ("prerequisite", self.prerequisite),
+        ):
+            if value is not None and (
+                not value.strip() or "\n" in value or "\r" in value
+            ):
+                raise ValueError(
+                    f"epic close blocker {label} must be a non-blank single line"
+                )
 
 
 @dataclass(frozen=True)
@@ -113,6 +126,14 @@ class EpicReviewSnapshot:
     target_branch: str | None = None
     forge_state: ForgeReviewState = "unknown"
     blocker: EpicCloseBlocker | None = None
+    generation: int = 0
+    observation_identity: str | None = None
+    accepted_merge_sha: str | None = None
+    observed_target_sha: str | None = None
+    post_merge_ci: dict[str, object] = field(default_factory=dict)
+    board_fingerprint: str | None = None
+    sync_receipt: dict[str, object] = field(default_factory=dict)
+    verified_closure: bool = False
 
     def __post_init__(self) -> None:
         if self.stage not in {"implementation_review_pending", "completed", "blocked"}:
@@ -140,6 +161,19 @@ class EpicReviewSnapshot:
             raise ValueError("blocked epic close requires actionable blocker details")
         if self.stage != "blocked" and self.blocker is not None:
             raise ValueError("epic close blocker is only valid for the blocked stage")
+        if isinstance(self.generation, bool) or self.generation < 0:
+            raise ValueError("epic review generation must be nonnegative")
+        if self.verified_closure and (
+            self.forge_state != "merged"
+            or not self.accepted_merge_sha
+            or self.post_merge_ci.get("state") != "green"
+            or not self.board_fingerprint
+            or self.sync_receipt.get("ok") is not True
+            or self.sync_receipt.get("remote_sha") != self.observed_target_sha
+        ):
+            raise ValueError(
+                "verified epic closure requires matching independent evidence"
+            )
 
 
 def validate_review_url(url: str) -> None:
@@ -179,6 +213,8 @@ def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | No
             code=str(blocker_raw.get("code") or ""),
             message=str(blocker_raw.get("message") or ""),
             retryable=blocker_raw.get("retryable"),  # type: ignore[arg-type]
+            owner=str(blocker_raw.get("owner") or "") or None,
+            prerequisite=str(blocker_raw.get("prerequisite") or "") or None,
         )
     return EpicReviewSnapshot(
         stage=stage,  # type: ignore[arg-type]
@@ -187,6 +223,42 @@ def epic_review_snapshot(epic_id: str, *, root: Path) -> EpicReviewSnapshot | No
         target_branch=str(record.get("target_branch") or "") or None,
         forge_state=forge_state,  # type: ignore[arg-type]
         blocker=blocker,
+        generation=(
+            int(record.get("current_generation") or 0)
+            if not isinstance(record.get("current_generation"), bool)
+            else 0
+        ),
+        observation_identity=(
+            str(record.get("observation_identity"))
+            if record.get("observation_identity")
+            else None
+        ),
+        accepted_merge_sha=(
+            str(record.get("accepted_merge_sha"))
+            if record.get("accepted_merge_sha")
+            else None
+        ),
+        observed_target_sha=(
+            str(record.get("observed_target_sha"))
+            if record.get("observed_target_sha")
+            else None
+        ),
+        post_merge_ci=(
+            dict(record.get("post_merge_ci"))
+            if isinstance(record.get("post_merge_ci"), Mapping)
+            else {}
+        ),
+        board_fingerprint=(
+            str(record.get("board_fingerprint"))
+            if record.get("board_fingerprint")
+            else None
+        ),
+        sync_receipt=(
+            dict(record.get("sync_receipt"))
+            if isinstance(record.get("sync_receipt"), Mapping)
+            else {}
+        ),
+        verified_closure=record.get("verified_closure") is True,
     )
 
 
@@ -246,6 +318,14 @@ def persist_epic_review_snapshot(
         "source_branch": snapshot.source_branch,
         "target_branch": snapshot.target_branch,
         "forge_state": snapshot.forge_state,
+        "current_generation": snapshot.generation,
+        "observation_identity": snapshot.observation_identity,
+        "accepted_merge_sha": snapshot.accepted_merge_sha,
+        "observed_target_sha": snapshot.observed_target_sha,
+        "post_merge_ci": snapshot.post_merge_ci,
+        "board_fingerprint": snapshot.board_fingerprint,
+        "sync_receipt": snapshot.sync_receipt,
+        "verified_closure": snapshot.verified_closure,
         "closed": snapshot.stage == "completed",
         # Explicitly clear a prior lookup blocker when a later refresh works.
         "blocker": None,
@@ -255,6 +335,8 @@ def persist_epic_review_snapshot(
             "code": blocker.code,
             "message": blocker.message,
             "retryable": blocker.retryable,
+            "owner": blocker.owner,
+            "prerequisite": blocker.prerequisite,
         }
     _update_record(locate_trunk(root), epic_id, record, create=True)
 
@@ -325,6 +407,7 @@ def refresh_epic_review_snapshot(
     forge_state: ForgeReviewState = (
         raw_state if raw_state in {"open", "merged", "closed"} else "unknown"
     )  # type: ignore[assignment]
+    evidence = _epic_merge_observation(current, live)
     if forge_state == "open":
         refreshed = EpicReviewSnapshot(
             stage="implementation_review_pending",
@@ -332,6 +415,7 @@ def refresh_epic_review_snapshot(
             source_branch=current.source_branch,
             target_branch=current.target_branch,
             forge_state=forge_state,
+            **evidence,
         )
     elif forge_state == "merged":
         # The forge merge is necessary but not sufficient for terminal epic
@@ -342,6 +426,7 @@ def refresh_epic_review_snapshot(
             source_branch=current.source_branch,
             target_branch=current.target_branch,
             forge_state=forge_state,
+            **evidence,
         )
     else:
         code = "review_closed" if forge_state == "closed" else "review_state_unknown"
@@ -361,6 +446,7 @@ def refresh_epic_review_snapshot(
                 message=message,
                 retryable=forge_state == "unknown",
             ),
+            **evidence,
         )
     persist_epic_review_snapshot(epic_id, refreshed, root=trunk)
     return refreshed
@@ -382,9 +468,58 @@ def _persist_epic_review_blocker(
         target_branch=current.target_branch,
         forge_state="unknown",
         blocker=EpicCloseBlocker(code=code, message=message, retryable=retryable),
+        generation=current.generation,
+        observation_identity=current.observation_identity,
+        accepted_merge_sha=current.accepted_merge_sha,
+        observed_target_sha=current.observed_target_sha,
+        post_merge_ci=dict(current.post_merge_ci),
+        board_fingerprint=current.board_fingerprint,
+        sync_receipt=dict(current.sync_receipt),
     )
     persist_epic_review_snapshot(epic_id, blocked, root=root)
     return blocked
+
+
+def _epic_merge_observation(
+    current: EpicReviewSnapshot, live: Mapping[str, object]
+) -> dict[str, object]:
+    """Retain exact accepted-merge dimensions without promoting them to closure."""
+
+    accepted = live.get("accepted_merge_identity")
+    accepted = accepted if isinstance(accepted, Mapping) else {}
+    post_merge = live.get("post_merge_ci")
+    post_merge = dict(post_merge) if isinstance(post_merge, Mapping) else {}
+    merge_sha = accepted.get("merge_sha") or live.get("merge_sha")
+    observed_target = (
+        accepted.get("observed_target_head")
+        or post_merge.get("observed_target_sha")
+        or live.get("target_revision")
+    )
+    # Old forge adapters and tests have no accepted-merge dimensions. Preserve
+    # their generation-zero compatibility without treating them as evidence.
+    if not merge_sha and not post_merge and not observed_target:
+        return {}
+    material = {
+        "merge_sha": merge_sha,
+        "observed_target_sha": observed_target,
+        "post_merge_ci": post_merge,
+        "review_url": live.get("url") or current.review_url,
+        "source_branch": live.get("source_branch") or current.source_branch,
+        "target_branch": live.get("target_branch") or current.target_branch,
+    }
+    identity = hashlib.sha256(
+        json.dumps(
+            material, sort_keys=True, separators=(",", ":"), default=str
+        ).encode()
+    ).hexdigest()
+    generation = current.generation + (identity != current.observation_identity)
+    return {
+        "generation": generation,
+        "observation_identity": identity,
+        "accepted_merge_sha": str(merge_sha) if merge_sha else None,
+        "observed_target_sha": str(observed_target) if observed_target else None,
+        "post_merge_ci": post_merge,
+    }
 
 
 def list_open_reviews(*, root: Path, limit: int | None = None) -> list[OpenReview]:
@@ -1180,7 +1315,7 @@ def _accept_current_review_generation(
         return False
     merge_sha = accepted_identity["merge_sha"]
     source_revision = snapshot.get("source_revision")
-    _update_record(
+    updated = _update_record(
         root,
         feature_id,
         {
@@ -1206,8 +1341,20 @@ def _accept_current_review_generation(
                 else {}
             ),
         },
+        expected_generation=int(record.get("current_generation") or 0),
+        expected_url=record.get("url"),
+        expected_evidence_revision=int(record.get("review_evidence_revision") or 0),
+        expected_identity={
+            field: record.get(field)
+            for field in (
+                "source_branch",
+                "target_branch",
+                "source_head",
+                "target_head",
+            )
+        },
     )
-    return True
+    return updated is not None
 
 
 def _save(root: Path, state: dict[str, dict[str, object]]) -> None:
@@ -1259,6 +1406,7 @@ def _update_record(
     expected_generation: int | None = None,
     expected_url: object = None,
     expected_evidence_revision: int | None = None,
+    expected_identity: Mapping[str, object] | None = None,
 ) -> dict[str, object] | None:
     """Merge one feature's fields into the latest registry without losing peers."""
 
@@ -1280,6 +1428,11 @@ def _update_record(
             expected_evidence_revision is not None
             and int(existing.get("review_evidence_revision") or 0)
             != expected_evidence_revision
+        ):
+            return None
+        if expected_identity is not None and any(
+            existing.get(field) != value
+            for field, value in expected_identity.items()
         ):
             return None
         updated = dict(existing)

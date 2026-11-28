@@ -596,9 +596,22 @@ accepted SHA produce `green`.
 `REQ-REVIEW-EVIDENCE-004`: The review registry normalizes these dimensions to
 bounded rows and text, writes them atomically into the current generation, and
 increments an evidence revision under the registry lock. The generation, URL,
-route and source fence rejects duplicate concurrent or late historical callbacks;
-advancing a generation clears its compatibility projection without rewriting
-the retained historical row.
+route, source and target-head fence is rechecked under that same lock for the
+final acceptance write. A proof resolved for an older generation or evidence
+revision returns a rejected update instead of closing the current row. Advancing
+a generation clears its compatibility projection without rewriting the retained
+historical row.
+
+`REQ-REVIEW-EVIDENCE-005`: Closeout consumers join, but do not collapse, the
+accepted identity, exact merge-SHA CI, physical-board proof and operator-trunk
+sync receipt. Boss persists their matching observation generation and grants
+verified Epic closure only when the merge and observed target agree across all
+four dimensions. Watchdog keeps accepted red, pending and unavailable work in
+its bounded producer lane. Open work uses its current Feature repair owner;
+closed work retains its accepted lineage and reports the human-approved
+corrective-scope capability gate instead of reopening or enqueueing an action
+that Feature cannot execute. Read-only projections do not gain mutation
+authority from these receipts.
 
 ```mermaid
 flowchart LR
@@ -629,6 +642,9 @@ flowchart TD
     Unknown --> Fence
     Fence -->|yes| Registry[Atomic bounded generation receipt]
     Fence -->|no| Preserve[Preserve newer evidence]
+    Registry --> Closeout{Board proof and trunk sync match target?}
+    Closeout -->|yes| Verified[Persist independently verified closure]
+    Closeout -->|no| Actionable[Retain owner and exact prerequisite]
 ```
 
 Normal evidence flow is exercised by the GitHub and GitLab scripted transport

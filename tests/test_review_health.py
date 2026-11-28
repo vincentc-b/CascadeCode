@@ -646,6 +646,12 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
     import cascade.team_supervision as team_supervision
 
     root, turn = _execution_ready_turn(tmp_path)
+    review_path = root / ".cascade" / "reviews.json"
+    review_rows = json.loads(review_path.read_text())
+    review_rows["feat_035_001"].update(
+        url="https://github.com/example/project/pull/35", number="35", forge="github"
+    )
+    review_path.write_text(json.dumps(review_rows), encoding="utf-8")
     add_doc(
         root,
         id="feat_035_002",
@@ -683,7 +689,7 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
     queue_task_merge("task_035_003_999", root=root)
     material = {
         "run_id": 41,
-        "source_head": "s" * 40,
+        "source_head": turn.observed_source_sha,
         "target_head": turn.observed_target_sha,
     }
 
@@ -694,35 +700,38 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
             "https://github.com/example/project/pull/35",
             "35",
             "github",
-            "feat-x",
-            "main",
+            "feat/feat_035_001",
+            "epic/epic_035",
             False,
         )
         runner = _github_evidence_runner(
             transport_mr,
             policy={"contexts": ["build"]},
-            checks=[{
-                "id": material["run_id"],
-                "name": "build",
-                "head_sha": material["source_head"],
-                "conclusion": "failure",
-                "completed_at": (
-                    f"2026-01-{material['run_id'] - 39:02d}T00:00:00Z"
-                ),
-            }],
+            checks=[
+                {
+                    "id": material["run_id"],
+                    "name": "build",
+                    "head_sha": material["source_head"],
+                    "conclusion": "failure",
+                    "completed_at": (
+                        f"2026-01-{material['run_id'] - 39:02d}T00:00:00Z"
+                    ),
+                }
+            ],
             target_sha=material["target_head"],
         )
 
         def material_runner(
             args: list[str], runner_root: Path
         ) -> subprocess.CompletedProcess[str]:
-            result = runner(args, runner_root)
+            scripted_args = [
+                arg.replace("epic%2Fepic_035", "epic/epic_035") for arg in args
+            ]
+            result = runner(scripted_args, runner_root)
             if args[:3] == ["gh", "pr", "view"] and result.returncode == 0:
                 payload = json.loads(result.stdout)
                 payload["commits"] = [{"oid": material["source_head"]}]
-                return subprocess.CompletedProcess(
-                    args, 0, json.dumps(payload), ""
-                )
+                return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
             return result
 
         return tracking.merge_request_snapshot(
@@ -733,7 +742,9 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
 
     durable_actions: list[dict[str, object]] = []
 
-    def request(_feature_id: str, request_id: str, **kwargs: object) -> dict[str, object]:
+    def request(
+        _feature_id: str, request_id: str, **kwargs: object
+    ) -> dict[str, object]:
         if durable_actions:
             current = durable_actions[0]
             return {
@@ -775,9 +786,10 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
     changed_observation = changed_action["metadata"]["upstream_review_observation"]
     material["source_head"] = "t" * 40
     source_changed = reconcile_open_review_health(root)[0]
-    source_observation = load_action(
-        "task_035_002_999:queued_merge", root=root
-    )["metadata"]["upstream_review_observation"]
+    source_observation = load_action("task_035_002_999:queued_merge", root=root)[
+        "metadata"
+    ]["upstream_review_observation"]
+    material["source_head"] = turn.observed_source_sha
     material["target_head"] = "u" * 40
     target_changed = reconcile_open_review_health(root)[0]
     target_action = load_action("task_035_002_999:queued_merge", root=root)
@@ -787,20 +799,79 @@ def test_scripted_normalized_check_runs_update_downstream_fence_without_redispat
     assert first["outcome"] == "routed"
     assert replay["wait_type"] == "repair_generation_reused"
     assert changed["wait_type"] == "repair_writer_active"
-    assert source_changed["wait_type"] == "repair_writer_active"
+    assert source_changed["wait_type"] == "evidence_unavailable"
     assert target_changed["wait_type"] == "repair_writer_active"
-    assert first_observation["blocker_identity"] == changed_observation["blocker_identity"]
-    assert first_observation["evidence_generation"] != changed_observation[
-        "evidence_generation"
-    ]
-    assert len({
-        changed_observation["evidence_generation"],
-        source_observation["evidence_generation"],
-        target_observation["evidence_generation"],
-    }) == 3
+    assert (
+        first_observation["blocker_identity"] == changed_observation["blocker_identity"]
+    )
+    assert (
+        first_observation["evidence_generation"]
+        != changed_observation["evidence_generation"]
+    )
+    assert source_observation == changed_observation
+    assert (
+        len(
+            {
+                changed_observation["evidence_generation"],
+                target_observation["evidence_generation"],
+            }
+        )
+        == 2
+    )
     assert target_action["attempt_count"] == 0
     assert first_observation["feature_id"] == "feat_035_001"
     assert first_observation["dependent_feature_id"] == "feat_035_002"
     assert first_observation["source_ref"] == "feat/feat_035_001"
     assert first_observation["target_ref"] == "epic/epic_035"
     assert "upstream_review_observation" not in unrelated_action["metadata"]
+
+
+def test_accepted_red_review_reports_human_corrective_scope_without_reopening(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = {
+        "url": "https://github.com/example/project/pull/35",
+        "number": "35",
+        "forge": "github",
+        "source_branch": "feat/feat_035_001",
+        "target_branch": "epic/epic_035",
+        "closed": True,
+        "accepted_merge_sha": "a" * 40,
+    }
+    snapshot = {
+        "state": "merged",
+        "accepted_merge_identity": {
+            "available": True,
+            "merge_sha": "a" * 40,
+            "observed_target_head": "b" * 40,
+        },
+        "post_merge_ci": {
+            "state": "red",
+            "merge_sha": "a" * 40,
+            "observed_target_sha": "b" * 40,
+            "checks": ["boot"],
+        },
+    }
+    monkeypatch.setattr(
+        review_health, "merge_request_snapshot", lambda *_a, **_k: snapshot
+    )
+    monkeypatch.setattr(
+        review_health, "record_feature_review_evidence", lambda *_a, **_k: True
+    )
+    monkeypatch.setattr(
+        review_health,
+        "_reconcile_completed_review",
+        lambda *_a, **_k: pytest.fail("red accepted work must not be retired"),
+    )
+
+    result = review_health._reconcile_accepted_review_health(
+        "feat_035_001", tmp_path, record, forge="github", owner=None
+    )
+
+    assert result["outcome"] == "waiting"
+    assert result["wait_type"] == "approval_required"
+    assert (
+        result["prerequisite"]
+        == "authorize_supported_corrective_scope_on_current_target"
+    )
+    assert result["original_lineage_preserved"] is True
