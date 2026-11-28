@@ -2112,6 +2112,15 @@ code_workspace_mutation_owner = element "resolve_mutation_owner" "Function" "Pro
     }
 }
 
+code_workspace_history_repair = element "preview_terminal_history_repair" "Function" "Resolve canonical owner paths for rejected history records without mutating or selecting a physical copy." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.history-repair"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "preview_terminal_history_repair"
+    }
+}
+
 code_workspace_doc_owner = element "doc_filesystem_root" "Function" "Route mutation callers through exact owner resolution." {
     properties {
         "cascade.semanticId" "element.code.workspace.doc-owner"
@@ -5159,6 +5168,24 @@ code_teams_board_scan = element "validate_publication_board" "Function" "Delegat
     }
 }
 
+code_teams_history_proof = element "prove_accepted_terminal_history" "Function" "Compare a freshly scanned exact candidate with pinned accepted records and refuse terminal, cancellation, feedback, split-root, or target drift." {
+    properties {
+        "cascade.semanticId" "element.code.teams.history-proof"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "prove_accepted_terminal_history"
+    }
+}
+
+code_teams_history_refusal = element "TerminalHistoryRefusal" "Dataclass" "Carry affected IDs and paths, exact revisions, canonical owners, reason, and supported repair prerequisite." {
+    properties {
+        "cascade.semanticId" "element.code.teams.history-refusal"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "TerminalHistoryRefusal"
+    }
+}
+
 code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry and matching Epic document in a detached fetched trunk checkout." {
     properties {
         "cascade.semanticId" "element.code.boss.merged-epic"
@@ -5195,6 +5222,24 @@ code_teams_publish_to_board_scan = code_teams_candidate_validate -> code_teams_b
 code_teams_scan_to_parse = code_teams_board_scan -> code_board_physical_scan "Requests an exhaustive read-only scan of the supplied candidate root" {
     properties {
         "cascade.semanticId" "relationship.code.teams.scan-parse"
+    }
+}
+
+code_teams_history_to_scan = code_teams_history_proof -> code_teams_board_scan "Rescans candidate and pinned accepted inventories for every proof attempt" {
+    properties {
+        "cascade.semanticId" "relationship.code.teams.history-scan"
+    }
+}
+
+code_teams_history_to_refusal = code_teams_history_proof -> code_teams_history_refusal "Returns exact evidence and repair prerequisites on refusal" {
+    properties {
+        "cascade.semanticId" "relationship.code.teams.history-refusal"
+    }
+}
+
+code_workspace_history_to_owner = code_workspace_history_repair -> code_workspace_mutation_owner "Previews repairs only through the canonical lifecycle owner" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.history-owner"
     }
 }
 

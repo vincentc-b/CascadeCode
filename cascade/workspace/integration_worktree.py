@@ -69,6 +69,15 @@ class TerminalRetirementProof:
     persisted_descendants: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class HistoryRepairPreview:
+    """Read-only routing for repairing one rejected history record."""
+
+    work_id: str
+    owner: Path
+    prerequisite: str
+
+
 def integration_branch(kind: IntegrationKind, work_id: str) -> str:
     prefix = _KIND_DIR[kind]
     return f"{prefix}/{work_id}"
@@ -1468,6 +1477,30 @@ def resolve_mutation_owner(
             "restore the document in that checkout or repair the exact registry identity",
         )
     return owner
+
+
+def preview_terminal_history_repair(
+    work_ids: tuple[str, ...], *, trunk: Path
+) -> tuple[HistoryRepairPreview, ...]:
+    """Resolve canonical owners without changing a rejected candidate.
+
+    History validation deliberately cannot delete, move, or choose a physical
+    copy.  This preview gives callers the only supported repair route; a
+    repaired candidate must be scanned and compared again independently.
+    """
+
+    previews: list[HistoryRepairPreview] = []
+    for work_id in dict.fromkeys(work_ids):
+        owner = resolve_mutation_owner(work_id, trunk=trunk)
+        previews.append(
+            HistoryRepairPreview(
+                work_id,
+                owner,
+                f"repair {work_id} through canonical owner {owner}, then materialize "
+                "and validate a new exact candidate",
+            )
+        )
+    return tuple(previews)
 
 
 def _exact_owner_entry(

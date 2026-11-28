@@ -35,6 +35,7 @@ from cascade.workspace.integration_worktree import (
     merged_board,
     repair_missing_worktree,
     prove_terminal_retirement,
+    preview_terminal_history_repair,
     resolve_mutation_owner,
     retire_integration_worktree,
     retire_terminal_registered_worktrees,
@@ -120,6 +121,21 @@ def test_mutation_owner_ignores_completed_copy_in_sibling_worktree(tmp_path: Pat
     move_doc("task_001", "active", root=root)
     assert read_doc_in_worktree("task_001", owner.path).meta.status == "active"
     assert read_doc_in_worktree("task_001", sibling.path).meta.status == "completed"
+
+
+def test_terminal_history_repair_preview_is_read_only_and_owner_scoped(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    doc = add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    before = doc.meta.path.read_bytes()
+
+    preview = preview_terminal_history_repair(("epic_001",), trunk=root)
+
+    assert preview[0].work_id == "epic_001"
+    assert preview[0].owner == root.resolve()
+    assert "validate a new exact candidate" in preview[0].prerequisite
+    assert doc.meta.path.read_bytes() == before
 
 
 def test_mutation_owner_rejects_changed_registry_identity(tmp_path: Path) -> None:

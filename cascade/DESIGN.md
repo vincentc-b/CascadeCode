@@ -140,6 +140,13 @@ Board's exhaustive scanner reports malformed files, symlinks, duplicate IDs,
 tier/filename/status/column mismatches and invalid immediate-parent identity with
 exact paths. Duplicate backlog/completed copies are rejected without choosing or
 deleting one.
+`review_validation.prove_accepted_terminal_history` independently scans that
+candidate and one full pinned accepted revision. It requires every accepted work
+ID and declared child to remain present, prevents completed or cancelled records
+from reopening, and preserves cancellation reason, timestamp, cleanup outcome,
+and exact parent feedback/disposition. Valid lifecycle path and frontmatter
+transitions, including managed Epic activation pointers, do not require byte
+equality. Unrelated accepted specifications remain retained.
 This check establishes document consistency, not full Epic acceptance. It
 runs against an owned exact-pair candidate; it is not a universal
 precondition on every forge merge of a changed target. Successful source
@@ -184,6 +191,16 @@ resolved decisions from previous attempts cannot strand the action. Existing sou
 lease, remote-target revalidation, authorization and approval gates remain in force.
 The supervisor may report publication completed only from actual publication or
 verified reconciliation evidence, never merely from an enqueued investigation.
+
+`REQ-REVIEW-PUBLISH-003`: Terminal-history evidence binds the exact candidate
+source, target, result commit/tree and the pinned accepted revision. An optional
+target-ref observation is checked before and after comparison; movement refuses
+the proof and requires a fresh candidate. Split product/tracking sessions require
+the physical candidate tracking root rather than inferred projection data.
+Refusals carry every affected ID, accepted/candidate paths, exact revisions,
+canonical owners when resolvable, and the owner-scoped repair prerequisite.
+Validation performs no repair, and a repaired result is rescanned and reproved
+independently.
 
 Validation: `tests/test_review_publication_safeguards.py`,
 `tests/test_review_rebase.py`, and `tests/task/test_action_recovery.py` cover invalid
@@ -284,6 +301,7 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
 | [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
 | [validate_publication_board](review_validation.py) | Request Board's exhaustive read-only identity scan for the exact publication checkout before validation. Board owns physical schema and hierarchy invariants; Teams owns this publication gate. |
+| [prove_accepted_terminal_history / TerminalHistoryRefusal](review_validation.py) | Compare fresh candidate and pinned accepted physical inventories, preserve terminal/cancellation history, bind exact revisions, and return owner-routed refusal evidence. |
 
 The `cascade-teams-code` node `element.code.teams.board-scan` links this gate
 to Board's `element.code.board.physical-scan`, whose `cascade-board-code` path

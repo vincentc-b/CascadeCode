@@ -366,6 +366,14 @@ backlog snapshots and historical copies.
 projections. Lifecycle mutation uses `resolve_mutation_owner`, not column rank or
 generic worktree-path bonuses.
 
+`REQ-WORKSPACE-HISTORY-001`: A rejected terminal-history comparison names the
+canonical mutation owner for every affected work ID before it offers a repair.
+[`preview_terminal_history_repair`](integration_worktree.py) is read-only: it
+delegates to `resolve_mutation_owner`, returns owner paths and the prerequisite
+to materialize and validate a new exact candidate, and never deletes, moves, or
+selects a physical record. Missing split-root, registry, branch, or lineage
+evidence remains unavailable. A projection-ranked copy cannot supply authority.
+
 `REQ-WORKSPACE-RETIRE-001`: Retirement preserves a branch and refuses a
 noncanonical, dirty, locked or currently occupied checkout. Merge ancestry or an
 explicit forge merge confirmation gates removal. Before removal, Workspace walks
@@ -397,6 +405,7 @@ their own design artifact and owner rather than inheriting the package document.
 |---|---|
 | [resolve_doc_worktree](doc_root.py) | Work ID and board → registered checkout; Tasks follow their Feature parent. Missing work raises `NotFound`. |
 | [resolve_mutation_owner / doc_filesystem_root](integration_worktree.py) | Work identity, parent lineage, repository role, registry path and branch → one writable owner or actionable `MutationOwnerError`. |
+| [preview_terminal_history_repair](integration_worktree.py) | Rejected work IDs → canonical owner paths and a new-candidate prerequisite; performs no mutation and grants no approval. |
 | [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
 | [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
 | [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, shared Feature delivery phase, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |
@@ -406,6 +415,8 @@ their own design artifact and owner rather than inheriting the package document.
 ```mermaid
 flowchart TD
     ID[Work ID + tier + parent] --> Owner[Exact mutation-owner resolver]
+    History[Rejected pinned history proof] --> Preview[Read-only repair preview]
+    Preview --> Owner
     Owner --> Registry[Canonical tracking role + registered path and branch]
     ID --> Projection[Merged board read projection]
     Registry --> Delivery{Shared Feature delivery terminal?}
@@ -426,6 +437,28 @@ holds lifecycle state. Delivery actions and reviews remain the existing provenan
 stores; the retirement proof derives from them and does not persist another state
 machine. Restart reconstructs the board from surviving roots and repeats canonical
 readback, so a commit made before interruption is reused.
+
+```mermaid
+sequenceDiagram
+    participant Caller as Publication or admission caller
+    participant History as Terminal-history proof
+    participant Board as Physical board scanner
+    participant Owner as Mutation-owner resolver
+    Caller->>History: Exact candidate + pinned accepted revision
+    History->>Board: Scan candidate and accepted checkouts independently
+    alt retained terminal and cancellation history matches
+        History-->>Caller: Revision-bound proof fingerprint
+    else split-root or owner evidence unavailable
+        History-->>Caller: evidence_unavailable with IDs, paths and revisions
+        Caller->>Owner: Preview each affected canonical repair path
+        Owner-->>Caller: Owner prerequisite or ownership refusal
+    else history mismatch
+        History->>Owner: Preview canonical owner paths
+        History-->>Caller: Typed refusal; preserve both trees
+    end
+    Note over Caller,History: Target movement or any repair requires a newly materialized candidate and a fresh proof
+```
+
 Registry cleanup follows successful worktree removal; missing-path cleanup checks
 Git's worktree registration. This is repository ownership enforcement, not an OS
 sandbox.

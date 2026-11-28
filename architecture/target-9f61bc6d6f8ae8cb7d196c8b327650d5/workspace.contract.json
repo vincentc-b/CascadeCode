@@ -1,6 +1,8 @@
 {
   "elements": [
     {"dsl_identifier": "code_teams_board_scan", "semantic_id": "element.code.teams.board-scan", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_teams_history_proof", "semantic_id": "element.code.teams.history-proof", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_teams_history_refusal", "semantic_id": "element.code.teams.history-refusal", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_candidate_materialize", "semantic_id": "element.code.teams.candidate-materialize", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_candidate", "semantic_id": "element.code.teams.candidate", "fragment": "model.dsl"},
     {"dsl_identifier": "code_teams_candidate_refusal", "semantic_id": "element.code.teams.candidate-refusal", "fragment": "model.dsl"},
@@ -255,6 +257,7 @@
     {"dsl_identifier": "code_boss_retry", "semantic_id": "element.code.boss.retry", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_resolve", "semantic_id": "element.code.workspace.resolve", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_mutation_owner", "semantic_id": "element.code.workspace.mutation-owner", "fragment": "model.dsl"},
+    {"dsl_identifier": "code_workspace_history_repair", "semantic_id": "element.code.workspace.history-repair", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_doc_owner", "semantic_id": "element.code.workspace.doc-owner", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_board", "semantic_id": "element.code.workspace.board", "fragment": "model.dsl"},
     {"dsl_identifier": "code_workspace_select", "semantic_id": "element.code.workspace.select", "fragment": "model.dsl"},
@@ -328,6 +331,9 @@
   "relationships": [
     {"dsl_identifier": "code_teams_publish_to_board_scan", "semantic_id": "relationship.code.teams.publish-board-scan", "fragment": "model.dsl", "source": "code_teams_candidate_validate", "destination": "code_teams_board_scan"},
     {"dsl_identifier": "code_teams_scan_to_parse", "semantic_id": "relationship.code.teams.scan-parse", "fragment": "model.dsl", "source": "code_teams_board_scan", "destination": "code_board_physical_scan"},
+    {"dsl_identifier": "code_teams_history_to_scan", "semantic_id": "relationship.code.teams.history-scan", "fragment": "model.dsl", "source": "code_teams_history_proof", "destination": "code_teams_board_scan"},
+    {"dsl_identifier": "code_teams_history_to_refusal", "semantic_id": "relationship.code.teams.history-refusal", "fragment": "model.dsl", "source": "code_teams_history_proof", "destination": "code_teams_history_refusal"},
+    {"dsl_identifier": "code_workspace_history_to_owner", "semantic_id": "relationship.code.workspace.history-owner", "fragment": "model.dsl", "source": "code_workspace_history_repair", "destination": "code_workspace_mutation_owner"},
     {"dsl_identifier": "code_boss_epic_to_landed", "semantic_id": "relationship.code.boss.epic-landed", "fragment": "model.dsl", "source": "code_boss_epic", "destination": "code_boss_merged_epic"},
     {"dsl_identifier": "code_boss_landed_to_workspace", "semantic_id": "relationship.code.boss.landed-workspace", "fragment": "model.dsl", "source": "code_boss_merged_epic", "destination": "code_workspace_verified_trunk"},
     {"dsl_identifier": "rel_http_approval", "semantic_id": "relationship.http-approval", "fragment": "model.dsl", "source": "war_room_http", "destination": "approval_component"},
