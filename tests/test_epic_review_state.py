@@ -173,7 +173,17 @@ def test_board_and_doc_serialize_the_same_epic_review_state(
 
     board_state = board["epics"]["1_backlog"][0]["implementation_review"]
     assert board_state == doc["meta"]["implementation_review"]
-    assert board_state == {
+    assert {
+        key: board_state[key]
+        for key in (
+            "close_stage",
+            "review_url",
+            "source_branch",
+            "target_branch",
+            "forge_state",
+            "blocker",
+        )
+    } == {
         "close_stage": snapshot.stage,
         "review_url": snapshot.review_url,
         "source_branch": snapshot.source_branch,
@@ -189,6 +199,8 @@ def test_board_and_doc_serialize_the_same_epic_review_state(
             else None
         ),
     }
+    assert board_state["delivery"]["generation"] == snapshot.generation
+    assert board_state["delivery"]["verified_closure"]["verified"] is False
 
 
 @pytest.mark.parametrize("stage", ["implementation_review_pending", "blocked"])

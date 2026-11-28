@@ -680,6 +680,160 @@ def test_open_reviews_read_does_not_mutate_or_invoke_forge_or_provider(
     assert action_path.read_text(encoding="utf-8") == action_before
 
 
+def test_board_projects_exact_post_merge_delivery_and_verified_epic_closure(
+    war_room_server,
+):
+    base, root = war_room_server
+    reviews = _representative_registry()
+    reviews["feat_001"].update(
+        current_generation=7,
+        prospective_result={
+            "state": "green",
+            "source_sha": "1" * 40,
+            "observed_target_sha": "2" * 40,
+        },
+        exact_candidate_proof={
+            "fingerprint": "f" * 64,
+            "identity": {
+                "candidate": {
+                    "source_sha": "1" * 40,
+                    "target_sha": "2" * 40,
+                    "result_commit": "5" * 40,
+                    "result_tree": "6" * 40,
+                }
+            },
+        },
+        accepted_merge_identity={
+            "available": True,
+            "merge_sha": "3" * 40,
+            "observed_target_head": "4" * 40,
+            "review_generation": 7,
+        },
+        post_merge_ci={
+            "state": "green",
+            "merge_sha": "3" * 40,
+            "observed_target_sha": "4" * 40,
+        },
+        observed_target_sha="4" * 40,
+    )
+    reviews["epic_001"] = {
+        "kind": "epic_close",
+        "stage": "implementation_review_pending",
+        "review_url": "https://github.example/o/r/pull/99",
+        "source_branch": "epic/epic_001",
+        "target_branch": "main",
+        "forge_state": "merged",
+        "current_generation": 9,
+        "accepted_merge_sha": "a" * 40,
+        "observed_target_sha": "b" * 40,
+        "post_merge_ci": {
+            "state": "green",
+            "merge_sha": "a" * 40,
+            "observed_target_sha": "b" * 40,
+        },
+        "board_fingerprint": "board-proof",
+        "sync_receipt": {
+            "ok": True,
+            "local_sha": "b" * 40,
+            "remote_sha": "b" * 40,
+            "sync_result": "fast_forwarded",
+        },
+        "verified_closure": True,
+    }
+    _write_reviews(root, reviews)
+
+    _status, payload = _get_json(f"{base}/api/board")
+    feature = next(
+        row
+        for rows in payload["features"].values()
+        for row in rows
+        if row["id"] == "feat_001"
+    )
+    feature_delivery = feature["review"]["post_merge_delivery"]
+    assert feature_delivery["prospective_validation"]["source_sha"] == "1" * 40
+    assert feature_delivery["prospective_validation"]["result_sha"] == "5" * 40
+    assert feature_delivery["prospective_validation"]["result_tree"] == "6" * 40
+    assert feature_delivery["accepted_merge"]["merge_sha"] == "3" * 40
+    assert feature_delivery["merge_ci"]["state"] == "green"
+    assert feature_delivery["repair"]["owner"] == "feature_team:feat_001"
+    assert feature["review"]["url"] == "https://github.example/o/r/pull/1"
+
+    epic = next(
+        row
+        for rows in payload["epics"].values()
+        for row in rows
+        if row["id"] == "epic_001"
+    )
+    epic_delivery = epic["implementation_review"]["delivery"]
+    assert epic_delivery["accepted_merge"]["merge_sha"] == "a" * 40
+    assert epic_delivery["merge_ci"]["state"] == "green"
+    assert epic_delivery["trunk_sync"] == {
+        "state": "succeeded",
+        "local_sha": "b" * 40,
+        "remote_sha": "b" * 40,
+        "result": "fast_forwarded",
+        "reason": None,
+    }
+    assert epic_delivery["physical_board"]["state"] == "verified"
+    assert epic_delivery["verified_closure"] == {
+        "state": "verified",
+        "verified": True,
+    }
+
+
+def test_post_merge_projection_fails_closed_for_stale_and_oversized_evidence(
+    war_room_server,
+):
+    base, root = war_room_server
+    reviews = _representative_registry()
+    reviews["feat_001"].update(
+        current_generation=8,
+        accepted_merge_identity={
+            "merge_sha": "3" * 40,
+            "observed_target_head": "4" * 40,
+            "review_generation": 7,
+        },
+        post_merge_ci={
+            "state": "green",
+            "merge_sha": "3" * 40,
+            "observed_target_sha": "4" * 40,
+        },
+    )
+    reviews["feat_004"].update(
+        current_generation=2,
+        accepted_merge_identity={
+            "merge_sha": "x" * 81,
+            "observed_target_head": "4" * 40,
+            "review_generation": 2,
+        },
+        post_merge_ci={
+            "state": "green",
+            "merge_sha": "x" * 81,
+            "observed_target_sha": "4" * 40,
+        },
+    )
+    _write_reviews(root, reviews)
+
+    _status, payload = _get_json(f"{base}/api/open-reviews")
+    rows = {row["id"]: row for row in payload["reviews"]}
+    stale = rows["feat_001"]["post_merge_delivery"]
+    assert stale["freshness"] == "stale"
+    assert stale["accepted_merge"]["state"] == "stale"
+    assert stale["verified_closure"]["verified"] is False
+    assert stale["next_prerequisite"] == "refresh_review_observation"
+
+    malformed = rows["feat_004"]["post_merge_delivery"]
+    assert malformed["freshness"] == "unavailable"
+    assert malformed["merge_ci"] == {
+        "state": "unavailable",
+        "reason": "delivery_evidence_out_of_bounds",
+        "merge_sha": None,
+        "observed_target_sha": None,
+    }
+    assert malformed["verified_closure"]["verified"] is False
+    assert malformed["next_prerequisite"] == "refresh_review_observation"
+
+
 def test_open_reviews_returns_empty_list_when_registry_has_no_open_rows(tmp_path):
     root = make_repo(tmp_path, git=False)
     closed_only = {

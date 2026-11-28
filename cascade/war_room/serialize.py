@@ -14,6 +14,8 @@ Dates are ISO-8601 strings; paths are repo-relative or absolute posix strings.
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -900,25 +902,246 @@ def open_review_to_dict(review: OpenReview) -> dict[str, Any]:
 
 
 def epic_review_snapshot_to_dict(snapshot: EpicReviewSnapshot) -> dict[str, Any]:
-    """Serialize the canonical epic implementation-review state unchanged."""
+    """Serialize bounded persisted Epic delivery evidence without live observation."""
 
     blocker = snapshot.blocker
+    post_merge = snapshot.post_merge_ci
+    sync = snapshot.sync_receipt
+    identity_values = (
+        snapshot.accepted_merge_sha,
+        snapshot.observed_target_sha,
+        post_merge.get("merge_sha") if isinstance(post_merge, dict) else None,
+        post_merge.get("observed_target_sha") if isinstance(post_merge, dict) else None,
+        sync.get("local_sha") if isinstance(sync, dict) else None,
+        sync.get("remote_sha") if isinstance(sync, dict) else None,
+    )
+    malformed = (
+        not isinstance(post_merge, dict)
+        or not isinstance(sync, dict)
+        or any(
+            value is not None
+            and (
+                not isinstance(value, str)
+                or not value
+                or "\n" in value
+                or "\r" in value
+                or len(value.encode("utf-8")) > 80
+                or re.fullmatch(r"[0-9a-f]{40}", value) is None
+            )
+            for value in identity_values
+        )
+        or (
+            snapshot.board_fingerprint is not None
+            and len(snapshot.board_fingerprint.encode("utf-8")) > 160
+        )
+        or (
+            snapshot.review_url is not None
+            and _exact_delivery_text(snapshot.review_url, 2048) is None
+        )
+        or any(
+            branch is not None and _exact_delivery_text(branch, 256) is None
+            for branch in (snapshot.source_branch, snapshot.target_branch)
+        )
+    )
+    accepted_sha = _bounded_delivery_text(snapshot.accepted_merge_sha, 80)
+    observed_target = _bounded_delivery_text(snapshot.observed_target_sha, 80)
+    ci_state = _bounded_delivery_text(post_merge.get("state"), 40) if not malformed else None
+    ci_merge = _bounded_delivery_text(post_merge.get("merge_sha"), 80) if not malformed else None
+    local_sha = _bounded_delivery_text(sync.get("local_sha"), 80) if not malformed else None
+    remote_sha = _bounded_delivery_text(sync.get("remote_sha"), 80) if not malformed else None
+    sync_result = _bounded_delivery_text(sync.get("sync_result"), 80) if not malformed else None
+    stale = bool(
+        not malformed
+        and (
+            (accepted_sha and ci_merge and accepted_sha != ci_merge)
+            or (observed_target and remote_sha and observed_target != remote_sha)
+        )
+    )
+    delivery_unavailable = malformed or _delivery_payload_too_large(
+        {
+            "post_merge_ci": post_merge,
+            "sync_receipt": sync,
+            "board_fingerprint": snapshot.board_fingerprint,
+            "review_url": snapshot.review_url,
+            "source_branch": snapshot.source_branch,
+            "target_branch": snapshot.target_branch,
+            "blocker": (
+                {
+                    "code": blocker.code,
+                    "message": blocker.message,
+                    "owner": blocker.owner,
+                    "prerequisite": blocker.prerequisite,
+                }
+                if blocker is not None
+                else None
+            ),
+        }
+    )
+    if delivery_unavailable:
+        stale = False
+        ci_state = "unavailable"
+        ci_merge = None
+        local_sha = None
+        remote_sha = None
+        sync_result = None
+    elif stale:
+        ci_state = "stale"
+    elif not ci_state:
+        ci_state = "unavailable"
+
+    prerequisite = (
+        "refresh_persisted_delivery_observation"
+        if delivery_unavailable or stale
+        else blocker.prerequisite
+        if blocker is not None and blocker.prerequisite
+        else "authorize_supported_corrective_scope_on_current_target"
+        if ci_state == "red"
+        else None
+        if snapshot.verified_closure
+        else "finish_independent_delivery_verification"
+    )
+    owner = (
+        _bounded_delivery_text(blocker.owner, 160)
+        if blocker is not None
+        else "boss"
+    ) or "boss"
+    closure_state = (
+        "unavailable"
+        if delivery_unavailable
+        else "stale"
+        if stale
+        else "verified"
+        if snapshot.verified_closure
+        else "pending"
+    )
+    delivery = {
+        "generation": snapshot.generation,
+        "freshness": "unavailable" if delivery_unavailable else "stale" if stale else "current",
+        "prospective_validation": {
+            "state": "unavailable",
+            "source_sha": None,
+            "target_sha": None,
+            "result_sha": None,
+            "result_tree": None,
+        },
+        "accepted_merge": {
+            "state": "stale" if stale else "accepted" if accepted_sha else "pending",
+            "merge_sha": None if delivery_unavailable else accepted_sha,
+            "observed_target_sha": None if delivery_unavailable else observed_target,
+        },
+        "merge_ci": {
+            "state": ci_state,
+            "reason": (
+                "delivery_evidence_out_of_bounds"
+                if delivery_unavailable
+                else _bounded_delivery_text(post_merge.get("reason"), 160)
+            ),
+            "merge_sha": ci_merge,
+            "observed_target_sha": (
+                None
+                if delivery_unavailable
+                else _bounded_delivery_text(post_merge.get("observed_target_sha"), 80)
+            ),
+        },
+        "trunk_sync": {
+            "state": (
+                "unavailable"
+                if delivery_unavailable
+                else "stale"
+                if stale
+                else "succeeded"
+                if sync.get("ok") is True
+                else "failed"
+                if sync
+                else "pending"
+            ),
+            "local_sha": local_sha,
+            "remote_sha": remote_sha,
+            "result": sync_result,
+            "reason": (
+                None
+                if delivery_unavailable
+                else _bounded_delivery_text(sync.get("reason"), 160)
+            ),
+        },
+        "physical_board": {
+            "state": (
+                "unavailable"
+                if delivery_unavailable
+                else "verified"
+                if snapshot.board_fingerprint
+                else "pending"
+            ),
+            "fingerprint": (
+                None
+                if delivery_unavailable
+                else _bounded_delivery_text(snapshot.board_fingerprint, 160)
+            ),
+        },
+        "repair": {"owner": owner, "prerequisite": prerequisite},
+        "verified_closure": {
+            "state": closure_state,
+            "verified": closure_state == "verified",
+        },
+        "next_prerequisite": prerequisite,
+    }
     return {
         "close_stage": snapshot.stage,
-        "review_url": snapshot.review_url,
-        "source_branch": snapshot.source_branch,
-        "target_branch": snapshot.target_branch,
+        "review_url": _exact_delivery_text(snapshot.review_url, 2048),
+        "source_branch": _exact_delivery_text(snapshot.source_branch, 256),
+        "target_branch": _exact_delivery_text(snapshot.target_branch, 256),
         "forge_state": snapshot.forge_state,
         "blocker": (
             {
-                "code": blocker.code,
-                "message": blocker.message,
+                "code": _bounded_delivery_text(blocker.code, 80),
+                "message": _bounded_delivery_text(blocker.message, 500),
                 "retryable": blocker.retryable,
+                **(
+                    {"owner": _bounded_delivery_text(blocker.owner, 160)}
+                    if blocker.owner is not None
+                    else {}
+                ),
+                **(
+                    {
+                        "prerequisite": _bounded_delivery_text(
+                            blocker.prerequisite, 160
+                        )
+                    }
+                    if blocker.prerequisite is not None
+                    else {}
+                ),
             }
             if blocker is not None
             else None
         ),
+        "delivery": delivery,
     }
+
+
+def _bounded_delivery_text(value: object, limit: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = " ".join(value.split())
+    return value[:limit] if value else None
+
+
+def _exact_delivery_text(value: object, limit: int) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    if "\n" in value or "\r" in value or len(value.encode("utf-8")) > limit:
+        return None
+    return value
+
+
+def _delivery_payload_too_large(value: object) -> bool:
+    try:
+        return len(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        ) > 32 * 1024
+    except (TypeError, ValueError, UnicodeError):
+        return True
 
 
 def board_view_from_index(board, *, root: Path) -> dict:

@@ -2180,6 +2180,13 @@
     const evidence = review.evidence || {};
     const ci = evidence.ci || {};
     const feedback = evidence.feedback || {};
+    const postMerge = review.post_merge_delivery || {};
+    const prospective = postMerge.prospective_validation || {};
+    const accepted = postMerge.accepted_merge || {};
+    const mergeCi = postMerge.merge_ci || {};
+    const sync = postMerge.trunk_sync || {};
+    const physicalBoard = postMerge.physical_board || {};
+    const closure = postMerge.verified_closure || {};
     const details = document.createElement("div");
     details.className = compact ? "feature-review-accountability feature-review-accountability-compact" :
       "feature-review-accountability";
@@ -2191,6 +2198,14 @@
         " · policy: " + (ci.policy_status || "unknown") +
         " · feedback: " + (feedback.approval_state || feedback.status || "unknown") +
         " · freshness: " + (evidence.freshness || "unknown"),
+      "Prospective: " + (prospective.state || "unavailable") +
+        " · Accepted: " + (accepted.merge_sha || accepted.state || "pending") +
+        " · Merge CI: " + (mergeCi.state || "unavailable"),
+      "Trunk: " + (sync.state || "unavailable") +
+        " · local: " + (sync.local_sha || "unavailable") +
+        " · remote: " + (sync.remote_sha || "unavailable") +
+        " · Board: " + (physicalBoard.state || "unavailable") +
+        " · Closure: " + (closure.state || "pending"),
       "Repair generation: " + String(repair.generation || 0) +
         " · " + (repair.verified ? "verified" : repair.executing ? "executing" :
           repair.admitted ? "admitted" : repair.refused ? "refused" :

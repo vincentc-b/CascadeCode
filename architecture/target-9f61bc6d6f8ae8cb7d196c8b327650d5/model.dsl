@@ -1638,6 +1638,15 @@ code_http_review_repair = element "handle_post_review_repair" "Function" "Authen
     }
 }
 
+code_http_review_get = element "GET /api/open-reviews" "Function" "Returns a row-capped read-only projection of persisted review and post-merge delivery evidence." {
+    properties {
+        "cascade.semanticId" "element.code.http.review-get"
+        "cascade.parent" "element.component.war-room-http"
+        "cascade.sourcePath" "cascade/war_room/review_routes.py"
+        "cascade.sourceSymbol" "handle_get_open_reviews"
+    }
+}
+
 http_serve_to_handler = code_http_serve -> code_http_handler "Installs" {
     properties {
         "cascade.semanticId" "relationship.code-http-serve-to-handler"
@@ -1775,6 +1784,33 @@ code_dashboard_review_projection = element "feature_review_views" "Function" "Bu
     }
 }
 
+code_dashboard_delivery_projection = element "_post_merge_delivery_projection" "Function" "Projects bounded prospective, accepted-merge and exact merge-CI generations; stale or malformed persisted evidence fails closed without Git, forge, provider or lifecycle work." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.delivery-projection"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/review.py"
+        "cascade.sourceSymbol" "_post_merge_delivery_projection"
+    }
+}
+
+code_dashboard_epic_delivery_projection = element "epic_review_snapshot_to_dict" "Function" "Projects persisted Epic merge CI, local and remote trunk heads, sync result, physical-board proof, repair prerequisite and verified closure within a finite payload bound." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.epic-delivery-projection"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/serialize.py"
+        "cascade.sourceSymbol" "epic_review_snapshot_to_dict"
+    }
+}
+
+code_dashboard_epic_delivery_ui = element "append" "Function" "Renders exact accepted revision and independent merge-CI, trunk, board and closure states using text-only DOM nodes." {
+    properties {
+        "cascade.semanticId" "element.code.dashboard.epic-delivery-ui"
+        "cascade.parent" "element.component.dashboard"
+        "cascade.sourcePath" "cascade/war_room/static/epic_close_review_ui.js"
+        "cascade.sourceSymbol" "append"
+    }
+}
+
 code_dashboard_review_ui = element "createOpenReviewsPane" "Function" "Renders accountable review state, submits only an explicit repair POST, preserves typed action results, and uses GET for refreshes." {
     properties {
         "cascade.semanticId" "element.code.dashboard.review-ui"
@@ -1874,6 +1910,24 @@ dashboard_router_to_open_reviews = code_dashboard_router -> code_dashboard_open_
 dashboard_open_reviews_to_review_projection = code_dashboard_open_reviews -> code_dashboard_review_projection "Requests the shared accountable review projection" {
     properties {
         "cascade.semanticId" "relationship.code-dashboard-open-reviews-to-review-projection"
+    }
+}
+
+http_review_get_to_delivery_projection = code_http_review_get -> code_dashboard_delivery_projection "Reads only the bounded persisted projection" {
+    properties {
+        "cascade.semanticId" "relationship.code-http-review-get-to-delivery-projection"
+    }
+}
+
+dashboard_review_projection_to_delivery_projection = code_dashboard_review_projection -> code_dashboard_delivery_projection "Adds independent post-merge dimensions" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-review-projection-to-delivery-projection"
+    }
+}
+
+dashboard_epic_projection_to_ui = code_dashboard_epic_delivery_projection -> code_dashboard_epic_delivery_ui "Supplies bounded delivery states" {
+    properties {
+        "cascade.semanticId" "relationship.code-dashboard-epic-projection-to-ui"
     }
 }
 
@@ -4772,7 +4826,7 @@ code_watchdog_review_evidence_health = element "_review_health" "Function" "Clas
     }
 }
 
-code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Atomically persist bounded prospective, accepted-identity, post-merge CI and observed-target facts in the fenced current review generation." {
+code_watchdog_review_evidence_record = element "record_feature_review_evidence" "Function" "Atomically persists bounded prospective, accepted-identity, post-merge CI and observed-target facts in the fenced current review generation; unchanged evidence remains producer-deduplicated and passive GET consumers cannot invoke it." {
     properties {
         "cascade.semanticId" "element.code.watchdog.review-evidence-record"
         "cascade.parent" "element.component.watchdog"

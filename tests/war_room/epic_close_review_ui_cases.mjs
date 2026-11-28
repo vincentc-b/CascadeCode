@@ -45,6 +45,13 @@ function render(review) {
     close_stage: "implementation_review_pending",
     review_url: "https://forge.example/pull/17",
     forge_state: "<img src=x onerror=alert(1)>",
+    delivery: {
+      accepted_merge: { merge_sha: "a".repeat(40) },
+      merge_ci: { state: "green" },
+      trunk_sync: { state: "succeeded", local_sha: "b".repeat(40), remote_sha: "b".repeat(40) },
+      physical_board: { state: "verified" },
+      verified_closure: { state: "verified" },
+    },
   });
   assert.equal(result.row.children[0].textContent, "Implementation review pending");
   assert.equal(result.row.children[0].attributes["aria-label"],
@@ -53,6 +60,8 @@ function render(review) {
   assert.equal(result.actions.children[0].href, "https://forge.example/pull/17");
   assert.equal(result.actions.children[0].target, "_blank");
   assert.match(result.actions.children[0].rel, /noopener/);
+  assert.match(result.row.children[1].textContent, /Merge CI: green/);
+  assert.match(result.row.children[1].textContent, /Closure: verified/);
   assert.equal(result.row.innerHTML, undefined);
 }
 
@@ -62,9 +71,21 @@ function render(review) {
     close_stage: "blocked",
     review_url: "https://forge.example/pull/17",
     blocker: { code: "review_lookup_failed", message: hostile, retryable: true },
+    delivery: {
+      accepted_merge: { state: "accepted", merge_sha: "c".repeat(40) },
+      merge_ci: { state: "red" },
+      trunk_sync: { state: "failed", local_sha: "d".repeat(40), remote_sha: "e".repeat(40) },
+      physical_board: { state: "unavailable" },
+      verified_closure: { state: "pending" },
+      next_prerequisite: "authorize_corrective_scope_on_current_target",
+    },
   });
-  assert.equal(result.row.children[1].textContent, hostile);
-  assert.equal(result.row.children[1].innerHTML, undefined);
+  const blocker = result.row.children.find((item) => item.className === "epic-close-blocker");
+  assert.equal(blocker.textContent, hostile);
+  assert.equal(blocker.innerHTML, undefined);
+  assert.match(result.row.children[1].textContent, /Merge CI: red/);
+  assert.match(result.row.children[1].textContent, /Trunk: failed/);
+  assert.match(result.row.children[2].textContent, /authorize_corrective_scope/);
   const finish = result.actions.children.find((item) => item.textContent === "Finish close");
   assert.ok(finish);
   finish.callback();

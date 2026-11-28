@@ -1982,6 +1982,223 @@ def _bounded_text(value: object, *, limit: int = 160) -> str | None:
     return normalized[:limit] if normalized else None
 
 
+def _delivery_identity(value: object, *, limit: int = 80) -> str | None:
+    """Return one exact bounded identity or reject it without truncation."""
+
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or not value
+        or "\n" in value
+        or "\r" in value
+        or len(value.encode("utf-8")) > limit
+    ):
+        raise ValueError("delivery identity is malformed or exceeds its bound")
+    return value
+
+
+def _delivery_sha(value: object) -> str | None:
+    sha = _delivery_identity(value, limit=80)
+    if sha is not None and re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+        raise ValueError("delivery revision must be a full lowercase Git SHA")
+    return sha
+
+
+def _post_merge_delivery_projection(
+    record: Mapping[str, object],
+    repair: Mapping[str, object] | None,
+    delivery: Mapping[str, object],
+) -> dict[str, object]:
+    """Project bounded persisted delivery evidence without observing Git or forge."""
+
+    raw = {
+        "prospective_result": record.get("prospective_result"),
+        "exact_candidate_proof": record.get("exact_candidate_proof"),
+        "accepted_merge_identity": record.get("accepted_merge_identity"),
+        "post_merge_ci": record.get("post_merge_ci"),
+        "observed_target_sha": record.get("observed_target_sha"),
+    }
+    unavailable = False
+    try:
+        if not _review_evidence_payload_within_bound(raw):
+            raise ValueError("delivery evidence exceeds the normalized byte limit")
+        generation = record.get("current_generation", 0)
+        if type(generation) is not int or generation < 0:
+            raise ValueError("review generation must be a non-negative integer")
+        repair_generation = repair.get("generation", 0) if repair else 0
+        if type(repair_generation) is not int or repair_generation < 0:
+            raise ValueError("repair generation must be a non-negative integer")
+
+        prospective_raw = record.get("prospective_result")
+        prospective_raw = (
+            prospective_raw if isinstance(prospective_raw, Mapping) else {}
+        )
+        proof_raw = record.get("exact_candidate_proof")
+        proof_raw = proof_raw if isinstance(proof_raw, Mapping) else {}
+        proof_identity = proof_raw.get("identity")
+        proof_identity = proof_identity if isinstance(proof_identity, Mapping) else {}
+        candidate = proof_identity.get("candidate")
+        candidate = candidate if isinstance(candidate, Mapping) else {}
+        prospective_state = _bounded_text(prospective_raw.get("state"), limit=40)
+        prospective = {
+            "state": prospective_state or "pending",
+            "source_sha": _delivery_sha(
+                prospective_raw.get("source_sha") or candidate.get("source_sha")
+            ),
+            "target_sha": _delivery_sha(
+                prospective_raw.get("observed_target_sha")
+                or candidate.get("target_sha")
+            ),
+            "result_sha": _delivery_sha(
+                candidate.get("result_commit") or candidate.get("result_sha")
+            ),
+            "result_tree": _delivery_sha(
+                candidate.get("result_tree") or candidate.get("tree_sha")
+            ),
+            "validation_fingerprint": _delivery_identity(
+                proof_raw.get("fingerprint"), limit=128
+            ),
+        }
+        if proof_raw and not all(
+            prospective.get(field)
+            for field in (
+                "source_sha",
+                "target_sha",
+                "result_sha",
+                "result_tree",
+                "validation_fingerprint",
+            )
+        ):
+            prospective["state"] = "unavailable"
+        elif not prospective_state and proof_raw:
+            prospective["state"] = "green"
+
+        accepted_raw = record.get("accepted_merge_identity")
+        accepted_raw = accepted_raw if isinstance(accepted_raw, Mapping) else {}
+        accepted_generation = accepted_raw.get("review_generation")
+        if accepted_generation is not None and (
+            type(accepted_generation) is not int or accepted_generation < 0
+        ):
+            raise ValueError("accepted generation must be a non-negative integer")
+        accepted_sha = _delivery_sha(
+            accepted_raw.get("merge_sha") or record.get("accepted_merge_sha")
+        )
+        stale = (bool(accepted_sha) and repair_generation > generation) or (
+            accepted_generation is not None and accepted_generation != generation
+        )
+        accepted_state = (
+            "stale"
+            if stale
+            else "unavailable"
+            if accepted_sha and generation > 0 and accepted_generation is None
+            else "accepted"
+            if accepted_sha
+            else "unavailable"
+            if record.get("closed") is True
+            else "pending"
+        )
+        accepted = {
+            "state": (
+                accepted_state
+            ),
+            "merge_sha": accepted_sha,
+            "observed_target_sha": _delivery_sha(
+                accepted_raw.get("observed_target_head")
+                or record.get("observed_target_sha")
+            ),
+            "generation": accepted_generation,
+        }
+
+        ci_raw = record.get("post_merge_ci")
+        if ci_raw is not None and not isinstance(ci_raw, Mapping):
+            raise ValueError("post-merge CI must be a mapping")
+        ci_raw = ci_raw if isinstance(ci_raw, Mapping) else {}
+        ci_state = _bounded_text(ci_raw.get("state"), limit=40) or "unavailable"
+        if ci_state == "unknown" and "unavailable" in str(ci_raw.get("reason") or ""):
+            ci_state = "unavailable"
+        ci_merge_sha = _delivery_sha(ci_raw.get("merge_sha"))
+        if accepted_sha and ci_merge_sha and ci_merge_sha != accepted_sha:
+            stale = True
+            ci_state = "stale"
+        merge_ci = {
+            "state": ci_state,
+            "reason": _bounded_text(ci_raw.get("reason"), limit=160),
+            "merge_sha": ci_merge_sha,
+            "observed_target_sha": _delivery_sha(ci_raw.get("observed_target_sha")),
+        }
+    except (TypeError, ValueError, UnicodeError):
+        unavailable = True
+        generation = 0
+        stale = False
+        prospective = {
+            "state": "unavailable",
+            "source_sha": None,
+            "target_sha": None,
+            "result_sha": None,
+            "result_tree": None,
+            "validation_fingerprint": None,
+        }
+        accepted = {
+            "state": "unavailable",
+            "merge_sha": None,
+            "observed_target_sha": None,
+            "generation": None,
+        }
+        merge_ci = {
+            "state": "unavailable",
+            "reason": "delivery_evidence_out_of_bounds",
+            "merge_sha": None,
+            "observed_target_sha": None,
+        }
+
+    phase = str(delivery.get("phase") or "")
+    closure_state = (
+        "unavailable"
+        if unavailable
+        else "stale"
+        if stale
+        else "verified"
+        if phase == "verified_integrated"
+        and accepted.get("state") == "accepted"
+        and merge_ci.get("state") == "green"
+        and merge_ci.get("merge_sha") == accepted.get("merge_sha")
+        else "pending"
+    )
+    prerequisite = (
+        "refresh_review_observation"
+        if unavailable or stale
+        else "authorize_supported_corrective_scope_on_current_target"
+        if merge_ci["state"] == "red"
+        else _bounded_text(delivery.get("next_prerequisite"), limit=160)
+    )
+    return {
+        "generation": generation,
+        "freshness": "unavailable" if unavailable else "stale" if stale else "current",
+        "prospective_validation": prospective,
+        "accepted_merge": accepted,
+        "merge_ci": merge_ci,
+        # Feature delivery is integrated into its Epic target. Product-trunk
+        # convergence and physical-board proof belong to the Epic close receipt.
+        "trunk_sync": {
+            "state": "unavailable",
+            "local_sha": None,
+            "remote_sha": accepted.get("observed_target_sha"),
+            "result": None,
+        },
+        "physical_board": {"state": "unavailable", "fingerprint": None},
+        "repair": {
+            "owner": _bounded_text(delivery.get("accountable_owner"), limit=160),
+            "prerequisite": prerequisite,
+        },
+        "verified_closure": {
+            "state": closure_state,
+            "verified": closure_state == "verified",
+        },
+        "next_prerequisite": prerequisite,
+    }
+
+
 def _review_evidence_projection(
     record: Mapping[str, object], repair: Mapping[str, object] | None
 ) -> dict[str, object]:
@@ -2249,11 +2466,13 @@ def _accountable_review_projection(
     projection = _feature_review_projection(record, state)
     repair_view = _repair_projection(repair)
     evidence = _review_evidence_projection(record, repair)
+    post_merge_delivery = _post_merge_delivery_projection(record, repair, delivery)
     epic_id = _review_target_epic(record) or (
         str(meta.parent) if meta and meta.parent else None
     )
     next_prerequisite = (
         evidence.get("next_prerequisite")
+        or post_merge_delivery.get("next_prerequisite")
         or repair_view.get("next_prerequisite")
         or delivery.get("next_prerequisite")
     )
@@ -2280,6 +2499,7 @@ def _accountable_review_projection(
             "work_status": meta.status if meta is not None else "unknown",
             "delivery_status": delivery.get("phase"),
             "delivery": delivery,
+            "post_merge_delivery": post_merge_delivery,
             "evidence": evidence,
             "repair": repair_view,
             "repair_identity": {

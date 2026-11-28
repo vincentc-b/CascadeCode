@@ -17,6 +17,31 @@
     status.setAttribute("aria-label", "Epic close status: " + status.textContent);
     row.appendChild(status);
 
+    var delivery = review.delivery || {};
+    var accepted = delivery.accepted_merge || {};
+    var mergeCi = delivery.merge_ci || {};
+    var sync = delivery.trunk_sync || {};
+    var physicalBoard = delivery.physical_board || {};
+    var closure = delivery.verified_closure || {};
+    var evidence = document.createElement("div");
+    evidence.className = "epic-close-delivery-evidence";
+    evidence.textContent =
+      "Accepted: " + (accepted.merge_sha || accepted.state || "pending") +
+      " · Merge CI: " + (mergeCi.state || "unavailable") +
+      " · Trunk: " + (sync.state || "pending") +
+      " (local " + (sync.local_sha || "unavailable") +
+      ", remote " + (sync.remote_sha || "unavailable") + ")" +
+      " · Board: " + (physicalBoard.state || "pending") +
+      " · Closure: " + (closure.state || "pending");
+    row.appendChild(evidence);
+
+    if (delivery.next_prerequisite) {
+      var next = document.createElement("div");
+      next.className = "epic-close-next-prerequisite";
+      next.textContent = "Next: " + delivery.next_prerequisite;
+      row.appendChild(next);
+    }
+
     if (stage !== "completed" && review.review_url) {
       actions.appendChild(helpers.actionLink(
         "Open implementation review",

@@ -469,6 +469,16 @@ red, pending or unavailable. Polling and GET projections remain read-only; only
 the existing producer lane persists observations or changes an exact repair
 generation.
 
+`REQ-WATCHDOG-REVIEW-003`: The producer publishes one bounded current generation
+containing prospective source/target identity, accepted merge identity, exact
+merge-SHA CI and observed target. The existing content identity, current review
+generation and action backoff fence unchanged evidence, so repeated dashboard
+reads cannot trigger another model turn or validation. Epic closeout persists
+trunk sync, physical-board and verified-closure receipts separately after the
+same accepted evidence. War Room consumes only those persisted projections;
+unavailable persistence remains an observation prerequisite rather than a
+license to recompute evidence on the GET path.
+
 ## Recovery admission and active-path authority
 
 `REQ-WATCHDOG-REPAIR-001`: Audit repair requires a fresh canonical incident,

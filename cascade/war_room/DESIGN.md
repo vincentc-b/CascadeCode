@@ -38,6 +38,16 @@ success is not completion. Identical content rejoins its durable action while
 changed content, stale evidence, another writer, policy/approval waits and
 closed-unmerged reviews retain the adapter's typed refusal or prerequisite.
 
+`REQ-WARROOM-REVIEW-004`: Review, board and room reads expose prospective
+validation, accepted merge identity, exact merge-SHA CI, product-trunk sync,
+physical-board proof, accountable repair owner/prerequisite and independently
+verified closure as separate persisted dimensions. Exact revisions remain
+visible. Pending, unavailable, stale and failed evidence are distinct, and only
+the complete matching generation can display verified closure. Feature rows
+name product-trunk and physical-board evidence unavailable because those facts
+belong to Epic closeout; Epic rows expose the bounded persisted sync and board
+receipts. The original review URL and accountable Feature remain unchanged.
+
 `DEC-WARROOM-REVIEW-001`: [`feature_review_views`](../review.py) joins the durable
 review registry and Feature delivery projection with
 [`latest_feature_repair_records`](../feature/repair.py). The latter performs one
@@ -52,6 +62,15 @@ project context. The authorized Watchdog health pass persists a bounded
 observation through [`record_feature_review_evidence`](../review.py) after its
 forge query; unavailable publication remains a typed health wait rather than
 allowing an action to proceed with evidence that readers cannot inspect.
+[`_post_merge_delivery_projection`](../review.py) validates the current Feature
+generation and its bounded prospective, acceptance and merge-CI payload without
+Git or forge observation. [`epic_review_snapshot_to_dict`](serialize.py) applies
+the same fail-closed presentation rule to the Epic close receipt, including
+local/remote heads, sync result, physical-board fingerprint and closure flag.
+Malformed or oversized evidence becomes unavailable with a refresh prerequisite;
+a mismatched generation or revision becomes stale. GET and dashboard polling do
+not fetch Git, query a forge, validate CI, start a provider, scan an unbounded
+ledger or mutate lifecycle state.
 
 `DEC-WARROOM-REVIEW-002`: [`handle_post_review_repair`](review_routes.py)
 authenticates through the request verifier, validates the closed HTTP envelope,
@@ -82,11 +101,16 @@ sequenceDiagram
     UI->>R: Read requested Feature rows
     R->>V: Load persisted review identities and generations
     R->>A: Load latest open-review repairs once
-    R-->>UI: Accountable state and typed prerequisite
+    R-->>UI: Exact revisions, independent delivery dimensions and typed prerequisite
     alt Missing or stale health evidence
         R-->>UI: Explicit unknown/unavailable or stale evidence
     else Oversized or malformed current, legacy, request, or postcheck evidence
         R-->>UI: Unavailable, not fresh or verified; refresh_review_observation
+    end
+    alt Accepted Epic close receipt
+        R-->>UI: Merge CI, local/remote trunk, board proof and closure
+    else Missing, stale or failed dimension
+        R-->>UI: Explicit state and actionable next prerequisite
     end
     Note over UI,A: No forge query, provider start, queue write, or lifecycle mutation
 ```

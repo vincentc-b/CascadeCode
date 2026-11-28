@@ -36,6 +36,22 @@
       " · freshness: " + (evidence.freshness || "unknown");
   }
 
+  function deliverySummary(review) {
+    const delivery = review.post_merge_delivery || {};
+    const prospective = delivery.prospective_validation || {};
+    const accepted = delivery.accepted_merge || {};
+    const mergeCi = delivery.merge_ci || {};
+    const sync = delivery.trunk_sync || {};
+    const board = delivery.physical_board || {};
+    const closure = delivery.verified_closure || {};
+    return "Prospective: " + (prospective.state || "unavailable") +
+      " · Accepted: " + (accepted.merge_sha || accepted.state || "pending") +
+      " · Merge CI: " + (mergeCi.state || "unavailable") +
+      " · Trunk: " + (sync.state || "unavailable") +
+      " · Board: " + (board.state || "unavailable") +
+      " · Closure: " + (closure.state || "pending");
+  }
+
   function actionResultLabel(result) {
     if (!result) return "";
     const state = result.verified ? "Verified" :
@@ -93,6 +109,11 @@
     health.className = "open-review-evidence";
     health.textContent = evidenceSummary(review);
     li.appendChild(health);
+
+    const deliveryEvidence = document.createElement("p");
+    deliveryEvidence.className = "open-review-delivery-evidence";
+    deliveryEvidence.textContent = deliverySummary(review);
+    li.appendChild(deliveryEvidence);
 
     const prerequisite = document.createElement("p");
     prerequisite.className = "open-review-prerequisite";
@@ -287,5 +308,6 @@
     renderOpenReviews,
     renderOpenReviewCard,
     reviewStateLabel,
+    deliverySummary,
   };
 });
