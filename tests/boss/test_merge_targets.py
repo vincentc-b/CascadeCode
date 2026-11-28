@@ -137,7 +137,11 @@ def _reviewed_epic_with_remote(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     ).stdout.strip()
     monkeypatch.setattr(
         "cascade.review.merge_request_snapshot",
-        lambda *_a, **_k: {"state": "merged", "merge_sha": accepted_tip},
+        lambda *_a, **_k: {
+            "state": "merged",
+            "merge_sha": accepted_tip,
+            "source_revision": accepted_tip,
+        },
     )
     return root, epic_wt
 

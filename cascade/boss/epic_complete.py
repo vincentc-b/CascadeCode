@@ -447,6 +447,22 @@ def _merged_epic_review_landed(epic_id: WorkId, review, repo: Path):
         )
         if landed.returncode != 0:
             return None
+        accepted_parent = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{merge_sha}^1"],
+            cwd=checkout, capture_output=True, text=True,
+        )
+        if accepted_parent.returncode != 0:
+            return None
+        source_revision = snapshot.get("source_revision")
+        if not isinstance(source_revision, str) or len(source_revision) != 40:
+            return None
+        try:
+            workspace.verify_history(
+                source_revision=source_revision,
+                accepted_revision=accepted_parent.stdout.strip(),
+            )
+        except GitError:
+            return None
         entry = get_integration_worktree(trunk, "epic", epic_id)
         if entry is None or not entry.path.is_dir():
             return None

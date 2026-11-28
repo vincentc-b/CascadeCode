@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
 from pathlib import Path
 
+import pytest
+
+from cascade.board.errors import GitError
+from cascade.board.store import move_doc
 from cascade.workspace.closeout import create_verified_trunk_workspace
-from tests.support import make_repo
+from tests.support import add_doc, commit_board, make_repo
 
 
 def _git(root: Path, *args: str) -> str:
@@ -66,3 +71,40 @@ def test_verified_closeout_workspace_is_detached_and_cleanup_preserves_operator(
     assert _git(root, "ls-files", "-s") == before["index"]
     assert _git(root, "status", "--porcelain") == before["status"]
     assert (root / "README.md").read_bytes() == before["readme"]
+
+
+def test_closeout_refuses_duplicate_remote_board_without_leaking_worktree(
+    tmp_path: Path,
+) -> None:
+    root = _remote_operator(tmp_path)
+    original = add_doc(
+        root, id="epic_001", title="Epic", tier="epic", status="completed"
+    )
+    duplicate = root / "docs/epics/1_backlog/epic_001_duplicate.md"
+    duplicate.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(original.meta.path, duplicate)
+    commit_board(root, message="duplicate remote board")
+    _git(root, "push", "origin", "main")
+    before = _git(root, "worktree", "list", "--porcelain")
+
+    with pytest.raises(GitError, match="closeout history admission refused"):
+        create_verified_trunk_workspace(root)
+
+    assert _git(root, "worktree", "list", "--porcelain") == before
+
+
+def test_closeout_history_proof_rejects_reopened_terminal_target(
+    tmp_path: Path,
+) -> None:
+    root = _remote_operator(tmp_path)
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    commit_board(root, message="accepted terminal board")
+    _git(root, "push", "origin", "main")
+    accepted = _git(root, "rev-parse", "HEAD")
+    move_doc("epic_001", "active", root=root)
+    commit_board(root, message="reopen terminal board")
+    _git(root, "push", "origin", "main")
+
+    with create_verified_trunk_workspace(root) as workspace:
+        with pytest.raises(GitError, match="terminal status reopened"):
+            workspace.verify_history(accepted_revision=accepted)

@@ -1177,6 +1177,7 @@ def _history_repair_previews(
 ) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...], tuple[str, ...]]:
     """Return established owners, prerequisites, and unavailable owner facts."""
 
+    from cascade.board.errors import BoardError
     from cascade.workspace.errors import MutationOwnerError
     from cascade.workspace.integration_worktree import preview_terminal_history_repair
 
@@ -1189,6 +1190,11 @@ def _history_repair_previews(
         except MutationOwnerError as exc:
             unavailable.append(f"{work_id}: {exc.reason}")
             prerequisites.append(f"{work_id}: {exc.action}")
+        except (BoardError, OSError) as exc:
+            unavailable.append(f"{work_id}: canonical owner evidence is unreadable: {exc}")
+            prerequisites.append(
+                f"{work_id}: repair the canonical physical board before retrying"
+            )
         else:
             owners.append((work_id, str(preview.owner)))
             prerequisites.append(preview.prerequisite)

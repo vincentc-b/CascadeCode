@@ -926,10 +926,30 @@ def create_integration_worktree(
         raise GitError("Existing unregistered Epic checkout or branch; preserved for recovery.")
     _remove_stale_worktree(trunk, wt_path)
 
-    if _branch_exists(trunk, branch):
+    branch_existed = _branch_exists(trunk, branch)
+    if branch_existed:
         _git(trunk, "worktree", "add", str(wt_path), branch)
     else:
         _git(trunk, "worktree", "add", "-b", branch, str(wt_path), base_ref)
+
+    try:
+        _prove_integration_checkout_history(
+            trunk=trunk,
+            checkout=wt_path,
+            base_ref=base_ref,
+            base_sha=base_sha,
+        )
+    except Exception:
+        # This checkout has not run caller preparation and has not been
+        # registered, so it contains no admitted owner work.  Detach only this
+        # attempt.  Preserve a pre-existing branch; remove a branch minted by
+        # this attempt only while it still names the approved base.
+        _git(trunk, "worktree", "remove", "--force", str(wt_path), check=False)
+        if not branch_existed:
+            branch_tip = _resolve_ref_or_none(trunk, branch)
+            if branch_tip == base_sha:
+                _git(trunk, "branch", "-d", branch, check=False)
+        raise
 
     if prepare is not None:
         prepare(wt_path)
@@ -954,6 +974,75 @@ def create_integration_worktree(
     else:
         _upsert_registry_entry(trunk, record)
     return record
+
+
+def _prove_integration_checkout_history(
+    *,
+    trunk: Path,
+    checkout: Path,
+    base_ref: str,
+    base_sha: str,
+) -> None:
+    """Fence one unregistered checkout to its base and canonical board history."""
+
+    from cascade.board.context import get_project_context
+    from cascade.review_validation import (
+        AcceptedTerminalHistoryProof,
+        ExactMergeCandidate,
+        prove_accepted_terminal_history,
+    )
+
+    checkout_sha = _resolve_ref(checkout, "HEAD")
+    checkout_tree = _resolve_ref(checkout, "HEAD^{tree}")
+    project = get_project_context()
+    board_root = checkout.resolve()
+    accepted_repository = trunk
+    accepted_revision = base_sha
+    target_repository = trunk
+    target_ref = base_ref
+    target_sha = base_sha
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+    ):
+        # Product branches carry implementation history; the tracking checkout
+        # is the sole physical board owner.  Pin both roles independently.
+        accepted_repository = project.tracking.root.resolve()
+        board_root = accepted_repository
+        accepted_revision = _resolve_ref(accepted_repository, "HEAD")
+        target_repository = accepted_repository
+        target_ref = "HEAD"
+        target_sha = accepted_revision
+
+    candidate = ExactMergeCandidate(
+        source_sha=checkout_sha,
+        target_sha=target_sha,
+        result_commit=checkout_sha,
+        result_tree=checkout_tree,
+        checkout=checkout.resolve(),
+    )
+    proof = prove_accepted_terminal_history(
+        target_repository,
+        candidate,
+        accepted_revision,
+        accepted_repository=accepted_repository,
+        candidate_board_root=board_root,
+        owner_root=trunk,
+        target_ref=target_ref,
+    )
+    if not isinstance(proof, AcceptedTerminalHistoryProof):
+        detail = f"{proof.kind}: {proof.reason}; {proof.owner_action}"
+        raise GitError(f"integration checkout history admission refused: {detail}")
+    if _resolve_ref(trunk, base_ref) != base_sha:
+        raise GitError(
+            "integration checkout target changed during history admission; "
+            "refresh the target and retry with fresh proof"
+        )
+
+
+def _resolve_ref_or_none(root: Path, ref: str) -> str | None:
+    result = _git(root, "rev-parse", "--verify", f"{ref}^{{commit}}", check=False)
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def resume_unstarted_epic_worktree(
@@ -997,6 +1086,17 @@ def resume_unstarted_epic_worktree(
     # A fast-forward preserves the existing checkout and every commit. The
     # approved revision, not the interrupted attempt's old base, owns new work.
     git_run(["merge", "--ff-only", base_sha], entry.path)
+    try:
+        _prove_integration_checkout_history(
+            trunk=trunk.resolve(),
+            checkout=entry.path,
+            base_ref=base_sha,
+            base_sha=base_sha,
+        )
+    except GitError:
+        # The existing owner branch and checkout are recovery evidence.  A
+        # failed fresh proof cannot authorize preparation or registry refresh.
+        return None
     if prepare is not None:
         prepare(entry.path)
     updated = replace(entry, base_sha=base_sha)

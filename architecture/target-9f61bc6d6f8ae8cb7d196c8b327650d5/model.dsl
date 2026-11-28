@@ -2157,12 +2157,21 @@ code_workspace_registry = element "get_integration_worktree" "Function" "Read re
     }
 }
 
-code_workspace_create = element "create_integration_worktree" "Function" "Creates and prepares an integration checkout before publishing its registration and switching Epic or Feature transcript ownership inside its graph fence." {
+code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout, admits its exact physical history before preparation, then publishes registration and transcript ownership." {
     properties {
         "cascade.semanticId" "element.code.workspace.create"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
         "cascade.sourceSymbol" "create_integration_worktree"
+    }
+}
+
+code_workspace_checkout_history = element "_prove_integration_checkout_history" "Function" "Fence product base and canonical tracking-board revisions; refuse stale or invalid history before preparation or registry mutation." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.checkout-history"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "_prove_integration_checkout_history"
     }
 }
 
@@ -2184,7 +2193,7 @@ code_epic_prepare_checkout = element "prepare_epic_checkout" "Function" "Scrubs 
     }
 }
 
-code_workspace_resume_epic = element "resume_unstarted_epic_worktree" "Function" "Proves canonical clean checkout identity and ancestor-only history, fast-forwards to the approved base and refreshes registration without deleting a branch." {
+code_workspace_resume_epic = element "resume_unstarted_epic_worktree" "Function" "Proves canonical clean identity and ancestor-only work, fast-forwards, re-proves physical history, then refreshes registration without deleting a branch." {
     properties {
         "cascade.semanticId" "element.code.workspace.resume-epic"
         "cascade.parent" "element.component.workspace"
@@ -5186,7 +5195,7 @@ code_teams_history_refusal = element "TerminalHistoryRefusal" "Dataclass" "Carry
     }
 }
 
-code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry and matching Epic document in a detached fetched trunk checkout." {
+code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry, first-parent terminal-history proof and matching Epic document in a detached fetched trunk checkout." {
     properties {
         "cascade.semanticId" "element.code.boss.merged-epic"
         "cascade.parent" "element.component.boss"
@@ -5195,12 +5204,21 @@ code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require
     }
 }
 
-code_workspace_verified_trunk = element "create_verified_trunk_workspace" "Function" "Fetch product trunk and create a private detached checkout at its exact revision without changing operator files or HEAD." {
+code_workspace_verified_trunk = element "create_verified_trunk_workspace" "Function" "Fetch product trunk, create a private detached checkout and admit its exact physical history without changing operator files or HEAD." {
     properties {
         "cascade.semanticId" "element.code.workspace.verified-trunk"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/closeout.py"
         "cascade.sourceSymbol" "create_verified_trunk_workspace"
+    }
+}
+
+code_workspace_closeout_history = element "VerifiedTrunkWorkspace.verify_history" "Method" "Bind the fetched product target and canonical board root to a fresh terminal-history proof; target movement or unavailable split-root evidence refuses use." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.closeout-history"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/closeout.py"
+        "cascade.sourceSymbol" "VerifiedTrunkWorkspace.verify_history"
     }
 }
 
@@ -5252,5 +5270,41 @@ code_boss_epic_to_landed = code_boss_epic -> code_boss_merged_epic "Requires acc
 code_boss_landed_to_workspace = code_boss_merged_epic -> code_workspace_verified_trunk "Reads a freshly fetched detached trunk" {
     properties {
         "cascade.semanticId" "relationship.code.boss.landed-workspace"
+    }
+}
+
+code_workspace_create_to_history = code_workspace_create -> code_workspace_checkout_history "Requires exact checkout and canonical board admission before preparation or registration" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.create-history"
+    }
+}
+
+code_workspace_resume_to_history = code_workspace_resume_epic -> code_workspace_checkout_history "Requires fresh physical history before resumed preparation or registry refresh" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.resume-history"
+    }
+}
+
+code_workspace_checkout_to_proof = code_workspace_checkout_history -> code_teams_history_proof "Consumes a fresh revision-bound terminal-history proof" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.checkout-history-proof"
+    }
+}
+
+code_workspace_verified_to_history = code_workspace_verified_trunk -> code_workspace_closeout_history "Admits the fetched target before exposing the disposable checkout" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.verified-history"
+    }
+}
+
+code_workspace_closeout_to_proof = code_workspace_closeout_history -> code_teams_history_proof "Compares fetched or canonical split-root board evidence with the pinned accepted revision" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.closeout-history-proof"
+    }
+}
+
+code_boss_landed_to_history = code_boss_merged_epic -> code_workspace_closeout_history "Rechecks the accepted merge first-parent history before consuming the Epic document" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.landed-history"
     }
 }

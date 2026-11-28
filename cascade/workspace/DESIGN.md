@@ -6,11 +6,22 @@ Purpose: resolve repository roles, manage integration worktrees, and enforce rev
 
 ## Epic checkout admission and provisioning
 
-The worktree creator accepts a preparation callback before registry publication
-and transcript ownership handoff. Epic activation uses it to remove inherited
-Feature/Task documents in a single-repository project, so a newly registered
-checkout never contributes those stale copies to the board. A previous unregistered
-checkout or branch is preserved rather than force-removed by a provisioning retry.
+`REQ-WORKSPACE-ADMISSION-001`: The worktree creator pins the requested product
+base and the applicable canonical physical board before preparation, registry
+publication, or transcript ownership handoff. Colocated projects scan the exact
+new checkout and compare it with the accepted base. Split projects independently
+pin the product base and tracking `HEAD`, using the tracking checkout as the sole
+board owner. Malformed, duplicate, reopened terminal, changed cancellation or
+feedback history, unavailable ownership evidence, or movement of either pin
+refuses admission.
+
+The creator accepts a preparation callback only after that proof. Epic activation
+uses it to remove inherited Feature/Task documents in a single-repository project,
+so a newly registered checkout never contributes those stale copies to the board.
+Refusal detaches only the not-yet-admitted checkout. A branch that existed before
+the attempt is preserved; a branch minted by the refused attempt is removed only
+while it still equals the approved base. A previous unregistered checkout or
+branch discovered before provisioning is preserved rather than force-removed.
 For an interrupted
 activation, `resume_unstarted_epic_worktree` verifies canonical identity, an
 unlocked and clean checkout and ancestor-only history against the latest approved
@@ -25,11 +36,16 @@ and [Watchdog provisioning](../watchdog/DESIGN.md#interrupted-epic-provisioning)
 Under `REQ-WORKSPACE-001`,
 [`create_verified_trunk_workspace`](closeout.py) resolves the configured product
 trunk, fetches its remote ref and creates a private detached Git worktree at the
-resolved commit. `VerifiedTrunkWorkspace` owns only that temporary directory and
-its Git registration. Context-manager cleanup removes those resources; it does
-not change the operator checkout's branch, index or files. Fetch, target mismatch
+resolved commit. Before returning it, `VerifiedTrunkWorkspace.verify_history`
+scans the applicable physical board and fences the fetched remote ref. Boss can
+then compare that same target with a pinned accepted first parent; any target
+movement requires a fresh checkout and proof. Split projects use canonical
+tracking evidence without treating a product checkout as the document owner.
+`VerifiedTrunkWorkspace` owns only its temporary directory and Git registration.
+Context-manager cleanup removes those resources; it does not change the operator
+checkout's branch, index or files. Fetch, target mismatch, board/history refusal
 and worktree creation failures raise `GitError` without admitting a workspace.
-The name identifies a fetched revision, not successful board validation or CI.
+This proof establishes board-history retention, not accepted-merge CI.
 
 [`fast_forward_trunk`](../tracking.py) is a separate mutation adapter: it requires
 the configured branch to be checked out, fetches, returns immediately for equal
@@ -43,7 +59,9 @@ again rather than treating an earlier fetch as completion.
 flowchart TD
     Target[Configured product trunk] --> Fetch[Fetch remote and resolve exact commit]
     Fetch -->|inspection| Detached[Private detached worktree]
-    Detached --> Caller[Boss checks forge acceptance and document identity]
+    Detached --> History{Physical board and pinned history current?}
+    History -->|yes| Caller[Boss checks forge acceptance and document identity]
+    History -->|no| Refuse
     Caller --> Cleanup[Remove only private worktree]
     Target -->|separate sync request| Branch{Operator on requested branch?}
     Branch -->|yes| SyncFetch[Fetch remote target]
@@ -406,6 +424,8 @@ their own design artifact and owner rather than inheriting the package document.
 | [resolve_doc_worktree](doc_root.py) | Work ID and board → registered checkout; Tasks follow their Feature parent. Missing work raises `NotFound`. |
 | [resolve_mutation_owner / doc_filesystem_root](integration_worktree.py) | Work identity, parent lineage, repository role, registry path and branch → one writable owner or actionable `MutationOwnerError`. |
 | [preview_terminal_history_repair](integration_worktree.py) | Rejected work IDs → canonical owner paths and a new-candidate prerequisite; performs no mutation and grants no approval. |
+| [create_integration_worktree / _prove_integration_checkout_history](integration_worktree.py) | Exact product base plus canonical physical board → a prepared registration, or refusal before preparation/registry publication with attempt-owned cleanup only. |
+| [VerifiedTrunkWorkspace.verify_history](closeout.py) | Fetched product revision plus canonical board and pinned accepted revision → a target-fenced proof fingerprint or disposable-workspace refusal. |
 | [merged_board / _meta_preference](integration_worktree.py) | Tracking board, registry and snapshot provenance → preferred documents with retained approval metadata. Ranking includes column and generic worktree-path bonuses; it does not prove exact mutation ownership. |
 | [preflight_lifecycle_merge_target](branch_synchronization.py) | Source/target work IDs and branches → synchronization check or typed refusal, including `not_active`. |
 | [prove_terminal_retirement / TerminalRetirementProof](integration_worktree.py) | Registered parent, shared Feature delivery phase, exact destination, descendant closure, Git/event/review evidence → canonical terminal readback or an actionable refusal. |

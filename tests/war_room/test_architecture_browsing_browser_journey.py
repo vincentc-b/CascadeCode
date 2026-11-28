@@ -71,6 +71,24 @@ custom "cascade-teams-code" {
     include code_teams_candidate_validate
     autoLayout lr
 }
+
+custom "cascade-workspace-code" {
+    title "Workspace — Code"
+    properties {
+        "cascade.codeComponent" "element.component.workspace"
+    }
+    include code_workspace_checkout_history
+    autoLayout lr
+}
+
+custom "cascade-boss-code" {
+    title "Boss — Code"
+    properties {
+        "cascade.codeComponent" "element.component.boss"
+    }
+    include code_boss_merged_epic
+    autoLayout lr
+}
 """
 JOURNEY_MODEL = """operator = person "Operator" "Reviews branch architecture." {
     properties {
@@ -103,6 +121,16 @@ cascade = softwareSystem "Cascade" "Coordinates artifact-driven delivery in a Gi
                 "cascade.semanticId" "element.component.teams"
             }
         }
+        workspace_component = component "Workspace" "Owns checkout admission." "cascade.workspace" {
+            properties {
+                "cascade.semanticId" "element.component.workspace"
+            }
+        }
+        boss_component = component "Boss" "Consumes guarded closeout evidence." "cascade.boss" {
+            properties {
+                "cascade.semanticId" "element.component.boss"
+            }
+        }
     }
 }
 
@@ -121,6 +149,24 @@ code_teams_candidate_validate = element "validate_exact_merge_candidate" "Functi
         "cascade.parent" "element.component.teams"
         "cascade.sourcePath" "cascade/review_validation.py"
         "cascade.sourceSymbol" "validate_exact_merge_candidate"
+    }
+}
+
+code_workspace_checkout_history = element "_prove_integration_checkout_history" "Function" "Fence one unregistered checkout to its base and canonical board history." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.checkout-history"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "_prove_integration_checkout_history"
+    }
+}
+
+code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Return the reviewed remote doc only after forge, history and trunk verification." {
+    properties {
+        "cascade.semanticId" "element.code.boss.merged-epic"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/epic_complete.py"
+        "cascade.sourceSymbol" "_merged_epic_review_landed"
     }
 }
 
@@ -206,6 +252,20 @@ def _install_model(root: Path, *, system_name: str | None = None) -> ProjectCont
         "    \"\"\"Freshly validate one exact merge result.\"\"\"\n",
         encoding="utf-8",
     )
+    integration = root / "cascade" / "workspace" / "integration_worktree.py"
+    integration.parent.mkdir(parents=True, exist_ok=True)
+    integration.write_text(
+        "def _prove_integration_checkout_history():\n"
+        "    \"\"\"Fence one unregistered checkout.\"\"\"\n",
+        encoding="utf-8",
+    )
+    epic_complete = root / "cascade" / "boss" / "epic_complete.py"
+    epic_complete.parent.mkdir(parents=True, exist_ok=True)
+    epic_complete.write_text(
+        "def _merged_epic_review_landed():\n"
+        "    \"\"\"Return the reviewed remote doc.\"\"\"\n",
+        encoding="utf-8",
+    )
     if system_name is not None:
         model = project.editable_architecture_root / "model.dsl"
         model.write_text(
@@ -232,8 +292,12 @@ def _limit_model_views(architecture: Path) -> None:
         "element.container.supervisor",
         "element.component.agent",
         "element.component.teams",
+        "element.component.workspace",
+        "element.component.boss",
         "element.code.agent.runner",
         "element.code.teams.candidate-validate",
+        "element.code.workspace.checkout-history",
+        "element.code.boss.merged-epic",
     }
     relationship_ids = {
         "relationship.operator-uses-war-room",
@@ -260,6 +324,8 @@ def _limit_model_views(architecture: Path) -> None:
             "cascade-supervisor-components",
             "cascade-agent-code",
             "cascade-teams-code",
+            "cascade-workspace-code",
+            "cascade-boss-code",
         }
     ]
     contract_path.write_text(
@@ -616,6 +682,38 @@ def test_branch_architecture_is_pinned_navigable_and_refreshes_whole_snapshot(
         page.locator("#architecture-target-detail button", has_text="Open pinned source").click()
         source_preview.filter(has_text="freshly validate one exact merge result").wait_for()
         assert "def validate_exact_merge_candidate" in source_preview.inner_text()
+
+        # Checkout and closeout admission nodes are reachable at Code level,
+        # restorable by semantic deep link, and open their pinned declarations.
+        workspace_link = teams_link.replace(
+            "view=cascade-teams-code", "view=cascade-workspace-code"
+        ).replace(
+            "target=element.code.teams.candidate-validate",
+            "target=element.code.workspace.checkout-history",
+        )
+        page.goto(workspace_link, wait_until="domcontentloaded")
+        _wait_for_snapshot(page, timeout=30_000)
+        assert page.locator(
+            '[aria-label="element element.code.workspace.checkout-history"]'
+        ).get_attribute("aria-pressed") == "true"
+        page.locator("#architecture-target-detail button", has_text="Open pinned source").click()
+        source_preview.filter(has_text="Fence one unregistered checkout").wait_for()
+        assert "def _prove_integration_checkout_history" in source_preview.inner_text()
+
+        boss_link = workspace_link.replace(
+            "view=cascade-workspace-code", "view=cascade-boss-code"
+        ).replace(
+            "target=element.code.workspace.checkout-history",
+            "target=element.code.boss.merged-epic",
+        )
+        page.goto(boss_link, wait_until="domcontentloaded")
+        _wait_for_snapshot(page, timeout=30_000)
+        assert page.locator(
+            '[aria-label="element element.code.boss.merged-epic"]'
+        ).get_attribute("aria-pressed") == "true"
+        page.locator("#architecture-target-detail button", has_text="Open pinned source").click()
+        source_preview.filter(has_text="reviewed remote doc").wait_for()
+        assert "def _merged_epic_review_landed" in source_preview.inner_text()
 
         # Level up traverses Code → Components → Containers → Context.
         page.locator("#architecture-back").click()
