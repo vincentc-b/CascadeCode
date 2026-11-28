@@ -2,7 +2,7 @@
 id: feat_054_002
 title: Preserve canonical board history across merge and checkout boundaries
 tier: feature
-status: active
+status: completed
 parent: epic_054
 children:
 - task_054_002_001
