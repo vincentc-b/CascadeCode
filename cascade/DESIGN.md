@@ -130,12 +130,28 @@ the [producer benchmark](../tests/watchdog/benchmark_audit_producer.py) and
 `REQ-REVIEW-PUBLISH-001`: a Git conflict resolution is not publishable until Git
 can materialize the freshly observed source and target commits into one prospective
 result commit/tree in a private checkout, that candidate contains valid lifecycle
-documents with unique IDs, repository checks succeed within a finite budget, and
+documents with unique IDs and coherent physical identity, repository checks
+succeed within a finite budget, and
 the admitted remote heads and source lease still match.
 `review_validation.validate_publication_board` scans the physical candidate,
 including in split-repository sessions; it does not redirect to a tracking root or
 silently omit malformed drafts as a normal board projection may.
-Duplicate backlog/completed copies are rejected without choosing or deleting one.
+Board's exhaustive scanner reports malformed files, symlinks, duplicate IDs,
+tier/filename/status/column mismatches and invalid immediate-parent identity with
+exact paths. Duplicate backlog/completed copies are rejected without choosing or
+deleting one.
+`review_validation.prove_accepted_terminal_history` independently scans that
+candidate and one full pinned accepted revision. It requires every accepted work
+ID and declared child to remain present, prevents completed or cancelled records
+from reopening, and preserves cancellation reason, timestamp, cleanup outcome,
+and exact parent feedback/disposition. Valid lifecycle path and frontmatter
+transitions, including managed Epic activation pointers, do not require byte
+equality. Unrelated accepted specifications remain retained.
+`inspect_exact_validation_material` binds the fresh history-proof fingerprint,
+accepted revision and retained/terminal IDs into the immutable publication
+material before budget reservation. Post-check refresh recomputes the proof; a
+changed target, repaired tree or unavailable split-root inventory requires new
+materialization and admission, so a prior green receipt cannot cross revisions.
 This check establishes document consistency, not full Epic acceptance. It
 runs against an owned exact-pair candidate; it is not a universal
 precondition on every forge merge of a changed target. Successful source
@@ -180,6 +196,16 @@ resolved decisions from previous attempts cannot strand the action. Existing sou
 lease, remote-target revalidation, authorization and approval gates remain in force.
 The supervisor may report publication completed only from actual publication or
 verified reconciliation evidence, never merely from an enqueued investigation.
+
+`REQ-REVIEW-PUBLISH-003`: Terminal-history evidence binds the exact candidate
+source, target, result commit/tree and the pinned accepted revision. An optional
+target-ref observation is checked before and after comparison; movement refuses
+the proof and requires a fresh candidate. Split product/tracking sessions require
+the physical candidate tracking root rather than inferred projection data.
+Refusals carry every affected ID, accepted/candidate paths, exact revisions,
+canonical owners when resolvable, and the owner-scoped repair prerequisite.
+Validation performs no repair, and a repaired result is rescanned and reproved
+independently.
 
 Validation: `tests/test_review_publication_safeguards.py`,
 `tests/test_review_rebase.py`, and `tests/task/test_action_recovery.py` cover invalid
@@ -279,12 +305,14 @@ publication pipeline. `element.component.teams` owns that pipeline;
 | [_actual_accepted_merge_identity](review.py) / [merge_request_snapshot](tracking.py) | Keep actual forge merge SHA, observed target head, route and local generation separate from the prospective candidate proof; incomplete identity fails closed. |
 | [materialize_exact_merge_candidate](review_validation.py) | Use a private Git clone and real merge path to produce deterministic prospective commit/tree identity or a typed refusal without mutating shared worktrees, refs, indexes or caches. |
 | [validate_exact_merge_candidate](review_validation.py) | Scan candidate lifecycle documents, establish fresh source/bytecode and dependency identity, run the approved argv, and return classified bounded evidence. |
-| [validate_publication_board](review_validation.py) | Parse every physical lifecycle-column document in the publication checkout and reject symlinks, malformed records and duplicate IDs before validation. Board owns schema invariants; Teams owns this publication gate. |
+| [validate_publication_board](review_validation.py) | Request Board's exhaustive read-only identity scan for the exact publication checkout before validation. Board owns physical schema and hierarchy invariants; Teams owns this publication gate. |
+| [prove_accepted_terminal_history / TerminalHistoryRefusal](review_validation.py) | Compare fresh candidate and pinned accepted physical inventories, preserve terminal/cancellation history, bind exact revisions, and return owner-routed refusal evidence. |
 
 The `cascade-teams-code` node `element.code.teams.board-scan` links this gate
-to the [Board parser](board/parse.py). It reads the prospective Git merge
-candidate and does not prove terminal-history preservation
-or cross-root hierarchy. Its failure prevents validator execution and push;
+to Board's `element.code.board.physical-scan`, whose `cascade-board-code` path
+reaches the parser and immediate-parent validator. It reads the prospective Git
+merge candidate but does not prove terminal-history preservation or supply an
+unobserved split root. Its failure prevents validator execution and push;
 it does not repair or select among conflicting records.
 
 ```mermaid

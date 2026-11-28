@@ -1089,7 +1089,7 @@ code_board_list = element "list_board" "Function" "Scans lifecycle directories a
     }
 }
 
-code_board_index = element "BoardIndex" "Dataclass" "Holds work metadata and duplicates from a directory scan." {
+code_board_index = element "BoardIndex" "Dataclass" "Holds work metadata indexed by unique work ID for one board projection." {
     properties {
         "cascade.semanticId" "element.code.board.index"
         "cascade.parent" "element.component.board"
@@ -1125,6 +1125,24 @@ code_board_validate = element "validate_doc" "Function" "Checks document identit
     }
 }
 
+code_board_physical_scan = element "scan_physical_board" "Function" "Scans exactly one checkout without tracking-root redirection and reports every malformed file, symlink, duplicate and physical identity defect with its path." {
+    properties {
+        "cascade.semanticId" "element.code.board.physical-scan"
+        "cascade.parent" "element.component.board"
+        "cascade.sourcePath" "cascade/board/store.py"
+        "cascade.sourceSymbol" "scan_physical_board"
+    }
+}
+
+code_board_physical_identity = element "validate_physical_identity" "Function" "Checks tier, filename, lifecycle column and immediate-parent identity for one parsed physical record." {
+    properties {
+        "cascade.semanticId" "element.code.board.physical-identity"
+        "cascade.parent" "element.component.board"
+        "cascade.sourcePath" "cascade/board/validate.py"
+        "cascade.sourceSymbol" "validate_physical_identity"
+    }
+}
+
 board_list_to_parse = code_board_list -> code_board_parse "Reads Markdown metadata during scans" {
     properties {
         "cascade.semanticId" "relationship.board-list-to-parse"
@@ -1152,6 +1170,24 @@ board_move_to_validate = code_board_move -> code_board_validate "Validates the p
 board_validate_to_index = code_board_validate -> code_board_index "Checks parent and dependency metadata against" {
     properties {
         "cascade.semanticId" "relationship.code-board-validate-to-index"
+    }
+}
+
+board_physical_scan_to_parse = code_board_physical_scan -> code_board_parse "Parses every discovered Markdown record without following symlinks" {
+    properties {
+        "cascade.semanticId" "relationship.code-board-physical-scan-to-parse"
+    }
+}
+
+board_physical_scan_to_identity = code_board_physical_scan -> code_board_physical_identity "Checks every successfully parsed record and aggregates path-specific defects" {
+    properties {
+        "cascade.semanticId" "relationship.code-board-physical-scan-to-identity"
+    }
+}
+
+board_physical_identity_to_index = code_board_physical_identity -> code_board_index "Resolves immediate parents only from the exact physical scan" {
+    properties {
+        "cascade.semanticId" "relationship.code-board-physical-identity-to-index"
     }
 }
 
@@ -1401,6 +1437,15 @@ code_boss_merge = element "merge_task_branch" "Function" "Integrates an approved
         "cascade.parent" "element.component.boss"
         "cascade.sourcePath" "cascade/boss/merge.py"
         "cascade.sourceSymbol" "merge_task_branch"
+    }
+}
+
+code_boss_epic_promote = element "promote_epic_to_trunk" "Function" "Promotes an Epic only through the exact physical-board and accepted-history merge gate." {
+    properties {
+        "cascade.semanticId" "element.code.boss.epic-promote"
+        "cascade.parent" "element.component.boss"
+        "cascade.sourcePath" "cascade/boss/merge.py"
+        "cascade.sourceSymbol" "promote_epic_to_trunk"
     }
 }
 
@@ -2076,6 +2121,15 @@ code_workspace_mutation_owner = element "resolve_mutation_owner" "Function" "Pro
     }
 }
 
+code_workspace_history_repair = element "preview_terminal_history_repair" "Function" "Resolve canonical owner paths for rejected history records without mutating or selecting a physical copy." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.history-repair"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "preview_terminal_history_repair"
+    }
+}
+
 code_workspace_doc_owner = element "doc_filesystem_root" "Function" "Route mutation callers through exact owner resolution." {
     properties {
         "cascade.semanticId" "element.code.workspace.doc-owner"
@@ -2112,12 +2166,21 @@ code_workspace_registry = element "get_integration_worktree" "Function" "Read re
     }
 }
 
-code_workspace_create = element "create_integration_worktree" "Function" "Creates and prepares an integration checkout before publishing its registration and switching Epic or Feature transcript ownership inside its graph fence." {
+code_workspace_create = element "create_integration_worktree" "Function" "Creates an integration checkout, admits its exact physical history before preparation, then publishes registration and transcript ownership." {
     properties {
         "cascade.semanticId" "element.code.workspace.create"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
         "cascade.sourceSymbol" "create_integration_worktree"
+    }
+}
+
+code_workspace_checkout_history = element "_prove_integration_checkout_history" "Function" "Fence product base and canonical tracking-board revisions; refuse stale or invalid history before preparation or registry mutation." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.checkout-history"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/integration_worktree.py"
+        "cascade.sourceSymbol" "_prove_integration_checkout_history"
     }
 }
 
@@ -2139,7 +2202,7 @@ code_epic_prepare_checkout = element "prepare_epic_checkout" "Function" "Scrubs 
     }
 }
 
-code_workspace_resume_epic = element "resume_unstarted_epic_worktree" "Function" "Proves canonical clean checkout identity and ancestor-only history, fast-forwards to the approved base and refreshes registration without deleting a branch." {
+code_workspace_resume_epic = element "resume_unstarted_epic_worktree" "Function" "Proves canonical clean identity and ancestor-only work, fast-forwards, re-proves physical history, then refreshes registration without deleting a branch." {
     properties {
         "cascade.semanticId" "element.code.workspace.resume-epic"
         "cascade.parent" "element.component.workspace"
@@ -2211,6 +2274,15 @@ code_workspace_preflight = element "preflight_lifecycle_merge_target" "Function"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
         "cascade.sourceSymbol" "preflight_lifecycle_merge_target"
+    }
+}
+
+code_workspace_lifecycle_merge = element "merge_exact_lifecycle_candidate" "Function" "Materialize and prove the exact source/target board, fence both refs, and commit only the matching result tree." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.lifecycle-merge"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/branch_synchronization.py"
+        "cascade.sourceSymbol" "merge_exact_lifecycle_candidate"
     }
 }
 
@@ -3417,7 +3489,7 @@ code_teams_validation_material = element "ExactValidationMaterial" "Dataclass" "
     }
 }
 
-code_teams_material_inspect = element "inspect_exact_validation_material" "Function" "Preflight the approved profile, materialize the exact result and scan its physical board before any validator reservation." {
+code_teams_material_inspect = element "inspect_exact_validation_material" "Function" "Preflight the approved profile, materialize the exact result, scan its physical board and prove pinned accepted history before any validator reservation." {
     properties {
         "cascade.semanticId" "element.code.teams.material-inspect"
         "cascade.parent" "element.component.teams"
@@ -5114,7 +5186,7 @@ rel_dashboard_feature_readiness = code_dashboard_feature_readiness -> code_featu
     }
 }
 
-code_teams_board_scan = element "validate_publication_board" "Function" "Parse all physical lifecycle columns and refuse malformed documents, symlinks and duplicate IDs before source publication." {
+code_teams_board_scan = element "validate_publication_board" "Function" "Delegate exhaustive identity validation of the exact candidate checkout to Board without split-root redirection before source publication." {
     properties {
         "cascade.semanticId" "element.code.teams.board-scan"
         "cascade.parent" "element.component.teams"
@@ -5123,7 +5195,25 @@ code_teams_board_scan = element "validate_publication_board" "Function" "Parse a
     }
 }
 
-code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry and matching Epic document in a detached fetched trunk checkout." {
+code_teams_history_proof = element "prove_accepted_terminal_history" "Function" "Compare a freshly scanned exact candidate with pinned accepted records and refuse terminal, cancellation, feedback, split-root, or target drift." {
+    properties {
+        "cascade.semanticId" "element.code.teams.history-proof"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "prove_accepted_terminal_history"
+    }
+}
+
+code_teams_history_refusal = element "TerminalHistoryRefusal" "Dataclass" "Carry affected IDs and paths, exact revisions, canonical owners, reason, and supported repair prerequisite." {
+    properties {
+        "cascade.semanticId" "element.code.teams.history-refusal"
+        "cascade.parent" "element.component.teams"
+        "cascade.sourcePath" "cascade/review_validation.py"
+        "cascade.sourceSymbol" "TerminalHistoryRefusal"
+    }
+}
+
+code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require a fresh merged forge observation, merge ancestry, first-parent terminal-history proof and matching Epic document in a detached fetched trunk checkout." {
     properties {
         "cascade.semanticId" "element.code.boss.merged-epic"
         "cascade.parent" "element.component.boss"
@@ -5132,12 +5222,21 @@ code_boss_merged_epic = element "_merged_epic_review_landed" "Function" "Require
     }
 }
 
-code_workspace_verified_trunk = element "create_verified_trunk_workspace" "Function" "Fetch product trunk and create a private detached checkout at its exact revision without changing operator files or HEAD." {
+code_workspace_verified_trunk = element "create_verified_trunk_workspace" "Function" "Fetch product trunk, create a private detached checkout and admit its exact physical history without changing operator files or HEAD." {
     properties {
         "cascade.semanticId" "element.code.workspace.verified-trunk"
         "cascade.parent" "element.component.workspace"
         "cascade.sourcePath" "cascade/workspace/closeout.py"
         "cascade.sourceSymbol" "create_verified_trunk_workspace"
+    }
+}
+
+code_workspace_closeout_history = element "VerifiedTrunkWorkspace.verify_history" "Method" "Bind the fetched product target and canonical board root to a fresh terminal-history proof; target movement or unavailable split-root evidence refuses use." {
+    properties {
+        "cascade.semanticId" "element.code.workspace.closeout-history"
+        "cascade.parent" "element.component.workspace"
+        "cascade.sourcePath" "cascade/workspace/closeout.py"
+        "cascade.sourceSymbol" "VerifiedTrunkWorkspace.verify_history"
     }
 }
 
@@ -5156,9 +5255,51 @@ code_teams_publish_to_board_scan = code_teams_candidate_validate -> code_teams_b
     }
 }
 
-code_teams_scan_to_parse = code_teams_board_scan -> code_board_parse "Parses every discovered physical document" {
+code_teams_scan_to_parse = code_teams_board_scan -> code_board_physical_scan "Requests an exhaustive read-only scan of the supplied candidate root" {
     properties {
         "cascade.semanticId" "relationship.code.teams.scan-parse"
+    }
+}
+
+code_teams_history_to_scan = code_teams_history_proof -> code_teams_board_scan "Rescans candidate and pinned accepted inventories for every proof attempt" {
+    properties {
+        "cascade.semanticId" "relationship.code.teams.history-scan"
+    }
+}
+
+code_teams_history_to_refusal = code_teams_history_proof -> code_teams_history_refusal "Returns exact evidence and repair prerequisites on refusal" {
+    properties {
+        "cascade.semanticId" "relationship.code.teams.history-refusal"
+    }
+}
+
+code_teams_material_inspect_to_history = code_teams_material_inspect -> code_teams_history_proof "Binds fresh accepted-history proof into publication material" {
+    properties {
+        "cascade.semanticId" "relationship.code-teams-material-inspect-to-history"
+    }
+}
+
+code_workspace_history_to_owner = code_workspace_history_repair -> code_workspace_mutation_owner "Previews repairs only through the canonical lifecycle owner" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.history-owner"
+    }
+}
+
+code_workspace_lifecycle_merge_to_history = code_workspace_lifecycle_merge -> code_teams_history_proof "Requires a fresh proof for the exact lifecycle result" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.lifecycle-merge-history"
+    }
+}
+
+code_boss_merge_to_lifecycle_merge = code_boss_merge -> code_workspace_lifecycle_merge "Delegates guarded Task integration" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.merge-lifecycle-merge"
+    }
+}
+
+code_boss_epic_promote_to_lifecycle_merge = code_boss_epic_promote -> code_workspace_lifecycle_merge "Delegates guarded Epic promotion" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.epic-promote-lifecycle-merge"
     }
 }
 
@@ -5171,5 +5312,41 @@ code_boss_epic_to_landed = code_boss_epic -> code_boss_merged_epic "Requires acc
 code_boss_landed_to_workspace = code_boss_merged_epic -> code_workspace_verified_trunk "Reads a freshly fetched detached trunk" {
     properties {
         "cascade.semanticId" "relationship.code.boss.landed-workspace"
+    }
+}
+
+code_workspace_create_to_history = code_workspace_create -> code_workspace_checkout_history "Requires exact checkout and canonical board admission before preparation or registration" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.create-history"
+    }
+}
+
+code_workspace_resume_to_history = code_workspace_resume_epic -> code_workspace_checkout_history "Requires fresh physical history before resumed preparation or registry refresh" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.resume-history"
+    }
+}
+
+code_workspace_checkout_to_proof = code_workspace_checkout_history -> code_teams_history_proof "Consumes a fresh revision-bound terminal-history proof" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.checkout-history-proof"
+    }
+}
+
+code_workspace_verified_to_history = code_workspace_verified_trunk -> code_workspace_closeout_history "Admits the fetched target before exposing the disposable checkout" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.verified-history"
+    }
+}
+
+code_workspace_closeout_to_proof = code_workspace_closeout_history -> code_teams_history_proof "Compares fetched or canonical split-root board evidence with the pinned accepted revision" {
+    properties {
+        "cascade.semanticId" "relationship.code.workspace.closeout-history-proof"
+    }
+}
+
+code_boss_landed_to_history = code_boss_merged_epic -> code_workspace_closeout_history "Rechecks the accepted merge first-parent history before consuming the Epic document" {
+    properties {
+        "cascade.semanticId" "relationship.code.boss.landed-history"
     }
 }

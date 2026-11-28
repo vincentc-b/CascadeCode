@@ -17,7 +17,13 @@ from cascade.board.context import (
     resolve_tracking_root,
     route_planning_path,
 )
-from cascade.board.errors import GitError, GitSynchronizationError, NotFound, SchemaError
+from cascade.board.errors import (
+    BoardError,
+    GitError,
+    GitSynchronizationError,
+    NotFound,
+    SchemaError,
+)
 from cascade.board.gitutil import (
     commit_paths,
     has_git,
@@ -30,7 +36,7 @@ from cascade.board.lock import process_lock
 from cascade.board.parse import parse_doc, parse_text, render_doc
 from cascade.board.paths import column_dir, status_for_column
 from cascade.board.types import BoardIndex, Column, WorkDoc, WorkId, WorkMeta, WorkTier
-from cascade.board.validate import validate_doc
+from cascade.board.validate import validate_doc, validate_physical_identity
 from cascade.board.work_ids import allocate_hierarchical_id
 
 _COLUMNS = ("1_backlog", "2_active", "3_completed")
@@ -146,6 +152,85 @@ def list_board(root: Path) -> BoardIndex:
     if snapshot is not None:
         snapshot[repo] = board
     return board
+
+
+def scan_physical_board(root: Path) -> BoardIndex:
+    """Read and validate every lifecycle document in exactly ``root``.
+
+    Unlike :func:`list_board`, this publication-oriented scan does not route to
+    a configured tracking repository and does not tolerate malformed files.
+    All discovered defects are reported with their physical paths, and no file
+    is written or selected as canonical when duplicate IDs exist.
+    """
+
+    physical_root = Path(root).resolve()
+    docs_root = physical_root / "docs"
+    issues: list[str] = []
+    paths: list[Path] = []
+    if docs_root.is_symlink():
+        issues.append(f"symlink: {docs_root}")
+    elif docs_root.is_dir():
+        for _tier, dirname in _TIER_DIRS:
+            _collect_physical_markdown(docs_root / dirname, paths, issues)
+
+    records: list[WorkMeta] = []
+    occurrences: dict[str, list[Path]] = {}
+    for path in sorted(paths):
+        try:
+            meta = parse_doc(path).meta
+        except (SchemaError, OSError, UnicodeDecodeError) as exc:
+            issues.append(f"malformed {path}: {exc}")
+            continue
+        records.append(meta)
+        occurrences.setdefault(meta.id, []).append(path)
+
+    for work_id, duplicates in sorted(occurrences.items()):
+        if len(duplicates) > 1:
+            issues.append(
+                f"duplicate id {work_id}: " + ", ".join(str(path) for path in duplicates)
+            )
+
+    board = BoardIndex(
+        by_id={meta.id: meta for meta in records if len(occurrences[meta.id]) == 1}
+    )
+    for meta in records:
+        try:
+            validate_physical_identity(meta, board)
+        except BoardError as exc:
+            issues.append(f"identity {meta.path}: {exc}")
+
+    if issues:
+        raise SchemaError("invalid physical board:\n- " + "\n- ".join(issues))
+    return board
+
+
+def _collect_physical_markdown(
+    directory: Path, paths: list[Path], issues: list[str]
+) -> None:
+    """Collect Markdown below one tier without following directory symlinks."""
+
+    if directory.is_symlink():
+        issues.append(f"symlink: {directory}")
+        return
+    if not directory.is_dir():
+        return
+    try:
+        entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+    except OSError as exc:
+        issues.append(f"unreadable {directory}: {exc}")
+        return
+    for entry in entries:
+        path = Path(entry.path)
+        if entry.is_symlink():
+            issues.append(f"symlink: {path}")
+            continue
+        if entry.is_dir(follow_symlinks=False):
+            _collect_physical_markdown(path, paths, issues)
+        elif entry.name.endswith(".md"):
+            if entry.is_file(follow_symlinks=False):
+                paths.append(path)
+            else:
+                issues.append(f"not a regular file: {path}")
 
 
 def allocate_id(

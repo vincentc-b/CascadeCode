@@ -65,7 +65,7 @@ custom "cascade-teams-code" {
         "cascade.codeComponent" "element.component.teams"
     }
     include code_teams_epic code_teams_feature code_teams_task code_teams_skills code_teams_runtime code_teams_swe
-    include code_teams_board_scan code_teams_publication code_teams_budget_reserve code_teams_validation_operation code_teams_validation_profile code_teams_validation_material code_teams_material_inspect code_teams_receipt_match code_teams_proof_bind code_teams_review_identity code_teams_validate_publish code_teams_validator
+    include code_teams_board_scan code_teams_history_proof code_teams_history_refusal code_teams_publication code_teams_budget_reserve code_teams_validation_operation code_teams_validation_profile code_teams_validation_material code_teams_material_inspect code_teams_receipt_match code_teams_proof_bind code_teams_review_identity code_teams_validate_publish code_teams_validator
     include code_teams_candidate_materialize code_teams_candidate code_teams_candidate_refusal code_teams_candidate_validate code_teams_candidate_evidence
     autoLayout lr
 }
@@ -104,7 +104,7 @@ custom "cascade-board-code" {
     properties {
         "cascade.codeComponent" "element.component.board"
     }
-    include code_board_list code_board_index code_board_parse code_board_move code_board_validate
+    include code_board_list code_board_index code_board_parse code_board_move code_board_validate code_board_physical_scan code_board_physical_identity
     autoLayout lr
 }
 
@@ -134,7 +134,7 @@ custom "cascade-boss-code" {
     properties {
         "cascade.codeComponent" "element.component.boss"
     }
-    include code_boss_merged_epic code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_feature code_boss_epic
+    include code_boss_merged_epic code_boss_queue code_boss_order code_boss_retry code_boss_merge code_boss_epic_promote code_boss_feature code_boss_epic
     include code_boss_evidence code_boss_retire code_boss_review code_boss_review_route code_boss_exact_result code_boss_accepted_identity code_boss_open_review_identity code_boss_reconcile code_boss_lock code_boss_obligation code_boss_repair_postcheck_gate code_boss_delivery_view code_boss_delivery_execution_predicate code_boss_dependency_delivery_gate
     include code_boss_review_generation code_boss_review_pending
     autoLayout lr
@@ -203,8 +203,8 @@ custom "cascade-workspace-code" {
     properties {
         "cascade.codeComponent" "element.component.workspace"
     }
-    include code_workspace_verified_trunk code_workspace_fast_forward code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
-    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight
+    include code_workspace_verified_trunk code_workspace_closeout_history code_workspace_fast_forward code_workspace_ownership code_workspace_store code_workspace_closure code_workspace_publish code_review_union code_review_layout code_review_scheduler
+    include code_workspace_resolve code_workspace_doc_owner code_workspace_mutation_owner code_workspace_history_repair code_workspace_board code_workspace_select code_workspace_registry code_workspace_create code_workspace_checkout_history code_workspace_resume_epic code_workspace_persist code_workspace_descendant_proof code_workspace_retire code_workspace_preflight code_workspace_lifecycle_merge
     include code_workspace_invoke code_workspace_owner_live code_workspace_queue_kickoff code_workspace_kickoff_live code_workspace_live_begin code_workspace_live_refresh
     include code_workspace_delivery code_workspace_resume code_workspace_schedule code_workspace_delivery_locked code_workspace_retained_feature
     autoLayout lr

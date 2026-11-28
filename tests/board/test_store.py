@@ -17,6 +17,7 @@ from cascade.board import (
     move_doc,
     pin_parent,
     read_doc,
+    scan_physical_board,
     write_doc,
 )
 from tests.support import add_doc, make_repo
@@ -52,6 +53,64 @@ def test_write_without_git_returns_none(tmp_path: Path) -> None:
     assert doc.meta.status == "backlog"
     listed = list_board(root)
     assert set(listed.by_id) == {"epic_001"}
+
+
+def test_physical_scan_reports_every_identity_defect_with_exact_paths(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path, git=False)
+    epic = add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    feature = add_doc(
+        root,
+        id="feat_001_001",
+        title="Feature",
+        tier="feature",
+        parent="epic_001",
+    )
+    assert set(scan_physical_board(root).by_id) == {"epic_001", "feat_001_001"}
+
+    duplicate = root / "docs/features/3_completed" / feature.meta.path.name
+    duplicate.write_bytes(feature.meta.path.read_bytes())
+    wrong_filename = root / "docs/epics/1_backlog/not_an_epic.md"
+    wrong_filename.write_bytes(epic.meta.path.read_bytes())
+    wrong_tier = root / "docs/tasks/1_backlog" / feature.meta.path.name
+    wrong_tier.write_bytes(feature.meta.path.read_bytes())
+    ambiguous_filename = root / "docs/features/1_backlog/feat_001_999_alias.md"
+    ambiguous_filename.write_text(
+        feature.meta.path.read_text(encoding="utf-8").replace(
+            "feat_001_001", "feat_001"
+        ),
+        encoding="utf-8",
+    )
+    wrong_parent = root / "docs/features/1_backlog/feat_002_001_wrong_parent.md"
+    wrong_parent.write_text(
+        feature.meta.path.read_text(encoding="utf-8")
+        .replace("feat_001_001", "feat_002_001"),
+        encoding="utf-8",
+    )
+    linked = root / "docs/tasks/1_backlog/task_001_link.md"
+    linked.symlink_to(feature.meta.path)
+
+    with pytest.raises(SchemaError) as raised:
+        scan_physical_board(root)
+
+    message = str(raised.value)
+    for path in (
+        duplicate,
+        feature.meta.path,
+        wrong_filename,
+        wrong_tier,
+        ambiguous_filename,
+        wrong_parent,
+        linked,
+    ):
+        assert str(path) in message
+    assert "duplicate id feat_001_001" in message
+    assert "status backlog is not legal in 3_completed" in message
+    assert "tier feature is not in docs/features" in message
+    assert "encodes 'feat_001_999', not id feat_001" in message
+    assert "parent 'epic_001' does not match epic segment epic_002" in message
+    assert "symlink" in message
 
 
 def test_write_commits_only_that_file(tmp_path: Path) -> None:

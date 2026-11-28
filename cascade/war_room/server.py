@@ -1078,6 +1078,13 @@ class WarRoomRequestHandler(BaseHTTPRequestHandler):
                 conflict_paths=result.conflict_paths,
                 branch=result.branch,
                 task_id=task_id,
+                refusal_kind=result.refusal_kind,
+                detail=result.detail or None,
+                owner_action=result.owner_action or None,
+                affected_ids=(list(result.affected_ids) if result.affected_ids else None),
+                evidence_paths=(
+                    list(result.evidence_paths) if result.evidence_paths else None
+                ),
             )
             self._json_response(status, payload)
             return

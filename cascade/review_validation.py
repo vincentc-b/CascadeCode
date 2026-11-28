@@ -19,6 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Iterator, Literal, Mapping
 
+from cascade.board.types import BoardIndex
 from cascade.task.incident_budget import (
     IncidentOperationDecision,
     IncidentOperationPermit,
@@ -99,6 +100,7 @@ class ExactMaterialInspection:
 
     material: ExactValidationMaterial | None = None
     refusal: MergeCandidateRefusal | None = None
+    history_refusal: TerminalHistoryRefusal | None = None
     reason: str | None = None
     owner_action: str = ""
 
@@ -130,6 +132,43 @@ class ExactMergeCandidate:
     result_commit: str
     result_tree: str
     checkout: Path
+
+
+@dataclass(frozen=True, slots=True)
+class TerminalHistoryRefusal:
+    """Actionable refusal for one exact candidate/history comparison."""
+
+    kind: Literal[
+        "malformed",
+        "duplicate",
+        "hierarchy",
+        "history",
+        "evidence_unavailable",
+        "target_changed",
+    ]
+    affected_ids: tuple[str, ...]
+    paths: tuple[str, ...]
+    source_revision: str
+    target_revision: str
+    result_revision: str
+    accepted_revision: str
+    canonical_owners: tuple[tuple[str, str], ...]
+    reason: str
+    owner_action: str
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedTerminalHistoryProof:
+    """Fresh proof that a candidate retains one pinned accepted board history."""
+
+    source_revision: str
+    target_revision: str
+    result_revision: str
+    result_tree: str
+    accepted_revision: str
+    retained_ids: tuple[str, ...]
+    terminal_ids: tuple[str, ...]
+    fingerprint: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -583,6 +622,8 @@ def materialize_exact_merge_candidate(
     repository: Path,
     source_sha: str | None,
     target_sha: str | None,
+    *,
+    prefer_source_paths: tuple[str, ...] = (),
 ) -> Iterator[ExactMergeCandidate | MergeCandidateRefusal]:
     """Create an owned checkout and resolve an exact pair with Git's merge path.
 
@@ -669,20 +710,40 @@ def materialize_exact_merge_candidate(
                     checkout, "diff", "--name-only", "--diff-filter=U"
                 ).stdout.splitlines() if line
             )
-            yield MergeCandidateRefusal(
-                "conflict" if conflicts else "unknown", exact_source, exact_target,
-                (
-                    "The exact source/target pair has merge conflicts."
-                    if conflicts else "Git could not resolve the exact source/target pair."
-                ),
-                (
-                    "Resolve the listed product conflicts on the source branch and refresh both heads."
-                    if conflicts else "Inspect the bounded Git diagnostic and restore a mergeable exact pair."
-                ),
-                conflicts,
-                _sanitized_tail(f"{merge.stdout}\n{merge.stderr}", repository, checkout),
+            safe_preference = bool(prefer_source_paths) and all(
+                path
+                and not Path(path).is_absolute()
+                and ".." not in Path(path).parts
+                for path in prefer_source_paths
             )
-            return
+            if safe_preference and set(conflicts) == set(prefer_source_paths):
+                resolved_conflict = _candidate_git(
+                    checkout, "checkout", exact_source, "--", *prefer_source_paths
+                )
+                remaining = tuple(
+                    line for line in _candidate_git(
+                        checkout, "diff", "--name-only", "--diff-filter=U"
+                    ).stdout.splitlines() if line
+                )
+                if resolved_conflict.returncode == 0 and not remaining:
+                    merge = resolved_conflict
+            if merge.returncode == 0:
+                conflicts = ()
+            else:
+                yield MergeCandidateRefusal(
+                    "conflict" if conflicts else "unknown", exact_source, exact_target,
+                    (
+                        "The exact source/target pair has merge conflicts."
+                        if conflicts else "Git could not resolve the exact source/target pair."
+                    ),
+                    (
+                        "Resolve the listed product conflicts on the source branch and refresh both heads."
+                        if conflicts else "Inspect the bounded Git diagnostic and restore a mergeable exact pair."
+                    ),
+                    conflicts,
+                    _sanitized_tail(f"{merge.stdout}\n{merge.stderr}", repository, checkout),
+                )
+                return
 
         merge_head = checkout / ".git" / "MERGE_HEAD"
         if merge_head.is_file():
@@ -780,6 +841,15 @@ def inspect_exact_validation_material(
                     "before requesting admission."
                 ),
             )
+        history = prove_accepted_terminal_history(
+            repository, result, result.target_sha
+        )
+        if isinstance(history, TerminalHistoryRefusal):
+            return ExactMaterialInspection(
+                history_refusal=history,
+                reason=f"board_history_{history.kind}",
+                owner_action=history.owner_action,
+            )
         unconfined = _unconfined_candidate_source(result.checkout)
         if unconfined is not None:
             return ExactMaterialInspection(
@@ -807,6 +877,12 @@ def inspect_exact_validation_material(
                 "attempt_budget": profile.attempt_budget,
             },
             "incident_policy_version": policy_version,
+            "board_history": {
+                "accepted_revision": history.accepted_revision,
+                "retained_ids": list(history.retained_ids),
+                "terminal_ids": list(history.terminal_ids),
+                "fingerprint": history.fingerprint,
+            },
             "runtime": _candidate_runtime_identity(result),
         }
         try:
@@ -890,6 +966,16 @@ def validate_exact_merge_candidate(
                 "fixture_environment", "board", candidate, None, command, None, "", "",
                 dependency_revision, runtime,
                 f"Repair the candidate lifecycle documents ({type(exc).__name__}) before validation.",
+            )
+
+        history = prove_accepted_terminal_history(
+            repository, candidate, candidate.target_sha
+        )
+        if isinstance(history, TerminalHistoryRefusal):
+            return ExactCandidateValidation(
+                "fixture_environment", "board", candidate, None, command, None, "", "",
+                dependency_revision, runtime, history.owner_action,
+                f"board_history_{history.kind}: {history.reason}",
             )
 
         unconfined = _unconfined_candidate_source(candidate.checkout)
@@ -1090,24 +1176,403 @@ def _is_product_assertion(diagnostic: str) -> bool:
     return bool(re.search(r"AssertionError|(^|\n)\s*assert\s|(^|\n)FAILED\s", diagnostic))
 
 
-def validate_publication_board(worktree: Path) -> None:
-    """Validate physical documents being published, without split-root redirection.
+def validate_publication_board(worktree: Path) -> BoardIndex:
+    """Validate the exact physical checkout without split-root redirection."""
 
-    Normal board scans intentionally skip malformed drafts; publication must
-    reject those and duplicate IDs rather than hide them from the live board.
+    from cascade.board.store import scan_physical_board
+
+    return scan_physical_board(worktree)
+
+
+def _history_path(label: str, revision: str, path: Path, root: Path) -> str:
+    try:
+        relative = path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        relative = str(path.resolve())
+    return f"{label}@{revision}:{relative}"
+
+
+def _feedback_identity(meta: object) -> tuple[tuple[object, ...], ...]:
+    feedback = getattr(meta, "cancellation_feedback", ())
+    return tuple(
+        (
+            item.child_id,
+            item.child_tier,
+            item.parent_id,
+            item.reason,
+            item.cancelled_at.isoformat(),
+            tuple(item.available_dispositions),
+            item.disposition,
+            item.resolved_at.isoformat() if item.resolved_at is not None else None,
+        )
+        for item in feedback
+    )
+
+
+def _physical_refusal_details(error: Exception) -> tuple[str, tuple[str, ...]]:
+    """Classify Board's path-rich aggregate without discarding its evidence."""
+
+    message = str(error)
+    if "duplicate id" in message:
+        kind = "duplicate"
+    elif "identity " in message or " parent " in message:
+        kind = "hierarchy"
+    else:
+        kind = "malformed"
+    affected = tuple(
+        sorted(set(re.findall(r"\b(?:epic|feat|task)(?:_[0-9]+)+\b", message)))
+    )
+    return kind, affected
+
+
+def _history_repair_previews(
+    work_ids: tuple[str, ...], owner_root: Path
+) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...], tuple[str, ...]]:
+    """Return established owners, prerequisites, and unavailable owner facts."""
+
+    from cascade.board.errors import BoardError
+    from cascade.workspace.errors import MutationOwnerError
+    from cascade.workspace.integration_worktree import preview_terminal_history_repair
+
+    owners: list[tuple[str, str]] = []
+    prerequisites: list[str] = []
+    unavailable: list[str] = []
+    for work_id in work_ids:
+        try:
+            preview = preview_terminal_history_repair((work_id,), trunk=owner_root)[0]
+        except MutationOwnerError as exc:
+            unavailable.append(f"{work_id}: {exc.reason}")
+            prerequisites.append(f"{work_id}: {exc.action}")
+        except (BoardError, OSError) as exc:
+            unavailable.append(f"{work_id}: canonical owner evidence is unreadable: {exc}")
+            prerequisites.append(
+                f"{work_id}: repair the canonical physical board before retrying"
+            )
+        else:
+            owners.append((work_id, str(preview.owner)))
+            prerequisites.append(preview.prerequisite)
+    return tuple(owners), tuple(prerequisites), tuple(unavailable)
+
+
+@contextmanager
+def _materialize_pinned_revision(
+    repository: Path, revision: str
+) -> Iterator[tuple[Path, str] | MergeCandidateRefusal]:
+    """Check out one full pinned commit without reading a moving worktree."""
+
+    value = revision.strip() if isinstance(revision, str) else ""
+    if not value or re.fullmatch(r"[0-9a-fA-F]{40,64}", value) is None:
+        yield MergeCandidateRefusal(
+            "missing" if not value else "unknown",
+            None,
+            value or None,
+            "A full pinned accepted revision is required for history comparison.",
+            "Refresh and retain the exact accepted target revision before retrying.",
+        )
+        return
+    repository = Path(repository).resolve()
+    with tempfile.TemporaryDirectory(prefix="cascade-accepted-history-") as owned:
+        checkout = Path(owned) / "checkout"
+        clone = _candidate_git(
+            None,
+            "clone",
+            "--quiet",
+            "--no-checkout",
+            "--no-local",
+            str(repository),
+            str(checkout),
+        )
+        if clone.returncode:
+            yield MergeCandidateRefusal(
+                "unknown",
+                None,
+                value,
+                "The pinned accepted repository is unavailable.",
+                "Restore the accepted repository and its exact Git object before retrying.",
+                diagnostics=_sanitized_tail(clone.stderr, repository, checkout),
+            )
+            return
+        probe = _candidate_git(checkout, "rev-parse", "--verify", f"{value}^{{commit}}")
+        exact = probe.stdout.strip()
+        if probe.returncode or re.fullmatch(r"[0-9a-f]{40,64}", exact) is None:
+            yield MergeCandidateRefusal(
+                "unknown",
+                None,
+                value,
+                "The pinned accepted revision is not available as a commit.",
+                "Fetch the accepted target object and retry with the same full revision.",
+                diagnostics=_sanitized_tail(probe.stderr, repository, checkout),
+            )
+            return
+        result = _candidate_git(checkout, "checkout", "--quiet", "--detach", exact)
+        if result.returncode:
+            yield MergeCandidateRefusal(
+                "unknown",
+                None,
+                exact,
+                "The pinned accepted revision could not be checked out.",
+                "Repair accepted-repository Git object access before retrying.",
+                diagnostics=_sanitized_tail(result.stderr, repository, checkout),
+            )
+            return
+        yield checkout, exact
+
+
+def prove_accepted_terminal_history(
+    repository: Path,
+    candidate: ExactMergeCandidate,
+    accepted_revision: str,
+    *,
+    accepted_repository: Path | None = None,
+    candidate_board_root: Path | None = None,
+    owner_root: Path | None = None,
+    target_ref: str | None = None,
+) -> AcceptedTerminalHistoryProof | TerminalHistoryRefusal:
+    """Compare a fresh physical candidate with one pinned accepted board.
+
+    Paths and document bytes may change through valid lifecycle transitions.
+    Identity, retained records, terminal state, cancellation cleanup, and parent
+    feedback may not regress.  No result is cached: repaired candidates and a
+    moved target are independently scanned on every call.
     """
-    from cascade.board.parse import parse_doc
-    from cascade.board.errors import SchemaError
 
-    seen = {}
-    for tier in ("epics", "features", "tasks"):
-        for column in ("1_backlog", "2_active", "3_completed", "4_cancelled"):
-            for path in sorted((worktree / "docs" / tier / column).glob("*.md")):
-                if path.is_symlink():
-                    raise SchemaError(f"publication board symlink: {path}")
-                doc = parse_doc(path)
-                if doc.meta.id in seen:
-                    raise SchemaError(
-                        f"duplicate id {doc.meta.id} at {path} and {seen[doc.meta.id]}"
+    repository = Path(repository).resolve()
+    accepted_repository = Path(accepted_repository or repository).resolve()
+    candidate_root = Path(candidate_board_root or candidate.checkout).resolve()
+    owner_root = Path(owner_root or repository).resolve()
+
+    from cascade.board.context import get_project_context
+    from cascade.board.errors import BoardError
+
+    project = get_project_context()
+    if (
+        project is not None
+        and project.target.root.resolve() != project.tracking.root.resolve()
+        and candidate_board_root is None
+    ):
+        return TerminalHistoryRefusal(
+            "evidence_unavailable",
+            (),
+            (str(candidate.checkout), str(project.tracking.root.resolve())),
+            candidate.source_sha,
+            candidate.target_sha,
+            candidate.result_commit,
+            accepted_revision,
+            (),
+            "split-root candidate history evidence was not supplied",
+            "materialize the exact tracking-root candidate and pass its physical root",
+        )
+
+    observed_target: str | None = None
+    if target_ref is not None:
+        before = _candidate_git(repository, "rev-parse", "--verify", f"{target_ref}^{{commit}}")
+        observed_target = before.stdout.strip()
+        if before.returncode or observed_target != candidate.target_sha:
+            return TerminalHistoryRefusal(
+                "target_changed",
+                (),
+                (),
+                candidate.source_sha,
+                candidate.target_sha,
+                candidate.result_commit,
+                accepted_revision,
+                (),
+                f"target {target_ref} no longer names candidate target {candidate.target_sha}",
+                "refresh the target, materialize a new candidate, and prove history again",
+            )
+
+    try:
+        candidate_board = validate_publication_board(candidate_root)
+    except BoardError as exc:
+        kind, affected_ids = _physical_refusal_details(exc)
+        owners, prerequisites, unavailable = _history_repair_previews(
+            affected_ids, owner_root
+        )
+        return TerminalHistoryRefusal(
+            "evidence_unavailable" if unavailable else kind,
+            affected_ids,
+            (str(candidate_root),),
+            candidate.source_sha,
+            candidate.target_sha,
+            candidate.result_commit,
+            accepted_revision,
+            owners,
+            "; ".join(
+                [f"candidate physical inventory is invalid: {exc}", *unavailable]
+            ),
+            "; ".join(prerequisites)
+            or "restore identifiable records, then validate a new exact candidate",
+        )
+    except (OSError, ValueError) as exc:
+        return TerminalHistoryRefusal(
+            "evidence_unavailable",
+            (),
+            (str(candidate_root),),
+            candidate.source_sha,
+            candidate.target_sha,
+            candidate.result_commit,
+            accepted_revision,
+            (),
+            f"candidate physical inventory is unavailable: {exc}",
+            "restore the exact candidate inventory and retry without reusing prior proof",
+        )
+
+    with _materialize_pinned_revision(accepted_repository, accepted_revision) as pinned:
+        if isinstance(pinned, MergeCandidateRefusal):
+            return TerminalHistoryRefusal(
+                "evidence_unavailable",
+                (),
+                (str(accepted_repository),),
+                candidate.source_sha,
+                candidate.target_sha,
+                candidate.result_commit,
+                accepted_revision,
+                (),
+                pinned.message,
+                pinned.owner_action,
+            )
+        accepted_root, exact_accepted = pinned
+        try:
+            accepted_board = validate_publication_board(accepted_root)
+        except BoardError as exc:
+            kind, affected_ids = _physical_refusal_details(exc)
+            owners, prerequisites, unavailable = _history_repair_previews(
+                affected_ids, owner_root
+            )
+            return TerminalHistoryRefusal(
+                "evidence_unavailable" if unavailable else kind,
+                affected_ids,
+                (str(accepted_repository),),
+                candidate.source_sha,
+                candidate.target_sha,
+                candidate.result_commit,
+                exact_accepted,
+                owners,
+                "; ".join(
+                    [f"accepted physical inventory is invalid: {exc}", *unavailable]
+                ),
+                "; ".join(prerequisites)
+                or "restore identifiable pinned records through their canonical owners",
+            )
+        except (OSError, ValueError) as exc:
+            return TerminalHistoryRefusal(
+                "evidence_unavailable",
+                (),
+                (str(accepted_repository),),
+                candidate.source_sha,
+                candidate.target_sha,
+                candidate.result_commit,
+                exact_accepted,
+                (),
+                f"accepted physical inventory is unavailable: {exc}",
+                "restore the pinned accepted inventory before retrying",
+            )
+
+        issues: list[str] = []
+        affected: set[str] = set()
+        paths: list[str] = []
+        terminal_ids: list[str] = []
+        for work_id, accepted in sorted(accepted_board.by_id.items()):
+            current = candidate_board.by_id.get(work_id)
+            accepted_path = _history_path(
+                "accepted", exact_accepted, accepted.path, accepted_root
+            )
+            paths.append(accepted_path)
+            if current is None:
+                affected.add(work_id)
+                issues.append(f"{work_id} retained specification is missing")
+                continue
+            current_path = _history_path(
+                "candidate", candidate.result_commit, current.path, candidate_root
+            )
+            paths.append(current_path)
+            if current.tier != accepted.tier or current.parent != accepted.parent:
+                affected.add(work_id)
+                issues.append(f"{work_id} tier or parent lineage changed")
+            missing_children = sorted(set(accepted.children) - set(current.children))
+            if missing_children:
+                affected.update((work_id, *missing_children))
+                issues.append(
+                    f"{work_id} dropped accepted children {', '.join(missing_children)}"
+                )
+            if accepted.status in {"completed", "cancelled"}:
+                terminal_ids.append(work_id)
+                if current.status != accepted.status:
+                    affected.add(work_id)
+                    issues.append(
+                        f"{work_id} terminal status reopened from {accepted.status} "
+                        f"to {current.status}"
                     )
-                seen[doc.meta.id] = path
+            accepted_cancel = (
+                accepted.cancellation_reason,
+                accepted.cancelled_at.isoformat() if accepted.cancelled_at else None,
+                accepted.cancellation_step,
+                accepted.cancellation_error,
+            )
+            current_cancel = (
+                current.cancellation_reason,
+                current.cancelled_at.isoformat() if current.cancelled_at else None,
+                current.cancellation_step,
+                current.cancellation_error,
+            )
+            if current_cancel != accepted_cancel:
+                affected.add(work_id)
+                issues.append(f"{work_id} cancellation reason/timestamp/cleanup outcome changed")
+            if _feedback_identity(current) != _feedback_identity(accepted):
+                affected.add(work_id)
+                issues.append(f"{work_id} accepted parent feedback/disposition changed")
+
+        if issues:
+            owners, prerequisites, unavailable = _history_repair_previews(
+                tuple(sorted(affected)), owner_root
+            )
+            return TerminalHistoryRefusal(
+                "evidence_unavailable" if unavailable else "history",
+                tuple(sorted(affected)),
+                tuple(dict.fromkeys(paths)),
+                candidate.source_sha,
+                candidate.target_sha,
+                candidate.result_commit,
+                exact_accepted,
+                owners,
+                "; ".join([*issues, *unavailable]),
+                "; ".join(prerequisites),
+            )
+
+    if target_ref is not None:
+        after = _candidate_git(repository, "rev-parse", "--verify", f"{target_ref}^{{commit}}")
+        if after.returncode or after.stdout.strip() != observed_target:
+            return TerminalHistoryRefusal(
+                "target_changed",
+                (),
+                (),
+                candidate.source_sha,
+                candidate.target_sha,
+                candidate.result_commit,
+                accepted_revision,
+                (),
+                f"target {target_ref} moved while terminal history was being proved",
+                "refresh the target, materialize a new candidate, and prove history again",
+            )
+
+    identity = {
+        "candidate": {
+            "source": candidate.source_sha,
+            "target": candidate.target_sha,
+            "result": candidate.result_commit,
+            "tree": candidate.result_tree,
+        },
+        "accepted_revision": exact_accepted,
+        "retained_ids": sorted(accepted_board.by_id),
+        "terminal_ids": sorted(terminal_ids),
+    }
+    return AcceptedTerminalHistoryProof(
+        candidate.source_sha,
+        candidate.target_sha,
+        candidate.result_commit,
+        candidate.result_tree,
+        exact_accepted,
+        tuple(sorted(accepted_board.by_id)),
+        tuple(sorted(terminal_ids)),
+        exact_material_fingerprint(identity),
+    )

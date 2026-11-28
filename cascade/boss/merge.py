@@ -27,6 +27,11 @@ class MergeResult:
     branch: str | None = None
     target_branch: str | None = None
     conflict_paths: tuple[str, ...] = ()
+    refusal_kind: str | None = None
+    detail: str = ""
+    owner_action: str = ""
+    affected_ids: tuple[str, ...] = ()
+    evidence_paths: tuple[str, ...] = ()
 
 
 def _architecture_gate_refusal(work_id: str, boundary: str, root: Path) -> str | None:
@@ -56,6 +61,11 @@ def _merge_result_from_sync(
         branch=branch,
         target_branch=target_branch,
         conflict_paths=sync.conflict_paths,
+        refusal_kind=sync.refusal_kind,
+        detail=sync.detail,
+        owner_action=sync.owner_action,
+        affected_ids=sync.affected_ids,
+        evidence_paths=sync.evidence_paths,
     )
 
 
@@ -131,12 +141,14 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
 
     target_branch = f"feat/{feature_id}"
     from cascade.workspace.branch_synchronization import merge_lifecycle_source
-    from cascade.workspace.integration_worktree import repair_missing_worktree
+    from cascade.workspace.integration_worktree import get_integration_worktree
 
-    merge_root = None
-    repaired = repair_missing_worktree("feature", feature_id, trunk=trunk)
-    if repaired is not None:
-        merge_root = repaired.path
+    registered = get_integration_worktree(trunk, "feature", feature_id)
+    merge_root = (
+        registered.path
+        if registered is not None and registered.path.is_dir()
+        else None
+    )
     pre_merge_sha = head_sha(merge_root) if merge_root is not None else None
     worktree_clean = _worktree_clean(merge_root) if merge_root is not None else False
 
@@ -151,9 +163,7 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
             sync, branch=branch, target_branch=target_branch
         )
 
-    if merge_root is None and repaired is not None:
-        merge_root = repaired.path
-    elif merge_root is None:
+    if merge_root is None:
         merge_root = _feature_merge_checkout(trunk, feature_id)
 
     merge_sha = sync.merge_sha
@@ -169,8 +179,16 @@ def _merge_task_branch(task_id: str, *, root: Path) -> MergeResult:
         if _remove_superseded_feature_copy(merge_root, feature_id, trunk):
             merge_sha = head_sha(merge_root)
     except Exception:
-        if worktree_clean and created_merge_commit:
-            _run(["reset", "--hard", "ORIG_HEAD"], merge_root, check=False)
+        # Roll back only the exact merge commit created from the previously
+        # clean checkout.  If any later lifecycle write advanced or dirtied the
+        # owner, preserve it for recovery instead of resetting another change.
+        if (
+            worktree_clean
+            and created_merge_commit
+            and head_sha(merge_root) == merge_sha
+            and _worktree_clean(merge_root)
+        ):
+            _run(["reset", "--merge", pre_merge_sha], merge_root, check=False)
         return MergeResult(
             ok=False,
             reason="post_merge_failed",
@@ -396,15 +414,33 @@ def promote_epic_to_trunk(epic_id: str, *, root: Path | None = None) -> MergeRes
                 target_branch=target_branch,
             )
 
-        merge_sha, conflict_paths = _merge_epic_branch(trunk, source_branch, epic_id)
-        if merge_sha is None:
-            return MergeResult(
-                ok=False,
-                reason="branch_conflict",
-                branch=source_branch,
-                target_branch=target_branch,
-                conflict_paths=conflict_paths,
+        from cascade.workspace.branch_synchronization import (
+            merge_exact_lifecycle_candidate,
+        )
+
+        preferred = _expected_epic_pointer_resolution_path(
+            trunk, source_branch, epic_id
+        )
+        from cascade.workspace.integration_worktree import merged_board
+
+        epic_meta = merged_board(trunk).by_id.get(epic_id)
+        guarded_owner = epic_meta is not None and epic_meta.tier == "epic"
+        sync = merge_exact_lifecycle_candidate(
+            trunk,
+            trunk,
+            source_branch,
+            target_branch,
+            prefer_source_paths=(preferred,) if preferred is not None else (),
+            owner_work_id=epic_id if guarded_owner else None,
+            owner_tier="epic" if guarded_owner else None,
+            owner_parent=epic_meta.parent if guarded_owner else None,
+            owner_must_match_checkout=False,
+        )
+        if not sync.ok:
+            return _merge_result_from_sync(
+                sync, branch=source_branch, target_branch=target_branch
             )
+        merge_sha = sync.merge_sha
 
     return MergeResult(
         ok=True,
@@ -448,17 +484,13 @@ def _feature_merge_checkout(trunk: Path, feature_id: str) -> Path | None:
     from cascade.workspace.integration_worktree import (
         get_integration_worktree,
         integration_branch,
-        repair_missing_worktree,
     )
 
     feat_branch = integration_branch("feature", feature_id)
     if not _branch_exists(trunk, feat_branch):
         return None
-    repaired = repair_missing_worktree("feature", feature_id, trunk=trunk)
-    if repaired is not None:
-        return repaired.path
     entry = get_integration_worktree(trunk, "feature", feature_id)
-    return entry.path if entry is not None else None
+    return entry.path if entry is not None and entry.path.is_dir() else None
 
 
 def _epic_merge_checkout(trunk: Path, epic_id: str) -> Path | None:
@@ -561,6 +593,37 @@ def _merge_epic_branch(
         _run(["merge", "--abort"], repo, check=False)
         return None, conflict_paths
     return head_sha(repo), ()
+
+
+def _expected_epic_pointer_resolution_path(
+    repo: Path, branch: str, epic_id: str
+) -> str | None:
+    """Return the sole managed pointer path eligible for source preference."""
+
+    try:
+        from cascade.board.parse import parse_doc, parse_text
+        from cascade.workspace.integration_worktree import is_trunk_pointer
+
+        pointer_meta = list_board(repo).by_id[epic_id]
+        pointer = parse_doc(pointer_meta.path)
+        path = pointer_meta.path.resolve().relative_to(repo.resolve()).as_posix()
+        source = _run(["show", f"{branch}:{path}"], repo, check=False)
+        live = parse_text(source.stdout, repo / path) if source.returncode == 0 else None
+    except Exception:
+        return None
+    if (
+        path.startswith("docs/epics/2_active/")
+        and pointer.meta.tier == "epic"
+        and pointer.meta.id == epic_id
+        and pointer.meta.integration_branch == branch
+        and is_trunk_pointer(pointer.meta)
+        and live is not None
+        and live.meta.tier == "epic"
+        and live.meta.id == epic_id
+        and not is_trunk_pointer(live.meta)
+    ):
+        return path
+    return None
 
 
 def _is_expected_epic_pointer_conflict(

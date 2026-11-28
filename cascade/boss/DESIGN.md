@@ -60,6 +60,14 @@ delivery projection before it persists descendants, so a stale callback or an
 unsynchronized intended Epic target cannot exploit time between Boss closeout
 and checkout retirement.
 
+`REQ-BOSS-MERGE-001`: Boss Task, Feature and Epic acceptance delegates to
+Workspace's exact lifecycle merge gate while retaining the lifecycle lock,
+comment and architecture gates, current delivery evidence, source cleanliness
+and target preflight. Refusals preserve exact kind, affected IDs, evidence paths,
+diagnostic and owner action for recovery. Boss does not repair, delete, rank or
+choose physical board copies. Epic promotion permits only the established
+activation-pointer resolution and still refuses every unrelated conflict.
+
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
 and [views](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 connect `cascade-context` → `cascade-containers` →
@@ -72,6 +80,7 @@ own forge state. These functions collaborate within the local supervisor.
 | Entry point | Responsibility |
 |---|---|
 | [merge_task_branch](merge.py) | Lifecycle lock; validate current delivery, target, comments and architecture; merge and persist completion. |
+| [promote_epic_to_trunk](merge.py) | Under product-trunk preflight, consume the same exact physical/history gate and preserve the managed activation-pointer exception. |
 | [retry_pending_task_merges](../task_rollup.py) | Resume durable queued actions; retain source/target validation metadata and attempt history. |
 | [try_complete_feature](rollup.py) | Serialize rollup; stage completed document for review and reconcile accepted closeout. |
 | [_complete_verified_repair_source](rollup.py) | After the fresh closeout gate, persist the retained active source document as completed before retirement; absent or already terminal source is an idempotent no-op. |
@@ -146,15 +155,19 @@ Under `REQ-BOSS-001`, [`_merged_epic_review_landed`](epic_complete.py) requires
 the expected Epic source and configured trunk target. It obtains a
 [fresh detached remote-trunk workspace](../workspace/DESIGN.md#remote-trunk-inspection-and-synchronization),
 observes the forge review as merged, and requires its accepted merge SHA to be
-an ancestor of that fetched revision. It then checks the Epic document: an
-active document must match the source blob, while a completed document must
-match title, children and body. Missing registration, unavailable forge evidence,
-wrong route, absent merge ancestry or document mismatch returns no accepted
-document. The caller retains the closeout obligation.
+an ancestor of that fetched revision. Before consuming the document it resolves
+the accepted merge's first parent and asks Workspace to prove that the fetched
+physical board retains that pinned terminal and cancellation history. A moved
+target, unavailable split-root ownership, malformed/duplicate board, or reopened
+terminal descendant returns no accepted document and leaves the closeout
+obligation pending. It then checks the Epic document: an active document must
+match the source blob, while a completed document must match title, children and
+body. Missing registration, unavailable forge evidence, wrong route, absent merge
+ancestry or document mismatch also returns no accepted document.
 
-This proves acceptance and document presence on the observed remote revision;
-it does not independently establish required CI on the accepted merge SHA,
-validate every physical board record, or synchronize the operator checkout.
+This proves acceptance, physical history retention and document presence on the
+observed remote revision; it does not independently establish required CI on the
+accepted merge SHA or synchronize the operator checkout.
 The review registry and Git remain the evidence stores. Restart repeats remote
 inspection, and normal context-manager exit cleans the private checkout.
 
@@ -163,10 +176,12 @@ flowchart TD
     Route[Expected source and trunk route] --> Fetch[Workspace fetch and detached inspection]
     Fetch --> Forge{Fresh forge state merged?}
     Forge -->|yes| Ancestor{Accepted merge on fetched trunk?}
-    Ancestor -->|yes| Document{Epic document matches?}
+    Ancestor -->|yes| History{Pinned physical history retained?}
+    History -->|yes| Document{Epic document matches?}
     Document -->|yes| Accept[Return accepted remote document]
     Forge -->|no or unavailable| Wait[Retain closeout obligation]
     Ancestor -->|no| Wait
+    History -->|no or unavailable| Wait
     Document -->|no| Wait
 ```
 

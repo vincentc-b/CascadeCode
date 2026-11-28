@@ -152,7 +152,11 @@ def test_epic_closes_through_one_idempotent_implementation_review(
     assert not pending.ok and pending.reason == "pending_epic_review"
 
     implementation_tip = _git(root, "rev-parse", "epic/epic_001").stdout.strip()
-    snapshot.update(state="merged", merge_sha=implementation_tip)
+    snapshot.update(
+        state="merged",
+        merge_sha=implementation_tip,
+        source_revision=implementation_tip,
+    )
     not_landed = confirm_epic_complete_result("epic_001", "human", root=root)
     assert not not_landed.ok and not_landed.reason == "pending_epic_review"
 

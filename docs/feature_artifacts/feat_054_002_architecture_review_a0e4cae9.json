@@ -1,0 +1,72 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "a0e4cae9d1ab03224f715e0fbd5774b8cda46ce4",
+  "proposal": {
+    "owner_work_id": "feat_054_002",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade",
+    "design_owner_directory": "cascade",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_054",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/2_active/feat_054_002_preserve_canonical_board_history_across_merge_and_checkout_boundaries.md",
+      "revision": "a0e4cae9d1ab03224f715e0fbd5774b8cda46ce4",
+      "content_digest": "ca8c97645e7cd9e904b76ebdb0160db66ad78eaa6a47a5a4470682d21b18d4e3"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "owning_work": "feat_054_002",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "a0e4cae9d1ab03224f715e0fbd5774b8cda46ce4"
+      },
+      "content_digest": "52f2b22eeeedec974b4d00549e230341cb34592bd25d46f6298fdc13e58727f5"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-BOARD-001",
+      "REQ-WORKSPACE-OWNER-001",
+      "REQ-WORKSPACE-RETIRE-001",
+      "REQ-BOSS-001"
+    ],
+    "decision_citations": [
+      "DEC-BOARD-001",
+      "DEC-WORKSPACE-OWNER-001",
+      "DEC-BOSS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-board-code",
+      "cascade-teams-code",
+      "cascade-workspace-code",
+      "cascade-boss-code"
+    ],
+    "affected_work_ids": [
+      "feat_054_002"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "The committed Feature plan at a0e4cae9 only classifies the existing Epic models.swe test failure as a stale fixture after checking the current validator and fixture history. The exact diff changes no implementation, design, model or source-contract file. Reviewed the plan diff, cascade/DESIGN.md and the Board, Workspace and Boss child designs against their source entries and current model/views/contract. Context and containers retain the same actors, processes, stores and split product/tracking boundaries. Board, Teams, Workspace and Boss component and Code ownership remains accurate for integrated Tasks 001, 002 and 004. Source-contract validation passed 14 tests on a0e4cae9. Task 003 merge and Task 005 final combined render/navigation, accepted-target proof, normal/refusal/restart traces and final-diff review remain pending. Task 001 primary acceptance correction remains a separate lifecycle-owner prerequisite. This is an interim plan review."
+  }
+}

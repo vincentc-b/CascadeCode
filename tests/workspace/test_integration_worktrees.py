@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from cascade.board.context import set_project_context
+from cascade.board.errors import GitError
 from cascade.board.store import (
     list_board,
     move_doc,
@@ -26,6 +27,7 @@ from cascade.watchdog import (
 )
 from cascade.workspace.integration_worktree import (
     cancel_integration_worktree,
+    create_integration_worktree,
     ensure_integration_worktree,
     get_integration_worktree,
     invalidate_merged_board,
@@ -35,6 +37,7 @@ from cascade.workspace.integration_worktree import (
     merged_board,
     repair_missing_worktree,
     prove_terminal_retirement,
+    preview_terminal_history_repair,
     resolve_mutation_owner,
     retire_integration_worktree,
     retire_terminal_registered_worktrees,
@@ -120,6 +123,63 @@ def test_mutation_owner_ignores_completed_copy_in_sibling_worktree(tmp_path: Pat
     move_doc("task_001", "active", root=root)
     assert read_doc_in_worktree("task_001", owner.path).meta.status == "active"
     assert read_doc_in_worktree("task_001", sibling.path).meta.status == "completed"
+
+
+def test_terminal_history_repair_preview_is_read_only_and_owner_scoped(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    doc = add_doc(root, id="epic_001", title="Epic", tier="epic", status="completed")
+    before = doc.meta.path.read_bytes()
+
+    preview = preview_terminal_history_repair(("epic_001",), trunk=root)
+
+    assert preview[0].work_id == "epic_001"
+    assert preview[0].owner == root.resolve()
+    assert "validate a new exact candidate" in preview[0].prerequisite
+    assert doc.meta.path.read_bytes() == before
+
+
+def test_checkout_history_refusal_leaves_no_registry_branch_or_worktree(
+    tmp_path: Path,
+) -> None:
+    root = make_repo(tmp_path)
+    _initial_commit(root)
+    original = add_doc(
+        root, id="epic_001", title="Epic", tier="epic", status="completed"
+    )
+    duplicate = root / "docs/epics/1_backlog/epic_001_duplicate.md"
+    duplicate.parent.mkdir(parents=True, exist_ok=True)
+    duplicate.write_bytes(original.meta.path.read_bytes())
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "duplicate physical history"],
+        cwd=root,
+        check=True,
+    )
+
+    branch = integration_branch("epic", "epic_001")
+    checkout = integration_worktree_path("epic", "epic_001", trunk=root)
+    with pytest.raises(GitError, match="history admission refused"):
+        create_integration_worktree(
+            "epic",
+            "epic_001",
+            branch=branch,
+            base_ref="HEAD",
+            trunk=root,
+        )
+
+    assert load_registry(root) == []
+    assert not _branch_exists(root, branch)
+    assert not checkout.exists()
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert str(checkout) not in listed
 
 
 def test_mutation_owner_rejects_changed_registry_identity(tmp_path: Path) -> None:

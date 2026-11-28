@@ -1,0 +1,72 @@
+{
+  "expected_generation": null,
+  "expected_plan_revision": "c651365be00dc1a0e695a3cd7b212b789e125671",
+  "proposal": {
+    "owner_work_id": "feat_054_002",
+    "authorized_owner": "feature_architect",
+    "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "code_directory": "cascade",
+    "design_owner_directory": "cascade",
+    "code_repository_key": "repository-874164fe0f964e347c1e9926",
+    "integration_lineage": "epic:epic_054",
+    "documentation_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+    "documentation_repository_role": "target",
+    "documentation_destination_path": ".",
+    "proposed_ancestor_context": null,
+    "accepted_baseline": {
+      "kind": "empty_baseline",
+      "model": null,
+      "accepted_review_unit_id": null
+    },
+    "baseline_pointer_id": null,
+    "baseline_generation": null,
+    "rollout_version": 1,
+    "status": "draft",
+    "plan": {
+      "repository_key": "repository-874164fe0f964e347c1e9926",
+      "repository_role": "tracking",
+      "path": "docs/features/2_active/feat_054_002_preserve_canonical_board_history_across_merge_and_checkout_boundaries.md",
+      "revision": "c651365be00dc1a0e695a3cd7b212b789e125671",
+      "content_digest": "96567aba30e396acfe57ad7806859806e85ebec365e9aec28c547a600149529e"
+    },
+    "design": {
+      "reference": {
+        "target_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "code_directory": "cascade",
+        "design_owner_directory": "cascade",
+        "owning_work": "feat_054_002",
+        "destination_repository_key": "target-9f61bc6d6f8ae8cb7d196c8b327650d5",
+        "destination_repository_role": "target",
+        "repository_path": "cascade/DESIGN.md",
+        "revision": "c651365be00dc1a0e695a3cd7b212b789e125671"
+      },
+      "content_digest": "c19f09ba59c214e6f73ec2a7bf5aa66caf84b217739121b197848ebcd44e4bfc"
+    },
+    "proposed_model": null,
+    "requirement_citations": [
+      "REQ-BOARD-001",
+      "REQ-WORKSPACE-OWNER-001",
+      "REQ-WORKSPACE-RETIRE-001",
+      "REQ-BOSS-001"
+    ],
+    "decision_citations": [
+      "DEC-BOARD-001",
+      "DEC-WORKSPACE-OWNER-001",
+      "DEC-BOSS-001"
+    ],
+    "view_citations": [
+      "cascade-context",
+      "cascade-containers",
+      "cascade-supervisor-components",
+      "cascade-board-code",
+      "cascade-teams-code",
+      "cascade-workspace-code",
+      "cascade-boss-code"
+    ],
+    "affected_work_ids": [
+      "feat_054_002"
+    ],
+    "architecture_impact": "no_diagram_change",
+    "impact_reason": "The exact committed Feature revision changes planning records and Task acceptance only. It assigns physical candidate scanning, accepted terminal-history proof, guarded merge and integration-checkout admission, and final architecture reconciliation to Tasks 001–005. It changes no product source, DESIGN.md, model, views or source contract. Current Board design accurately limits publication scanning to the source checkout; Workspace owns mutation and retirement; Boss consumes closeout; Teams owns the review validator. Existing source-linked Code views and normal/failure/restart descriptions still match current code. The feature plan inventories context, container, component, Code and behavior impact and assigns implementation updates to the Tasks. Task 001's active primary acceptance remains TBD; its detailed execution contract is in the Feature plan and supported lifecycle correction remains required before Feature completion. Reviewed cascade/DESIGN.md, cascade/board/DESIGN.md, cascade/workspace/DESIGN.md, cascade/boss/DESIGN.md and the pinned model, views and source contract; the 14 C4 source-contract tests passed. No browser or render result is claimed for this unchanged planning model."
+  }
+}

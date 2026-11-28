@@ -159,6 +159,16 @@ def branch_sync_update_to_dict(
     )
     payload["ok"] = False
     payload["work_id"] = work_id
+    if result.refusal_kind is not None:
+        payload["refusal_kind"] = result.refusal_kind
+    if result.detail:
+        payload["detail"] = result.detail
+    if result.owner_action:
+        payload["owner_action"] = result.owner_action
+    if result.affected_ids:
+        payload["affected_ids"] = list(result.affected_ids)
+    if result.evidence_paths:
+        payload["evidence_paths"] = list(result.evidence_paths)
     return payload
 
 

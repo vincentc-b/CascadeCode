@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 import os
 import py_compile
@@ -9,8 +10,10 @@ import time
 import pytest
 
 from cascade import review_rebase, review_validation
+from cascade.board.errors import SchemaError
 from cascade.review_owner import current_review_owner, review_owner_exited
 from cascade.review_validation import (
+    AcceptedTerminalHistoryProof,
     ExactMergeCandidate,
     MergeCandidateRefusal,
     ReviewValidationAdmissionError,
@@ -18,6 +21,7 @@ from cascade.review_validation import (
     inspect_exact_validation_material,
     materialize_exact_merge_candidate,
     preflight_review_validation,
+    prove_accepted_terminal_history,
     run_review_validation,
     review_validation_timeout,
     validate_exact_merge_candidate,
@@ -134,6 +138,39 @@ def test_exact_material_inspection_precedes_admission_and_binds_complete_identit
     assert identity["runtime"]["dependency_revision"]
     assert identity["runtime"]["executable_sha256"] != "unavailable"
     assert identity["runtime"]["import_roots"] == ["."]
+    assert identity["board_history"]["accepted_revision"] == target
+    assert identity["board_history"]["fingerprint"]
+
+
+def test_exact_material_inspection_refuses_missing_accepted_history(tmp_path: Path) -> None:
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "target")
+    retained = add_doc(
+        root, id="epic_001", title="Retained", tier="epic", status="completed"
+    )
+    accepted = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-B", "source-history-loss", accepted)
+    _git(root, "rm", retained.meta.path.relative_to(root).as_posix())
+    _git(root, "commit", "-m", "drop accepted lifecycle history")
+    source = _git(root, "rev-parse", "HEAD")
+    profile = approved_review_validation_profile(
+        root, command=(sys.executable, "-c", "")
+    )
+
+    inspected = inspect_exact_validation_material(
+        root,
+        source,
+        accepted,
+        profile=profile,
+        review_identity={"review_id": "history-loss"},
+    )
+
+    assert inspected.material is None
+    assert inspected.reason == "board_history_evidence_unavailable"
+    assert inspected.history_refusal is not None
+    assert inspected.history_refusal.affected_ids == ("epic_001",)
+    assert "retained specification is missing" in inspected.history_refusal.reason
+    assert "restore the work document" in inspected.owner_action
 
 
 def test_duplicate_lifecycle_document_blocks_before_checks_and_push(
@@ -516,6 +553,210 @@ def test_exact_candidate_materialization_is_private_deterministic_and_typed(
     with materialize_exact_merge_candidate(root, "0" * 40, target) as unknown:
         assert isinstance(unknown, MergeCandidateRefusal)
         assert unknown.kind == "unknown"
+
+
+def test_exact_candidate_rejects_divergent_stale_and_completed_board_copies(
+    tmp_path: Path,
+) -> None:
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "source")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    source_feature = add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="backlog",
+        parent="epic_001",
+    )
+    source = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "target")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    target_feature = add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    target = _git(root, "rev-parse", "HEAD")
+
+    with materialize_exact_merge_candidate(root, source, target) as candidate:
+        assert isinstance(candidate, ExactMergeCandidate)
+        with pytest.raises(SchemaError) as raised:
+            review_validation.validate_publication_board(candidate.checkout)
+
+        message = str(raised.value)
+        assert "duplicate id feat_001" in message
+        assert str(
+            candidate.checkout / source_feature.meta.path.relative_to(root)
+        ) in message
+        assert str(
+            candidate.checkout / target_feature.meta.path.relative_to(root)
+        ) in message
+
+
+def test_terminal_history_proof_allows_lifecycle_move_and_retains_terminal_record(
+    tmp_path: Path,
+) -> None:
+    from cascade.board.store import move_doc
+
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "target")
+    add_doc(root, id="epic_001", title="Retained", tier="epic", status="completed")
+    add_doc(root, id="epic_002", title="Moving", tier="epic", status="backlog")
+    accepted = _git(root, "rev-parse", "HEAD")
+    _git(root, "checkout", "-B", "source-history", accepted)
+    move_doc("epic_002", "active", root=root)
+    source = _git(root, "rev-parse", "HEAD")
+
+    with materialize_exact_merge_candidate(root, source, accepted) as candidate:
+        assert isinstance(candidate, ExactMergeCandidate)
+        proof = prove_accepted_terminal_history(root, candidate, accepted)
+
+    assert isinstance(proof, AcceptedTerminalHistoryProof)
+    assert proof.retained_ids == ("epic_001", "epic_002")
+    assert proof.terminal_ids == ("epic_001",)
+    assert proof.target_revision == accepted
+
+
+def test_terminal_history_refuses_changed_cancellation_cleanup_with_owner_preview(
+    tmp_path: Path,
+) -> None:
+    from cascade.board.store import read_doc, save_doc
+    from cascade.review_validation import TerminalHistoryRefusal
+
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "target")
+    add_doc(root, id="epic_001", title="Cancelled", tier="epic", status="cancelled")
+    doc = read_doc("epic_001", root=root)
+    doc.meta.cancellation_reason = "superseded"
+    doc.meta.cancelled_at = datetime(2026, 11, 27, tzinfo=timezone.utc)
+    doc.meta.cancellation_step = "complete"
+    save_doc(doc, previous_path=doc.meta.path, root=root)
+    accepted = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "-B", "source-history", accepted)
+    changed = read_doc("epic_001", root=root)
+    changed.meta.cancellation_step = "failed"
+    changed.meta.cancellation_error = "cleanup interrupted"
+    save_doc(changed, previous_path=changed.meta.path, root=root)
+    source = _git(root, "rev-parse", "HEAD")
+
+    with materialize_exact_merge_candidate(root, source, accepted) as candidate:
+        assert isinstance(candidate, ExactMergeCandidate)
+        refusal = prove_accepted_terminal_history(root, candidate, accepted)
+
+    assert isinstance(refusal, TerminalHistoryRefusal)
+    assert refusal.kind == "history"
+    assert refusal.affected_ids == ("epic_001",)
+    assert refusal.canonical_owners == (("epic_001", str(root.resolve())),)
+    assert "cancellation reason/timestamp/cleanup outcome changed" in refusal.reason
+    assert "materialize and validate a new exact candidate" in refusal.owner_action
+    assert any(path.startswith(f"accepted@{accepted}:") for path in refusal.paths)
+
+
+def test_terminal_history_refuses_changed_parent_cancellation_disposition(
+    tmp_path: Path,
+) -> None:
+    from cascade.board.store import read_doc, save_doc
+    from cascade.board.types import CancellationFeedback
+    from cascade.review_validation import TerminalHistoryRefusal
+
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "target")
+    add_doc(
+        root,
+        id="epic_001",
+        title="Parent",
+        tier="epic",
+        status="active",
+        children=["feat_001_001"],
+    )
+    add_doc(
+        root,
+        id="feat_001_001",
+        title="Cancelled child",
+        tier="feature",
+        status="cancelled",
+        parent="epic_001",
+    )
+    timestamp = datetime(2026, 11, 27, tzinfo=timezone.utc)
+    parent = read_doc("epic_001", root=root)
+    parent.meta.cancellation_feedback = [
+        CancellationFeedback(
+            "feat_001_001",
+            "feature",
+            "epic_001",
+            "superseded",
+            timestamp,
+            disposition="continue_reduced_scope",
+            resolved_at=timestamp,
+        )
+    ]
+    save_doc(parent, previous_path=parent.meta.path, root=root)
+    accepted = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "-B", "source-history", accepted)
+    changed = read_doc("epic_001", root=root)
+    changed.meta.cancellation_feedback[0].disposition = "replace_replan"
+    save_doc(changed, previous_path=changed.meta.path, root=root)
+    source = _git(root, "rev-parse", "HEAD")
+
+    with materialize_exact_merge_candidate(root, source, accepted) as candidate:
+        assert isinstance(candidate, ExactMergeCandidate)
+        refusal = prove_accepted_terminal_history(root, candidate, accepted)
+
+    assert isinstance(refusal, TerminalHistoryRefusal)
+    assert refusal.kind == "history"
+    assert refusal.affected_ids == ("epic_001",)
+    assert "accepted parent feedback/disposition changed" in refusal.reason
+
+
+def test_terminal_history_proof_rejects_target_drift_before_reuse(tmp_path: Path) -> None:
+    from cascade.review_validation import TerminalHistoryRefusal
+
+    root, source, target = _candidate_repo(tmp_path)
+    with materialize_exact_merge_candidate(root, source, target) as candidate:
+        assert isinstance(candidate, ExactMergeCandidate)
+        _git(root, "checkout", "target")
+        (root / "drift.txt").write_text("moved\n", encoding="utf-8")
+        _git(root, "add", "drift.txt")
+        _git(root, "commit", "-m", "move target")
+        refusal = prove_accepted_terminal_history(
+            root, candidate, target, target_ref="target"
+        )
+
+    assert isinstance(refusal, TerminalHistoryRefusal)
+    assert refusal.kind == "target_changed"
+    assert refusal.target_revision == target
+
+
+def test_terminal_history_proof_requires_explicit_split_root_candidate(
+    tmp_path: Path,
+) -> None:
+    from cascade.board.context import set_project_context
+    from cascade.review_validation import TerminalHistoryRefusal
+    from cascade.workspace.types import ProjectContext
+
+    product_home = tmp_path / "product"
+    product_home.mkdir()
+    root, source, target = _candidate_repo(product_home)
+    tracking = make_repo(tmp_path / "tracking", git=False)
+    set_project_context(ProjectContext.split(root, tracking))
+    try:
+        with materialize_exact_merge_candidate(root, source, target) as candidate:
+            assert isinstance(candidate, ExactMergeCandidate)
+            refusal = prove_accepted_terminal_history(root, candidate, target)
+    finally:
+        set_project_context(None)
+
+    assert isinstance(refusal, TerminalHistoryRefusal)
+    assert refusal.kind == "evidence_unavailable"
+    assert str(tracking.resolve()) in refusal.paths
+    assert "exact tracking-root candidate" in refusal.owner_action
 
 
 def test_exact_candidate_conflict_and_malformed_board_refuse_before_spawn(tmp_path):

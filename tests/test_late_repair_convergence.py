@@ -1219,9 +1219,20 @@ def test_watchdog_owner_repair_delivers_and_independently_verifies_once(
     assert retry_pending_task_merges(root) == []
     assert len(forge.created) == 1
     assert physical_turns == [task_id]
-    refs = [line.split()[2] for line in push_log.read_text(encoding="utf-8").splitlines()]
+    pushed = [line.split() for line in push_log.read_text(encoding="utf-8").splitlines()]
+    refs = [entry[2] for entry in pushed]
     assert refs.count("refs/heads/feat/feat_001") == 1
-    assert refs.count("refs/heads/epic/epic_001") == (1 if split_roots else 3)
+    if split_roots:
+        # The guarded checkout retains a distinct product target even though
+        # the tracking checkout owns lifecycle writes. Count the initial target
+        # publication and the accepted merge, not a spurious retry or closeout.
+        epic_updates = [entry[:2] for entry in pushed if entry[2] == "refs/heads/epic/epic_001"]
+        assert epic_updates == [
+            ["0" * 40, forge.current_target_head],
+            [forge.current_target_head, forge.current_merge_sha],
+        ]
+    else:
+        assert refs.count("refs/heads/epic/epic_001") == 3
     review_messages = [
         event
         for event in read_events("war_room", 0, root=root)[0]

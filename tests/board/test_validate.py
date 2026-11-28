@@ -73,9 +73,9 @@ def test_unknown_provider_fails_validation() -> None:
 
 def test_models_wrong_tier_key_fails_validation() -> None:
     epic = _load("epics/1_backlog/epic_001_ok.md")
-    epic.meta.models = {"swe": "wrong-tier-model"}
+    epic.meta.models = {"reviewer": "wrong-tier-model"}
     board = BoardIndex(by_id={epic.meta.id: epic.meta})
-    with pytest.raises(SchemaError, match="swe"):
+    with pytest.raises(SchemaError, match="reviewer"):
         validate_doc(epic, board)
 
 
