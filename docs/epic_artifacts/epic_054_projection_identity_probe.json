@@ -1,0 +1,64 @@
+{
+  "revision": "fe28e6820d8a554b83090be2a55b889bbb39e2f7",
+  "result": "complete and both invalid identity cases display verified closure",
+  "cases": {
+    "complete": {
+      "merge_ci": {
+        "state": "green",
+        "reason": null,
+        "merge_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observed_target_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "trunk_sync": {
+        "state": "succeeded",
+        "local_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "remote_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "result": null,
+        "reason": null
+      },
+      "verified_closure": {
+        "state": "verified",
+        "verified": true
+      }
+    },
+    "missing_identities": {
+      "merge_ci": {
+        "state": "green",
+        "reason": null,
+        "merge_sha": null,
+        "observed_target_sha": null
+      },
+      "trunk_sync": {
+        "state": "succeeded",
+        "local_sha": null,
+        "remote_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "result": null,
+        "reason": null
+      },
+      "verified_closure": {
+        "state": "verified",
+        "verified": true
+      }
+    },
+    "mismatched_local_sha": {
+      "merge_ci": {
+        "state": "green",
+        "reason": null,
+        "merge_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observed_target_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "trunk_sync": {
+        "state": "succeeded",
+        "local_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "remote_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "result": null,
+        "reason": null
+      },
+      "verified_closure": {
+        "state": "verified",
+        "verified": true
+      }
+    }
+  },
+  "limits": "Executes extracted production declarations with their decorators and helper functions; no registry, HTTP, browser or end-to-end writer reachability is tested."
+}
