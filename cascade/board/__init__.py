@@ -26,6 +26,7 @@ from cascade.board.store import (
     move_doc,
     pin_parent,
     read_doc,
+    scan_physical_board,
     write_doc,
 )
 from cascade.board.work_ids import allocate_hierarchical_id
@@ -85,6 +86,7 @@ __all__ = [
     "parse_work_id",
     "pin_parent",
     "read_doc",
+    "scan_physical_board",
     "reset_id_reservations",
     "status_for_column",
     "validate_doc",

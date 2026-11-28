@@ -1089,7 +1089,7 @@ code_board_list = element "list_board" "Function" "Scans lifecycle directories a
     }
 }
 
-code_board_index = element "BoardIndex" "Dataclass" "Holds work metadata and duplicates from a directory scan." {
+code_board_index = element "BoardIndex" "Dataclass" "Holds work metadata indexed by unique work ID for one board projection." {
     properties {
         "cascade.semanticId" "element.code.board.index"
         "cascade.parent" "element.component.board"
@@ -1125,6 +1125,24 @@ code_board_validate = element "validate_doc" "Function" "Checks document identit
     }
 }
 
+code_board_physical_scan = element "scan_physical_board" "Function" "Scans exactly one checkout without tracking-root redirection and reports every malformed file, symlink, duplicate and physical identity defect with its path." {
+    properties {
+        "cascade.semanticId" "element.code.board.physical-scan"
+        "cascade.parent" "element.component.board"
+        "cascade.sourcePath" "cascade/board/store.py"
+        "cascade.sourceSymbol" "scan_physical_board"
+    }
+}
+
+code_board_physical_identity = element "validate_physical_identity" "Function" "Checks tier, filename, lifecycle column and immediate-parent identity for one parsed physical record." {
+    properties {
+        "cascade.semanticId" "element.code.board.physical-identity"
+        "cascade.parent" "element.component.board"
+        "cascade.sourcePath" "cascade/board/validate.py"
+        "cascade.sourceSymbol" "validate_physical_identity"
+    }
+}
+
 board_list_to_parse = code_board_list -> code_board_parse "Reads Markdown metadata during scans" {
     properties {
         "cascade.semanticId" "relationship.board-list-to-parse"
@@ -1152,6 +1170,24 @@ board_move_to_validate = code_board_move -> code_board_validate "Validates the p
 board_validate_to_index = code_board_validate -> code_board_index "Checks parent and dependency metadata against" {
     properties {
         "cascade.semanticId" "relationship.code-board-validate-to-index"
+    }
+}
+
+board_physical_scan_to_parse = code_board_physical_scan -> code_board_parse "Parses every discovered Markdown record without following symlinks" {
+    properties {
+        "cascade.semanticId" "relationship.code-board-physical-scan-to-parse"
+    }
+}
+
+board_physical_scan_to_identity = code_board_physical_scan -> code_board_physical_identity "Checks every successfully parsed record and aggregates path-specific defects" {
+    properties {
+        "cascade.semanticId" "relationship.code-board-physical-scan-to-identity"
+    }
+}
+
+board_physical_identity_to_index = code_board_physical_identity -> code_board_index "Resolves immediate parents only from the exact physical scan" {
+    properties {
+        "cascade.semanticId" "relationship.code-board-physical-identity-to-index"
     }
 }
 
@@ -5114,7 +5150,7 @@ rel_dashboard_feature_readiness = code_dashboard_feature_readiness -> code_featu
     }
 }
 
-code_teams_board_scan = element "validate_publication_board" "Function" "Parse all physical lifecycle columns and refuse malformed documents, symlinks and duplicate IDs before source publication." {
+code_teams_board_scan = element "validate_publication_board" "Function" "Delegate exhaustive identity validation of the exact candidate checkout to Board without split-root redirection before source publication." {
     properties {
         "cascade.semanticId" "element.code.teams.board-scan"
         "cascade.parent" "element.component.teams"
@@ -5156,7 +5192,7 @@ code_teams_publish_to_board_scan = code_teams_candidate_validate -> code_teams_b
     }
 }
 
-code_teams_scan_to_parse = code_teams_board_scan -> code_board_parse "Parses every discovered physical document" {
+code_teams_scan_to_parse = code_teams_board_scan -> code_board_physical_scan "Requests an exhaustive read-only scan of the supplied candidate root" {
     properties {
         "cascade.semanticId" "relationship.code.teams.scan-parse"
     }

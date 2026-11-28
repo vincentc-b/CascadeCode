@@ -18,24 +18,47 @@ registered ownership fails before a document move or write. The exact ownership
 contract and typed refusal belong to
 [`REQ-WORKSPACE-OWNER-001`](../workspace/DESIGN.md#work-ownership-and-retirement).
 
-[`list_board`](store.py) rejects two valid files with the same work ID in one
+[`list_board`](store.py) rejects two parseable files with the same work ID in one
 physical checkout, including stale backlog and completed copies. It does not
 pick a winner or mutate files. The merged-board projection can combine
-historical copies from distinct checkouts, but a malformed checkout can still
-prevent the merged board from loading. The guarded publication board validator
-also rejects duplicate IDs and malformed documents in the actual source
-checkout. This does not yet establish integrity of every prospective forge
-merge result; accepted target trees must retain a unique terminal record and
-any matching cancellation feedback. Board consistency is separate from the
-operator trunk synchronization and review acceptance gates.
+historical copies from distinct checkouts and intentionally omits malformed
+drafts from ordinary reads.
+
+[`scan_physical_board`](store.py) is the fail-closed candidate-tree interface for
+`REQ-BOARD-001`. It recursively reads Markdown records beneath every physical
+tier without following symlinks, aggregates malformed records and duplicate IDs,
+then applies [`validate_physical_identity`](validate.py) to tier, filename,
+status/column and immediate-parent identity. Every refusal includes the exact
+physical path, and duplicate records remain unselected. The supplied root is the
+complete evidence boundary: the scan never calls tracking-root resolution or a
+merged-board projection. In a split-repository deployment the caller must supply
+the applicable physical tracking checkout; an absent second root is unavailable
+evidence rather than permission to infer, redirect, repair or delete records.
+Terminal-history and cancellation-provenance comparison remains a separate
+admission proof.
+
+```mermaid
+flowchart TD
+    Candidate[Exact candidate root] --> Walk[Walk physical tier directories without following symlinks]
+    Walk --> Parse[Parse every Markdown record]
+    Parse --> Index[Build unique physical ID index]
+    Index --> Identity[Check tier, filename, status/column and immediate parent]
+    Identity -->|no defects| Admit[Return read-only BoardIndex]
+    Walk -->|symlink or unreadable entry| Refuse[Report all defects with exact paths]
+    Parse -->|malformed or duplicate| Refuse
+    Identity -->|mismatch or missing parent| Refuse
+    Refuse --> Retry[Caller preserves candidate and may retry only with new evidence]
+    Retry --> Candidate
+```
 
 Schema parsing is visible in `cascade-board-code`; the calling publication
 scan is owned by Teams in
 [cascade-teams-code](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/views.dsl)
 and [the package publication contract](../DESIGN.md#publication-implementation-and-recovery).
 The [model](../../architecture/target-9f61bc6d6f8ae8cb7d196c8b327650d5/model.dsl)
-links `validate_publication_board` to `parse_doc`; neither projection ranking
-nor that parse-only scan grants lifecycle mutation authority.
+links Teams' `validate_publication_board` to the Board-owned physical scanner,
+parser and identity validator. Neither projection ranking nor physical
+validation grants lifecycle mutation authority.
 
 ## Safe frontmatter scan performance
 

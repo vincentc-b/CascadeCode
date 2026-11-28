@@ -9,6 +9,7 @@ import time
 import pytest
 
 from cascade import review_rebase, review_validation
+from cascade.board.errors import SchemaError
 from cascade.review_owner import current_review_owner, review_owner_exited
 from cascade.review_validation import (
     ExactMergeCandidate,
@@ -505,6 +506,49 @@ def test_exact_candidate_materialization_is_private_deterministic_and_typed(tmp_
     with materialize_exact_merge_candidate(root, "0" * 40, target) as unknown:
         assert isinstance(unknown, MergeCandidateRefusal)
         assert unknown.kind == "unknown"
+
+
+def test_exact_candidate_rejects_divergent_stale_and_completed_board_copies(
+    tmp_path: Path,
+) -> None:
+    root, _source, _target = _candidate_repo(tmp_path)
+    _git(root, "checkout", "source")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    source_feature = add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="backlog",
+        parent="epic_001",
+    )
+    source = _git(root, "rev-parse", "HEAD")
+
+    _git(root, "checkout", "target")
+    add_doc(root, id="epic_001", title="Epic", tier="epic", status="active")
+    target_feature = add_doc(
+        root,
+        id="feat_001",
+        title="Feature",
+        tier="feature",
+        status="completed",
+        parent="epic_001",
+    )
+    target = _git(root, "rev-parse", "HEAD")
+
+    with materialize_exact_merge_candidate(root, source, target) as candidate:
+        assert isinstance(candidate, ExactMergeCandidate)
+        with pytest.raises(SchemaError) as raised:
+            review_validation.validate_publication_board(candidate.checkout)
+
+        message = str(raised.value)
+        assert "duplicate id feat_001" in message
+        assert str(
+            candidate.checkout / source_feature.meta.path.relative_to(root)
+        ) in message
+        assert str(
+            candidate.checkout / target_feature.meta.path.relative_to(root)
+        ) in message
 
 
 def test_exact_candidate_conflict_and_malformed_board_refuse_before_spawn(tmp_path):

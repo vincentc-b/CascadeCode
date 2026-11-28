@@ -1086,23 +1086,8 @@ def _is_product_assertion(diagnostic: str) -> bool:
 
 
 def validate_publication_board(worktree: Path) -> None:
-    """Validate physical documents being published, without split-root redirection.
+    """Validate the exact physical checkout without split-root redirection."""
 
-    Normal board scans intentionally skip malformed drafts; publication must
-    reject those and duplicate IDs rather than hide them from the live board.
-    """
-    from cascade.board.parse import parse_doc
-    from cascade.board.errors import SchemaError
+    from cascade.board.store import scan_physical_board
 
-    seen = {}
-    for tier in ("epics", "features", "tasks"):
-        for column in ("1_backlog", "2_active", "3_completed", "4_cancelled"):
-            for path in sorted((worktree / "docs" / tier / column).glob("*.md")):
-                if path.is_symlink():
-                    raise SchemaError(f"publication board symlink: {path}")
-                doc = parse_doc(path)
-                if doc.meta.id in seen:
-                    raise SchemaError(
-                        f"duplicate id {doc.meta.id} at {path} and {seen[doc.meta.id]}"
-                    )
-                seen[doc.meta.id] = path
+    scan_physical_board(worktree)

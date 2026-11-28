@@ -8,7 +8,7 @@ from pathlib import Path
 from cascade.agent.providers import parse_provider_id
 from cascade.board.errors import CycleError, SchemaError, StatusMismatch
 from cascade.board.paths import infer_repo_root, legal_folder
-from cascade.board.work_ids import validate_work_id_identity
+from cascade.board.work_ids import filename_work_id_prefix, validate_work_id_identity
 from cascade.board.types import BoardIndex, WorkDoc, WorkMeta, WorkTier
 
 _REQUIRED_HEADINGS: dict[WorkTier, tuple[str, ...]] = {
@@ -85,6 +85,44 @@ def validate_doc(doc: WorkDoc, board: BoardIndex) -> None:
     if meta.parent and meta.parent not in nodes:
         raise SchemaError(f"{meta.id} parent {meta.parent} is not on the board")
     _assert_acyclic(nodes)
+
+
+def validate_physical_identity(meta: WorkMeta, board: BoardIndex) -> None:
+    """Validate one record's on-disk and immediate-parent identity.
+
+    This deliberately excludes mutable planning quality such as headings,
+    dependencies, and skills.  It is the narrow contract needed when deciding
+    whether a prospective Git tree contains one physically coherent board.
+    """
+
+    try:
+        _check_identity(meta)
+    except SchemaError as exc:
+        parent = board.by_id.get(meta.parent) if meta.parent is not None else None
+        if parent is not None:
+            raise SchemaError(f"{exc}; parent path: {parent.path}") from exc
+        raise
+    encoded_id = filename_work_id_prefix(meta.path.stem)
+    if encoded_id != meta.id:
+        raise SchemaError(
+            f"filename {meta.path.name} encodes {encoded_id!r}, not id {meta.id}"
+        )
+    _check_folder(meta)
+    if meta.tier == "epic":
+        if meta.parent is not None:
+            raise SchemaError(f"{meta.id} epic must not have parent {meta.parent}")
+        return
+    if meta.parent is None:
+        raise SchemaError(f"{meta.id} requires a parent")
+    parent = board.by_id.get(meta.parent)
+    if parent is None:
+        raise SchemaError(f"{meta.id} parent {meta.parent} is not in the physical board")
+    expected_tier: WorkTier = "epic" if meta.tier == "feature" else "feature"
+    if parent.tier != expected_tier:
+        raise SchemaError(
+            f"{meta.id} parent {meta.parent} at {parent.path} has tier {parent.tier}; "
+            f"expected {expected_tier}"
+        )
 
 
 def _check_identity(meta: WorkMeta) -> None:

@@ -104,7 +104,7 @@ custom "cascade-board-code" {
     properties {
         "cascade.codeComponent" "element.component.board"
     }
-    include code_board_list code_board_index code_board_parse code_board_move code_board_validate
+    include code_board_list code_board_index code_board_parse code_board_move code_board_validate code_board_physical_scan code_board_physical_identity
     autoLayout lr
 }
 
