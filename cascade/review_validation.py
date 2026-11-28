@@ -648,7 +648,21 @@ def materialize_exact_merge_candidate(
             )
             return
 
-        merge = _candidate_git(checkout, "merge", "--no-commit", "--no-ff", exact_source)
+        # Even --no-commit merges require a committer identity on fresh runners.
+        # Use the same private identity as the synthetic candidate commit.
+        commit_env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Cascade candidate",
+            "GIT_AUTHOR_EMAIL": "candidate@cascade.invalid",
+            "GIT_AUTHOR_DATE": "@0 +0000",
+            "GIT_COMMITTER_NAME": "Cascade candidate",
+            "GIT_COMMITTER_EMAIL": "candidate@cascade.invalid",
+            "GIT_COMMITTER_DATE": "@0 +0000",
+        }
+        merge = _candidate_git(
+            checkout, "merge", "--no-commit", "--no-ff", exact_source,
+            env=commit_env,
+        )
         if merge.returncode:
             conflicts = tuple(
                 line for line in _candidate_git(
@@ -680,15 +694,6 @@ def materialize_exact_merge_candidate(
                     "Inspect local Git integrity before retrying the exact pair.",
                 )
                 return
-            commit_env = {
-                **os.environ,
-                "GIT_AUTHOR_NAME": "Cascade candidate",
-                "GIT_AUTHOR_EMAIL": "candidate@cascade.invalid",
-                "GIT_AUTHOR_DATE": "@0 +0000",
-                "GIT_COMMITTER_NAME": "Cascade candidate",
-                "GIT_COMMITTER_EMAIL": "candidate@cascade.invalid",
-                "GIT_COMMITTER_DATE": "@0 +0000",
-            }
             commit = _candidate_git(
                 checkout, "commit-tree", tree, "-p", exact_target, "-p", exact_source,
                 input_text="Cascade exact merge candidate\n", env=commit_env,
