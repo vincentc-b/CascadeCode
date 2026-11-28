@@ -515,8 +515,19 @@ def test_exact_candidate_real_git_red_then_equal_size_same_second_green(tmp_path
     assert bytecode.exists()
 
 
-def test_exact_candidate_materialization_is_private_deterministic_and_typed(tmp_path):
+@pytest.mark.parametrize("configured_identity", [True, False])
+def test_exact_candidate_materialization_is_private_deterministic_and_typed(
+    tmp_path, monkeypatch, configured_identity
+):
     root, source, target = _candidate_repo(tmp_path)
+    if not configured_identity:
+        monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+        monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+        monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+        monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.useConfigOnly")
+        monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+        for variable in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"):
+            monkeypatch.delenv(variable, raising=False)
     head_before = _git(root, "rev-parse", "HEAD")
     status_before = _git(root, "status", "--porcelain=v1")
     refs_before = _git(root, "show-ref")
