@@ -1,0 +1,81 @@
+{
+  "work_id": "epic_054",
+  "role": "epic_architect",
+  "triggers": [
+    "feat_054_003:active-task-primary-criteria-gate-20261128",
+    "feat_054_003:plan-revision-f4683ee0-handoff-20261128",
+    "feat_054_002:architecture-final-f0389463"
+  ],
+  "reviewed_integration_revision": "6cf7d489f8407902b9028a4fbbf036f491c3d011",
+  "epic_plan_revision": "bb26a5c88b911e3ecbfe2b7682565225301ef018",
+  "feature_plan_revision": "f4683ee06383f5391cb26d9654323a7fc1b4092c",
+  "outcome": "The revised Feature 3 evidence and ownership contracts remain aligned with the approved Epic. No Epic amendment, plan rewrite or replacement Epic sign-off is warranted. This parent review is not a Feature sign-off or completion acceptance.",
+  "observations": [
+    "Canonical Epic read is bb26a5c8; architecture amendments are empty. Latest stored role sign-offs both match the approved revision.",
+    "Canonical Feature 3 read is f4683ee0. Its bounded evidence, writer fence, consumer rejection and restart contracts separate candidate, accepted merge, exact required checks, remote board/history, clean synchronization and independent closure under existing owners.",
+    "Pinned Task inspection confirms active Tasks 001/002 primary Acceptance criteria are TBD. Tasks 003–005 have populated primary criteria. Detailed implementation notes preserve the intended contract but do not correct the canonical primary fields.",
+    "Historical review inspection for active Feature 3 is refused: historical replay requires a completed, non-cancelled work record. No matching Feature publication is independently attested this turn; the Feature Architect must provide its exact receipt through normal sequencing.",
+    "Completed Feature 2 historical review evidence confirms f0389463 remains staged as architecture-review-6f92846660cf4423df2da0bfd58bd6abe98375731e3db50cac32a471a4749113. Linked review 286 names 225f4460. Staging is not acceptance or promotion.",
+    "Feature 2 focused 91/91, Board/C4 26/26 and browser results are attributed child evidence, not Epic reruns. Exploratory 115 passed/28 failed remains non-green without complete per-test classification; the empty-panel timing observation remains unresolved.",
+    "The tool catalog exposes no supported Task primary-criteria correction or terminal architecture-publication recovery. No board filesystem edit, internal ledger mutation, child integration, cross-role publication or terminal-failure replay was attempted."
+  ],
+  "design_closeout": {
+    "reviewed_paths": [
+      "cascade/DESIGN.md#delivery-and-review-boundaries",
+      "cascade/workspace/DESIGN.md#remote-trunk-inspection-and-synchronization",
+      "cascade/boss/DESIGN.md#epic-remote-acceptance",
+      "cascade/watchdog/DESIGN.md#open-review-observation",
+      "cascade/feature/DESIGN.md#generation-bound-late-repair",
+      "cascade/war_room/DESIGN.md#accountable-open-review-projection"
+    ],
+    "basis": "Read owning interface prose and flows against the Feature contract and scoped record-only diff. Current Epic designs explicitly retain the weaker fetched-ancestry/document acceptance and fast-forward behavior; stronger child merge-CI, board, clean-sync and closure work remains proposed here. No executable or architecture content changed in the reviewed clarification.",
+    "diagram_impact": {
+      "context": "cascade-landscape/cascade-context, root DESIGN.md: no actor, external system or responsibility boundary changes in this evidence-only diff. Feature 3 retains aggregate boundary verification.",
+      "containers": "cascade-containers, root/package designs: no runtime, store, communication or isolation change. Existing registry, Git and action persistence remain the planned owners.",
+      "components": "cascade-supervisor-components/cascade-team-components/cascade-war-room-components, package and Boss/Workspace/Watchdog/Feature/War Room designs: no local collaborator changes. Feature Tasks 001–004 own receipt, safe sync, closure/repair and read-only display interfaces; Task 005 reconciles them.",
+      "code": "cascade-boss-code/cascade-workspace-code/cascade-watchdog-code/cascade-feature-code/cascade-dashboard-code/cascade-war-room-http-code: no local source/model/contract edits. Feature inventory names merge_request_snapshot, _merged_epic_review_landed, create_verified_trunk_workspace, review persistence, sync, repair and HTTP consumers. Tasks retain source-path/symbol/kind checks, native integrated Code navigation, pinned source opening, stale-symbol checks and measured warm reuse/render bounds; active Tasks 001/002 still need these requirements in primary acceptance.",
+      "behavior": "Current detached remote inspection, typed refusal, retry and generation-bound repair flows remain unchanged. Feature 3 owns the stronger merged -> exact checks -> board/history -> clean sync -> independent closure or actionable wait flow, including target drift, interrupted persistence and restart."
+    },
+    "updates": "No DESIGN.md or C4 edit is warranted by the record-only diff. No delivery chronology was added to designs and no accepted snapshot was rewritten.",
+    "verification": [
+      "Canonical Epic/Feature reads, empty amendments, Epic sign-off file and completed Feature 2 historical review inspected.",
+      "Pinned Task primary criteria inspected at f4683ee0: two TBD and three populated.",
+      "Six Epic publication references and two Feature 2 references match committed SHA-256 digests.",
+      "git diff --exit-code 5abe8b2d HEAD -- cascade DESIGN.md architecture passed.",
+      "git diff --exit-code e099598b f4683ee0 -- cascade DESIGN.md architecture passed.",
+      "git diff --exit-code f0389463 225f4460 -- cascade DESIGN.md architecture passed.",
+      "git merge-base --is-ancestor e86ee238 f0389463 passed.",
+      "Evidence JSON parsing and git diff --check passed before commit."
+    ],
+    "limitations": "No product test/render/browser rerun is warranted by unchanged executable/model content. No exact merged-trunk CI, child completion acceptance, lifecycle correction, accepted architecture promotion or Epic publication recovery is claimed.",
+    "source_trace": "Traced _merged_epic_review_landed from route check through detached fetched trunk, fresh forge merged state, merge ancestry and document identity. Wrong route, fetch/forge failure, absent ancestry or mismatched document refuses acceptance. create_verified_trunk_workspace owns and cleans its temporary checkout; restart repeats observation. fast_forward_trunk independently checks branch and fetches, then accepts equal heads or --ff-only and permits non-overlapping edits. These are current Epic source limits, not the stronger Feature proposal."
+  },
+  "remaining_gaps": [
+    {
+      "owner": "Task lifecycle owner",
+      "action": "Provide a supported correction path for active task_054_003_001 and task_054_003_002, plus predecessor completed Task primary criteria. Preserve lifecycle state, accepted history and writer guards. Feature contracts and passing checks do not cure canonical TBD. Do not attest complete primary criteria or final Feature plan readiness until reconciled."
+    },
+    {
+      "owner": "Feature 3 Architect through normal Feature team sequencing",
+      "action": "Review the exact current plan f4683ee0 or its actual successor, including source-linked ownership and the explicit acceptance limitation, before sign-off. Reconcile the final integrated implementation and publish its exact final review before completion acceptance. This Epic Manager does not sign for another role."
+    },
+    {
+      "owner": "Feature 3 combined acceptance owner and relevant fixture/provider owners",
+      "action": "Retain predecessor focused and exploratory evidence separately. Classify acceptance-relevant exploratory failures by revision, reproducible cause and accountable owner; preserve the empty-panel observation without claiming a timing fix. Do not turn the full repository suite into a default gate."
+    },
+    {
+      "owner": "Review acceptance/integration owner",
+      "action": "Keep Feature 2 staged architecture review separate from accepted/promoted state and reconcile only through the supported workflow."
+    },
+    {
+      "owner": "Architecture publication runtime owner, followed by Epic Architect",
+      "action": "Recover the exact request in docs/epic_artifacts/epic_054_architecture_review.json through a supported path. The terminal failure recorded in epic_054_architecture_publication_failure.json remains unresolved. No successful recovery or new publication is inferred."
+    }
+  ],
+  "handoff": {
+    "recipient": "feat_054_003",
+    "request_id": "epic_054:epic_054:architect-feature3-f4683ee0",
+    "status": "enqueued",
+    "next": "Feature Architect reviews the exact current Feature revision; child execution remains supervisor-sequenced. Lifecycle owner corrects active and predecessor completed Task criteria through a supported path. Runtime owner recovers the saved exact failed Epic publication request."
+  }
+}
